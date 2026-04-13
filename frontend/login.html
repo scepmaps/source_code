@@ -1,0 +1,557 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
+    <style>
+      :root{
+        --bg:#0b1020;
+        --bg-2:#0e1530;
+        --card:#0f1a39cc;
+        --stroke:#243167;
+        --text:#d7e3ff;
+        --muted:#8aa0d6;
+        --accent:#4de2ff;
+        --accent-2:#7a5cff;
+        --danger:#ff4d6d;
+        --shadow: 0 10px 30px rgba(0,0,0,.4);
+        --radius:16px;
+      }
+
+      *{box-sizing:border-box}
+
+      body {
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif;
+        background: radial-gradient(1200px 700px at 80% -10%, #1a2a6cff, transparent 60%),
+                    radial-gradient(1000px 600px at -10% 120%, #162447ff, transparent 55%),
+                    var(--bg);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+        height: 100vh;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body::before{
+        content:"";
+        position:fixed;
+        inset:0;
+        pointer-events:none;
+        opacity:.25;
+        mix-blend-mode:overlay;
+        background-image: linear-gradient(var(--stroke) 1px, transparent 1px),
+                          linear-gradient(90deg, var(--stroke) 1px, transparent 1px);
+        background-size: 28px 28px;
+      }
+
+      #particleCanvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      .login-container {
+        position: relative;
+        z-index: 10;
+        text-align: center;
+      }
+
+      .login-logo {
+        font-family: 'Orbitron', monospace;
+        font-size: 2.5rem;
+        font-weight: 600;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        background-clip: text;
+        -webkit-background-clip: text;
+        color: transparent;
+        margin-bottom: 2rem;
+        letter-spacing: 2px;
+        animation: logoGlow 2s ease-in-out infinite alternate;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--stroke);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 32px;
+        min-width: 360px;
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(77, 226, 255, 0.1);
+      }
+
+      h1 {
+        margin: 0 0 24px 0;
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      input {
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 12px;
+        border: 1px solid var(--stroke);
+        background: var(--bg-2);
+        color: var(--text);
+        margin: 8px 0;
+        font-size: 16px;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(77, 226, 255, 0.1);
+      }
+
+      .password-wrapper {
+        position: relative;
+        width: 100%;
+      }
+
+      .password-wrapper input {
+        padding-right: 44px;
+      }
+
+      .password-toggle {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--muted);
+        cursor: pointer;
+        padding: 4px;
+        font-size: 18px;
+        width: auto;
+        transition: color 0.2s ease;
+      }
+
+      .password-toggle:hover {
+        color: var(--accent);
+        transform: translateY(-50%);
+        box-shadow: none;
+      }
+
+      button {
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 12px;
+        border: 1px solid #2a3a7a;
+        background: linear-gradient(180deg, #0f1b3b, #0b142f);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(77, 226, 255, 0.2);
+      }
+
+      button:active {
+        transform: translateY(0);
+      }
+
+      .err {
+        color: var(--danger);
+        font-size: 14px;
+        height: 20px;
+        margin-bottom: 8px;
+      }
+
+      @keyframes logoGlow {
+        0% { filter: drop-shadow(0 0 10px var(--accent)) brightness(1); }
+        100% { filter: drop-shadow(0 0 20px var(--accent)) brightness(1.2); }
+      }
+
+      .legal-links {
+        position: fixed;
+        left: 50%;
+        bottom: 10px;
+        transform: translateX(-50%);
+        z-index: 20;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+        padding: 4px 8px;
+        font-size: 11px;
+        color: rgba(215, 227, 255, 0.55);
+      }
+
+      .legal-links a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .legal-links a:hover {
+        color: rgba(215, 227, 255, 0.75);
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="particleCanvas"></canvas>
+    <div class="login-container">
+      <div class="login-logo">SCEPMAPS</div>
+      <div class="card">
+        <h1>Sign in</h1>
+        <div class="err" id="err"></div>
+        <input id="email" placeholder="Email" />
+        <div class="password-wrapper">
+          <input id="password" placeholder="Password" type="password" />
+          <button type="button" class="password-toggle" id="passwordToggle" title="Show password">👁️</button>
+        </div>
+        <button id="loginBtn">Login</button>
+      </div>
+    </div>
+    <nav class="legal-links" aria-label="Legal links">
+      <a href="/legal-notice">Legal notice</a>
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms-of-use">Terms of use</a>
+      <a href="/cookies-policy">Cookies policy</a>
+      <a href="/terms-of-sale">Terms of sale</a>
+      <a href="/rgpd-compliance">RGPD compliance</a>
+    </nav>
+
+    <!-- Interactive Mapping Grid System -->
+    <script>
+      class MappingGrid {
+        constructor(canvas) {
+          this.canvas = canvas;
+          this.ctx = canvas.getContext('2d');
+          this.mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+          this.gridSize = 60;
+          this.time = 0;
+          this.waypoints = [];
+          this.mouseRadius = 200;
+          this.scanLines = [];
+
+          this.resize();
+          this.createWaypoints();
+          this.createScanLines();
+          this.bindEvents();
+          this.animate();
+        }
+
+        resize() {
+          this.canvas.width = window.innerWidth;
+          this.canvas.height = window.innerHeight;
+        }
+
+        createWaypoints() {
+          this.waypoints = [];
+          const cols = Math.ceil(this.canvas.width / this.gridSize) + 1;
+          const rows = Math.ceil(this.canvas.height / this.gridSize) + 1;
+
+          for (let x = 0; x < cols; x++) {
+            for (let y = 0; y < rows; y++) {
+              this.waypoints.push({
+                x: x * this.gridSize,
+                y: y * this.gridSize,
+                baseX: x * this.gridSize,
+                baseY: y * this.gridSize,
+                active: false,
+                elevation: 0,
+                signal: Math.random()
+              });
+            }
+          }
+        }
+
+        createScanLines() {
+          this.scanLines = [];
+          for (let i = 0; i < 3; i++) {
+            this.scanLines.push({
+              angle: (i * 120) * (Math.PI / 180),
+              length: 0,
+              maxLength: Math.sqrt(this.canvas.width * this.canvas.width + this.canvas.height * this.canvas.height),
+              speed: 2 + i * 0.5
+            });
+          }
+        }
+
+        bindEvents() {
+          window.addEventListener('resize', () => this.resize());
+          window.addEventListener('mousemove', (e) => {
+            this.mouse.x = e.clientX;
+            this.mouse.y = e.clientY;
+          });
+        }
+
+        updateWaypoints() {
+          this.waypoints.forEach(point => {
+            const dx = this.mouse.x - point.baseX;
+            const dy = this.mouse.y - point.baseY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < this.mouseRadius) {
+              const force = (this.mouseRadius - distance) / this.mouseRadius;
+              point.elevation = force * 20;
+              point.active = true;
+
+              // Ripple effect
+              const angle = Math.atan2(dy, dx);
+              point.x = point.baseX + Math.cos(angle) * force * 15;
+              point.y = point.baseY + Math.sin(angle) * force * 15;
+            } else {
+              point.elevation *= 0.95;
+              point.active = distance < this.mouseRadius * 1.5;
+              point.x += (point.baseX - point.x) * 0.1;
+              point.y += (point.baseY - point.y) * 0.1;
+            }
+          });
+        }
+
+        drawCoordinateGrid() {
+          this.ctx.strokeStyle = 'rgba(77, 226, 255, 0.15)';
+          this.ctx.lineWidth = 0.5;
+
+          // Vertical lines
+          for (let x = 0; x <= this.canvas.width; x += this.gridSize) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, 0);
+            this.ctx.lineTo(x, this.canvas.height);
+            this.ctx.stroke();
+          }
+
+          // Horizontal lines
+          for (let y = 0; y <= this.canvas.height; y += this.gridSize) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, y);
+            this.ctx.lineTo(this.canvas.width, y);
+            this.ctx.stroke();
+          }
+
+          // Draw coordinate labels (less dense for login screen)
+          this.ctx.fillStyle = 'rgba(77, 226, 255, 0.4)';
+          this.ctx.font = '10px monospace';
+
+          for (let x = 0; x <= this.canvas.width; x += this.gridSize * 3) {
+            for (let y = 0; y <= this.canvas.height; y += this.gridSize * 3) {
+              const lon = ((x / this.canvas.width) * 360 - 180).toFixed(1);
+              const lat = ((1 - y / this.canvas.height) * 180 - 90).toFixed(1);
+              this.ctx.fillText(`${lat}°, ${lon}°`, x + 4, y + 12);
+            }
+          }
+        }
+
+        drawWireframeMesh() {
+          this.ctx.strokeStyle = 'rgba(77, 226, 255, 0.2)';
+          this.ctx.lineWidth = 1;
+
+          // Connect nearby waypoints to create mesh
+          for (let i = 0; i < this.waypoints.length; i++) {
+            const point = this.waypoints[i];
+
+            for (let j = i + 1; j < this.waypoints.length; j++) {
+              const other = this.waypoints[j];
+              const dx = point.x - other.x;
+              const dy = point.y - other.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+
+              if (distance < this.gridSize * 1.5 && (point.active || other.active)) {
+                const opacity = Math.max(0.05, 0.3 - distance / (this.gridSize * 2));
+                this.ctx.strokeStyle = `rgba(77, 226, 255, ${opacity})`;
+                this.ctx.beginPath();
+                this.ctx.moveTo(point.x, point.y - point.elevation);
+                this.ctx.lineTo(other.x, other.y - other.elevation);
+                this.ctx.stroke();
+              }
+            }
+          }
+        }
+
+        drawWaypoints() {
+          this.waypoints.forEach(point => {
+            if (point.active || point.elevation > 0.1) {
+              this.ctx.save();
+
+              // Waypoint marker
+              const size = 1.5 + point.elevation * 0.2;
+              this.ctx.fillStyle = point.active ? '#4de2ff' : 'rgba(77, 226, 255, 0.5)';
+              this.ctx.beginPath();
+              this.ctx.arc(point.x, point.y - point.elevation, size, 0, Math.PI * 2);
+              this.ctx.fill();
+
+              // Elevation indicator (smaller for login)
+              if (point.elevation > 1) {
+                this.ctx.strokeStyle = 'rgba(77, 226, 255, 0.3)';
+                this.ctx.lineWidth = 0.5;
+                this.ctx.beginPath();
+                this.ctx.moveTo(point.baseX, point.baseY);
+                this.ctx.lineTo(point.x, point.y - point.elevation);
+                this.ctx.stroke();
+              }
+
+              this.ctx.restore();
+            }
+          });
+        }
+
+        drawRadarScan() {
+          // Smaller, subtler radar for login screen
+          this.scanLines.forEach((scan, index) => {
+            if (index > 0) return; // Only one scan line for login
+
+            scan.length += scan.speed * 0.5;
+            if (scan.length > scan.maxLength * 0.5) scan.length = 0;
+
+            const centerX = this.mouse.x;
+            const centerY = this.mouse.y;
+            const endX = centerX + Math.cos(scan.angle + this.time * 0.01) * scan.length;
+            const endY = centerY + Math.sin(scan.angle + this.time * 0.01) * scan.length;
+
+            // Radar beam
+            const gradient = this.ctx.createLinearGradient(centerX, centerY, endX, endY);
+            gradient.addColorStop(0, 'rgba(77, 226, 255, 0.2)');
+            gradient.addColorStop(0.7, 'rgba(77, 226, 255, 0.05)');
+            gradient.addColorStop(1, 'transparent');
+
+            this.ctx.strokeStyle = gradient;
+            this.ctx.lineWidth = 1;
+            this.ctx.beginPath();
+            this.ctx.moveTo(centerX, centerY);
+            this.ctx.lineTo(endX, endY);
+            this.ctx.stroke();
+          });
+
+          // Radar center (smaller)
+          this.ctx.strokeStyle = 'rgba(77, 226, 255, 0.6)';
+          this.ctx.lineWidth = 1;
+          this.ctx.beginPath();
+          this.ctx.arc(this.mouse.x, this.mouse.y, 4, 0, Math.PI * 2);
+          this.ctx.stroke();
+
+          // Concentric circles (fewer)
+          for (let r = 80; r <= 160; r += 80) {
+            this.ctx.strokeStyle = `rgba(77, 226, 255, ${0.2 - r * 0.001})`;
+            this.ctx.lineWidth = 0.5;
+            this.ctx.beginPath();
+            this.ctx.arc(this.mouse.x, this.mouse.y, r, 0, Math.PI * 2);
+            this.ctx.stroke();
+          }
+        }
+
+        animate() {
+          this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+          this.time++;
+
+          this.drawCoordinateGrid();
+          this.updateWaypoints();
+          this.drawWireframeMesh();
+          this.drawWaypoints();
+          this.drawRadarScan();
+
+          requestAnimationFrame(() => this.animate());
+        }
+      }
+
+      // Initialize mapping grid system when DOM is ready
+      document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.getElementById('particleCanvas');
+        if (canvas) {
+          new MappingGrid(canvas);
+        }
+      });
+    </script>
+
+    <script>
+      // Check if already logged in - redirect to app
+      (async () => {
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || 'null');
+        if (token && user) {
+          // Verify token is still valid
+          try {
+            const res = await fetch('/auth/me', {
+              headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (res.ok) {
+              // Token is valid, redirect to main app
+              location.href = 'index.html';
+              return;
+            }
+          } catch(e) {
+            // Token invalid or network error, continue to login
+          }
+        }
+      })();
+
+      // Password visibility toggle
+      const passwordInput = document.getElementById('password');
+      const passwordToggle = document.getElementById('passwordToggle');
+      passwordToggle.addEventListener('click', () => {
+        if (passwordInput.type === 'password') {
+          passwordInput.type = 'text';
+          passwordToggle.textContent = '🙈';
+          passwordToggle.title = 'Hide password';
+        } else {
+          passwordInput.type = 'password';
+          passwordToggle.textContent = '👁️';
+          passwordToggle.title = 'Show password';
+        }
+      });
+
+      // Login function
+      const doLogin = async () => {
+        const email = document.getElementById('email').value.trim();
+        const password = passwordInput.value;
+        document.getElementById('err').textContent = '';
+        try {
+          const res = await fetch('/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+          if (!res.ok) {
+            document.getElementById('err').textContent = 'Invalid credentials';
+            return;
+          }
+          const data = await res.json();
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          // Immediately refresh user profile from server to ensure latest defaults/permissions
+          try {
+            const me = await fetch('/auth/me', { headers: { 'Authorization': 'Bearer ' + data.token } });
+            if (me.ok) {
+              const m = await me.json();
+              localStorage.setItem('user', JSON.stringify(m.user));
+            }
+          } catch (_) { }
+          location.href = 'index.html';
+        } catch (e) {
+          document.getElementById('err').textContent = 'Network error';
+        }
+      };
+
+      // Click to login
+      const loginBtn = document.getElementById('loginBtn');
+      loginBtn.addEventListener('click', doLogin);
+
+      // Press Enter to login (on both email and password fields)
+      document.getElementById('email').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') doLogin();
+      });
+      passwordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') doLogin();
+      });
+    </script>
+  </body>
+  </html>

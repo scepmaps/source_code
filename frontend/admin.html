@@ -1,0 +1,915 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+      :root{
+        --bg:#0b1020; --bg-2:#0e1530; --card:#0f1a39cc; --stroke:#243167;
+        --text:#d7e3ff; --muted:#8aa0d6; --accent:#4de2ff; --danger:#ff4d6d;
+        --success:#4dff88; --warning:#ffa04d; --shadow:0 10px 30px rgba(0,0,0,.4);
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--text);
+        margin: 0; line-height: 1.5;
+      }
+      .header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 16px 24px; border-bottom: 1px solid var(--stroke);
+        background: linear-gradient(180deg, var(--bg-2), var(--bg));
+      }
+      .brand { font-size: 18px; font-weight: 600; }
+      .nav { display: flex; gap: 12px; }
+      .btn {
+        padding: 8px 16px; border: 1px solid var(--stroke); background: var(--card);
+        color: var(--text); border-radius: 8px; cursor: pointer; font-size: 14px;
+        transition: all 0.2s; text-decoration: none; display: inline-flex;
+        align-items: center; gap: 6px;
+      }
+      .btn:hover { background: var(--bg-2); transform: translateY(-1px); }
+      .btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+      .btn.danger { background: var(--danger); color: white; border-color: var(--danger); }
+      .btn.success { background: var(--success); color: var(--bg); border-color: var(--success); }
+
+      .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+      .grid { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+      .card {
+        background: var(--card); border: 1px solid var(--stroke); border-radius: 12px;
+        padding: 20px; box-shadow: var(--shadow);
+      }
+      .card h3 { margin: 0 0 16px 0; font-size: 16px; font-weight: 600; }
+
+      .form-grid { display: grid; gap: 16px; }
+      .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .form-group { display: flex; flex-direction: column; gap: 6px; }
+      label { font-size: 13px; color: var(--muted); font-weight: 500; }
+      input, select {
+        padding: 10px 12px; border: 1px solid var(--stroke); border-radius: 8px;
+        background: var(--bg-2); color: var(--text); font-size: 14px;
+      }
+      input:focus, select:focus { outline: none; border-color: var(--accent); }
+
+      .checkbox-group {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px;
+        padding: 12px; border: 1px solid var(--stroke); border-radius: 8px; background: var(--bg-2);
+      }
+      .checkbox-item {
+        display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+        border-radius: 6px; cursor: pointer; transition: background 0.15s;
+      }
+      .checkbox-item:hover { background: var(--card); }
+      .checkbox-item input[type="checkbox"] {
+        width: auto; height: auto; margin: 0; accent-color: var(--accent);
+      }
+
+      .users-table {
+        width: 100%; border-collapse: collapse; margin-top: 16px;
+        background: var(--bg-2); border-radius: 8px; overflow: hidden;
+      }
+      .users-table th, .users-table td {
+        padding: 12px; text-align: left; border-bottom: 1px solid var(--stroke);
+      }
+      .users-table th {
+        background: var(--card); font-weight: 600; font-size: 13px;
+        color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;
+      }
+      .users-table tbody tr:hover { background: var(--card); }
+
+      .user-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;
+      }
+      .user-badge.admin { background: var(--accent); color: var(--bg); }
+      .user-badge.user { background: var(--stroke); color: var(--muted); }
+
+      .permission-tags {
+        display: flex; flex-wrap: wrap; gap: 4px; max-width: 120px;
+      }
+      .permission-tag {
+        padding: 2px 6px; background: var(--stroke); color: var(--text);
+        border-radius: 4px; font-size: 10px; font-weight: 500;
+      }
+
+      .stats {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;
+      }
+      .stat-card {
+        background: var(--card); border: 1px solid var(--stroke); border-radius: 8px;
+        padding: 16px; text-align: center;
+      }
+      .stat-number { font-size: 24px; font-weight: 600; color: var(--accent); }
+      .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+      .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+      .form-actions { display: flex; gap: 12px; }
+
+      .alert {
+        padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px;
+        display: none;
+      }
+      .alert.success { background: rgba(77, 255, 136, 0.1); border: 1px solid var(--success); color: var(--success); }
+      .alert.error { background: rgba(255, 77, 109, 0.1); border: 1px solid var(--danger); color: var(--danger); }
+
+      .loading { opacity: 0.6; pointer-events: none; }
+      .empty-state {
+        text-align: center; padding: 40px; color: var(--muted);
+      }
+
+      /* Modal styles */
+      .modal {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7); z-index: 1000; display: flex;
+        align-items: center; justify-content: center;
+      }
+      .modal-content {
+        background: var(--bg); border: 1px solid var(--stroke); border-radius: 12px;
+        max-width: 800px; width: 90%; max-height: 80%; overflow-y: auto;
+        box-shadow: var(--shadow);
+      }
+      .modal-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 16px 20px; border-bottom: 1px solid var(--stroke);
+      }
+      .modal-body { padding: 20px; }
+
+      /* Analytics grid */
+      .analytics-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px;
+      }
+      .analytics-section h4 {
+        margin: 0 0 12px 0; font-size: 14px; color: var(--muted);
+        text-transform: uppercase; letter-spacing: 0.5px;
+      }
+      .top-users-list {
+        display: flex; flex-direction: column; gap: 8px;
+      }
+      .top-user-item {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 8px 12px; background: var(--bg-2); border-radius: 6px;
+      }
+      .usage-chart {
+        display: flex; flex-direction: column; gap: 6px;
+      }
+      .usage-bar {
+        display: flex; align-items: center; gap: 8px;
+      }
+      .usage-bar-fill {
+        flex: 1; height: 20px; background: var(--bg-2); border-radius: 4px;
+        position: relative; overflow: hidden;
+      }
+      .usage-bar-progress {
+        height: 100%; background: var(--accent); border-radius: 4px;
+        transition: width 0.3s ease;
+      }
+      .usage-label { min-width: 60px; font-size: 12px; }
+      .usage-count { min-width: 40px; text-align: right; font-size: 12px; }
+
+      /* Progress indicators */
+      .progress-ring {
+        display: inline-flex; align-items: center; gap: 8px; margin: 4px 0;
+      }
+      .progress-circle {
+        width: 40px; height: 40px; border-radius: 50%;
+        background: conic-gradient(var(--accent) var(--progress, 0%), var(--bg-2) 0%);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 10px; font-weight: 600;
+      }
+      .progress-info { font-size: 12px; }
+
+      @media (max-width: 768px) {
+        .grid { grid-template-columns: 1fr; }
+        .form-row { grid-template-columns: 1fr; }
+        .stats { grid-template-columns: repeat(2, 1fr); }
+        .analytics-grid { grid-template-columns: 1fr; }
+        .modal-content { width: 95%; }
+      }
+
+      .legal-links {
+        position: fixed;
+        left: 50%;
+        bottom: 10px;
+        transform: translateX(-50%);
+        z-index: 1200;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+        padding: 4px 8px;
+        font-size: 11px;
+        color: rgba(215, 227, 255, 0.55);
+      }
+
+      .legal-links a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .legal-links a:hover {
+        color: rgba(215, 227, 255, 0.75);
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="brand">🛡️ Admin Dashboard</div>
+      <div class="nav">
+        <a href="index.html" class="btn">🗺️ Back to Map</a>
+        <button class="btn danger" onclick="logout()">🚪 Logout</button>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-number" id="totalUsers">0</div>
+          <div class="stat-label">Total Users</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="adminUsers">0</div>
+          <div class="stat-label">Administrators</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="todayExports">0</div>
+          <div class="stat-label">Today's Exports</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="totalExports">0</div>
+          <div class="stat-label">Total Exports</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h3>👤 User Management</h3>
+          <div class="alert" id="alert"></div>
+
+          <form id="userForm" class="form-grid">
+            <input type="hidden" id="userId" />
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" required />
+              </div>
+              <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Leave blank to keep current" />
+              </div>
+              <div class="form-group">
+                <label for="role">User Role</label>
+                <select id="role">
+                  <option value="user">Regular User</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>🎉 Fun Mode</label>
+              <div class="checkbox-group">
+                <label class="checkbox-item">
+                  <input type="checkbox" id="funMode" /> Enable PAMERKUF branding
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>🗺️ Allowed Base Maps</label>
+              <div class="checkbox-group" id="baseMaps">
+                <label class="checkbox-item">
+                  <input type="checkbox" value="osm" /> 🌍 OpenStreetMap
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="esri" /> 🛰️ Satellite
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="topo" /> ⛰️ Topographic
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="navigation" /> 🧭 Navigation
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="night" /> 🌙 Night
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="ocean" /> 🌊 Ocean
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="shom" /> ⚓ SHOM Charts
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="ukho" /> 🇬🇧 UKHO Charts
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="gbsouth" /> ✈️ GB South Aviation
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>📍 Allowed Overlays</label>
+              <div class="checkbox-group" id="overlays">
+                <label class="checkbox-item">
+                  <input type="checkbox" value="seamarks" /> 🚢 Seamarks
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="openaip" /> ✈️ Air Space
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="density" /> 🏘️ Population Density
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="label" /> 🏷️ Names
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="history" /> 🕐 History
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="hgt" data-scope="tool" /> 🟥 HGT Tiles
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>📊 Export Limits (-1 = unlimited)</label>
+              <div class="form-row">
+                <input type="number" id="limitDay" placeholder="Daily limit" min="-1" />
+                <input type="number" id="limitWeek" placeholder="Weekly limit" min="-1" />
+                <input type="number" id="limitMonth" placeholder="Monthly limit" min="-1" />
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn primary">💾 Save User</button>
+              <button type="button" class="btn" onclick="resetForm()">🔄 Reset</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <h3>👥 All Users</h3>
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>Permissions</th>
+                <th>Limits</th>
+                <th>Activity</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody">
+              <tr>
+                <td colspan="6" class="empty-state">Loading users...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Detailed User Stats Modal -->
+      <div id="userStatsModal" class="modal" style="display: none;">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="modalUserName">User Statistics</h3>
+            <button class="btn" onclick="closeUserStatsModal()">&times;</button>
+          </div>
+          <div class="modal-body" id="modalContent">
+            Loading...
+          </div>
+        </div>
+      </div>
+
+      <!-- System-wide Analytics -->
+      <div class="card" style="margin-top: 24px;">
+        <h3>📊 System Analytics</h3>
+        <div id="systemAnalytics" class="analytics-grid">
+          Loading analytics...
+        </div>
+      </div>
+    </div>
+    <nav class="legal-links" aria-label="Legal links">
+      <a href="/legal-notice">Legal notice</a>
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms-of-use">Terms of use</a>
+      <a href="/cookies-policy">Cookies policy</a>
+      <a href="/terms-of-sale">Terms of sale</a>
+      <a href="/rgpd-compliance">RGPD compliance</a>
+    </nav>
+
+    <script>
+      const API = '';
+      let currentEditingUser = null;
+
+      // Auth helpers
+      const getToken = () => localStorage.getItem('token') || '';
+      const getAuthHeaders = () => ({ 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' });
+      const logout = () => { localStorage.clear(); location.href = 'login.html'; };
+
+      // UI helpers
+      const showAlert = (message, type = 'success') => {
+        const alert = document.getElementById('alert');
+        alert.textContent = message;
+        alert.className = `alert ${type}`;
+        alert.style.display = 'block';
+        setTimeout(() => alert.style.display = 'none', 5000);
+      };
+
+      const setLoading = (loading) => {
+        document.body.classList.toggle('loading', loading);
+      };
+
+      // Form management
+      const resetForm = () => {
+        document.getElementById('userForm').reset();
+        document.getElementById('userId').value = '';
+        currentEditingUser = null;
+        document.querySelector('button[type="submit"]').textContent = '💾 Save User';
+      };
+
+      const collectFormData = () => {
+        const getCheckedValues = (selector) =>
+          Array.from(document.querySelectorAll(`${selector} input:checked`)).map(cb => cb.value);
+        const bases = getCheckedValues('#baseMaps');
+        const overlayAndToolChecks = Array.from(document.querySelectorAll('#overlays input:checked'));
+        const overlays = overlayAndToolChecks
+          .filter(cb => cb.dataset.scope !== 'tool')
+          .map(cb => cb.value);
+        const tools = overlayAndToolChecks
+          .filter(cb => cb.dataset.scope === 'tool')
+          .map(cb => cb.value);
+        // For bases: if none selected, send null to mean "unrestricted" (OSM will be added as fallback)
+        // For overlays: send empty array [] to explicitly mean "no overlays allowed"
+        // Note: null means unrestricted, [] means explicitly no access
+        return {
+          email: document.getElementById('email').value.trim().toLowerCase(),
+          name: document.getElementById('name').value.trim(),
+          password: document.getElementById('password').value,
+          is_admin: document.getElementById('role').value === 'admin',
+          fun: document.getElementById('funMode').checked,
+          allowed_bases: bases.length ? bases : null,
+          allowed_overlays: overlays, // Always send array (empty [] means no overlays, null would mean unrestricted)
+          allowed_tools: tools.length ? tools : [],
+          limit_day: parseInt(document.getElementById('limitDay').value) || -1,
+          limit_week: parseInt(document.getElementById('limitWeek').value) || -1,
+          limit_month: parseInt(document.getElementById('limitMonth').value) || -1,
+        };
+      };
+
+      const populateForm = (user) => {
+        document.getElementById('userId').value = user.id;
+        document.getElementById('email').value = user.email;
+        document.getElementById('name').value = user.name || '';
+        document.getElementById('password').value = '';
+        document.getElementById('role').value = user.is_admin ? 'admin' : 'user';
+        document.getElementById('funMode').checked = user.fun || false;
+        document.getElementById('limitDay').value = user.limit_day === -1 ? '' : user.limit_day;
+        document.getElementById('limitWeek').value = user.limit_week === -1 ? '' : user.limit_week;
+        document.getElementById('limitMonth').value = user.limit_month === -1 ? '' : user.limit_month;
+
+        // Clear all checkboxes first
+        document.querySelectorAll('#baseMaps input, #overlays input').forEach(cb => cb.checked = false);
+
+        // Set base maps
+        const bases = user.allowed_bases || ['osm', 'esri', 'topo', 'navigation', 'night', 'ocean', 'shom', 'ukho', 'gbsouth'];
+        bases.forEach(base => {
+          const cb = document.querySelector(`#baseMaps input[value="${base}"]`);
+          if (cb) cb.checked = true;
+        });
+
+        // Set overlays
+        // Handle null (unrestricted) vs [] (explicitly no overlays)
+        const overlays = user.allowed_overlays;
+        if (overlays === null || overlays === undefined) {
+          // Unrestricted: check all overlays by default
+          ['seamarks', 'openaip', 'density', 'label', 'history'].forEach(overlay => {
+            const cb = document.querySelector(`#overlays input[value="${overlay}"]`);
+            if (cb) cb.checked = true;
+          });
+        } else if (Array.isArray(overlays)) {
+          // Explicit list (could be empty [] or have items)
+          overlays.forEach(overlay => {
+            const cb = document.querySelector(`#overlays input[value="${overlay}"]`);
+            if (cb) cb.checked = true;
+          });
+        }
+
+        // Set tools
+        const tools = user.allowed_tools;
+        if (tools === null || tools === undefined) {
+          // Unrestricted defaults
+          ['hgt'].forEach(tool => {
+            const cb = document.querySelector(`#overlays input[data-scope="tool"][value="${tool}"]`);
+            if (cb) cb.checked = true;
+          });
+        } else if (Array.isArray(tools)) {
+          tools.forEach(tool => {
+            const cb = document.querySelector(`#overlays input[data-scope="tool"][value="${tool}"]`);
+            if (cb) cb.checked = true;
+          });
+        }
+
+        currentEditingUser = user;
+        document.querySelector('button[type="submit"]').textContent = '💾 Update User';
+      };
+
+      // API calls
+      const loadUsers = async () => {
+        try {
+          const res = await fetch(`${API}/admin/users`, { headers: getAuthHeaders() });
+          if (!res.ok) {
+            if (res.status === 401) return logout();
+            throw new Error('Failed to load users');
+          }
+
+          const data = await res.json();
+          renderUsers(data.users);
+          updateStats(data.users);
+        } catch (error) {
+          showAlert('Failed to load users: ' + error.message, 'error');
+        }
+      };
+
+      const saveUser = async (userData) => {
+        try {
+          setLoading(true);
+          const isUpdate = currentEditingUser?.id;
+          const url = isUpdate ? `${API}/admin/users/${currentEditingUser.id}` : `${API}/admin/users`;
+          const method = isUpdate ? 'PUT' : 'POST';
+
+          // Don't send password if empty on update
+          if (isUpdate && !userData.password) {
+            delete userData.password;
+          }
+
+          const res = await fetch(url, {
+            method,
+            headers: getAuthHeaders(),
+            body: JSON.stringify(userData)
+          });
+
+          if (!res.ok) {
+            const error = await res.json();
+            throw new Error(error.error || 'Save failed');
+          }
+
+          showAlert(isUpdate ? 'User updated successfully!' : 'User created successfully!');
+          resetForm();
+          loadUsers();
+        } catch (error) {
+          showAlert(error.message, 'error');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const deleteUser = async (userId) => {
+        if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+
+        try {
+          setLoading(true);
+          const res = await fetch(`${API}/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+          });
+
+          if (!res.ok) throw new Error('Delete failed');
+
+          showAlert('User deleted successfully!');
+          loadUsers();
+        } catch (error) {
+          showAlert('Failed to delete user: ' + error.message, 'error');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      // Rendering
+      const renderUsers = (users) => {
+        const tbody = document.getElementById('usersTableBody');
+
+        if (!users.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No users found</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = users.map(user => `
+          <tr>
+            <td>
+              <div><strong>${user.email}</strong></div>
+              <div style="font-size: 12px; color: var(--muted);">${user.name || 'No name'}</div>
+            </td>
+            <td>
+              <span class="user-badge ${user.is_admin ? 'admin' : 'user'}">
+                ${user.is_admin ? '👑 Admin' : '👤 User'}
+              </span>
+            </td>
+            <td>
+              <div class="permission-tags">
+                ${(user.allowed_bases || ['osm', 'esri', 'topo', 'navigation', 'night', 'ocean', 'shom', 'ukho', 'gbsouth']).map(base =>
+                  `<span class="permission-tag">${base.toUpperCase()}</span>`
+                ).join('')}
+              </div>
+              <div class="permission-tags" style="margin-top: 4px;">
+                ${(user.allowed_overlays || ['seamarks', 'openaip', 'density', 'label', 'history']).map(overlay =>
+                  `<span class="permission-tag">${overlay}</span>`
+                ).join('')}
+              </div>
+              <div class="permission-tags" style="margin-top: 4px;">
+                ${(user.allowed_tools || ['hgt']).map(tool =>
+                  `<span class="permission-tag">${tool}</span>`
+                ).join('')}
+              </div>
+            </td>
+            <td style="font-size: 12px;">
+              D: ${user.limit_day === -1 ? '∞' : user.limit_day}<br>
+              W: ${user.limit_week === -1 ? '∞' : user.limit_week}<br>
+              M: ${user.limit_month === -1 ? '∞' : user.limit_month}
+            </td>
+            <td style="font-size: 12px;">
+              ${user.count_day || 0}/${user.count_week || 0}/${user.count_month || 0}<br>
+              <span style="color: var(--muted);">Total: ${user.count_total || 0}</span>
+            </td>
+            <td>
+              <button class="btn" style="padding: 4px 8px; font-size: 12px;" onclick="populateForm(${JSON.stringify(user).replace(/"/g, '&quot;')})">
+                ✏️ Edit
+              </button>
+              <button class="btn" style="padding: 4px 8px; font-size: 12px;" onclick="showUserStats(${user.id}, '${user.email}')">
+                📊 Stats
+              </button>
+              <button class="btn danger" style="padding: 4px 8px; font-size: 12px;" onclick="deleteUser(${user.id})">
+                🗑️ Delete
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      };
+
+      const updateStats = (users) => {
+        document.getElementById('totalUsers').textContent = users.length;
+        document.getElementById('adminUsers').textContent = users.filter(u => u.is_admin).length;
+        document.getElementById('todayExports').textContent = users.reduce((sum, u) => sum + (u.count_day || 0), 0);
+        document.getElementById('totalExports').textContent = users.reduce((sum, u) => sum + (u.count_total || 0), 0);
+      };
+
+      // Event listeners
+      document.getElementById('userForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const userData = collectFormData();
+
+        if (!userData.email) {
+          showAlert('Email is required', 'error');
+          return;
+        }
+
+        if (!currentEditingUser && !userData.password) {
+          showAlert('Password is required for new users', 'error');
+          return;
+        }
+
+        saveUser(userData);
+      });
+
+      // Enhanced statistics functions
+      const loadSystemAnalytics = async () => {
+        try {
+          const res = await fetch(`${API}/admin/stats`, { headers: getAuthHeaders() });
+          if (!res.ok) return;
+
+          const data = await res.json();
+          renderSystemAnalytics(data.stats);
+        } catch (error) {
+          console.error('Failed to load system analytics:', error);
+        }
+      };
+
+      const renderSystemAnalytics = (stats) => {
+        const container = document.getElementById('systemAnalytics');
+
+        const maxCount = Math.max(...Object.values(stats.popular_bases || {}));
+
+        container.innerHTML = `
+          <div class="analytics-section">
+            <h4>🏆 Most Active Users (This Month)</h4>
+            <div class="top-users-list">
+              ${stats.top_users?.map(user => `
+                <div class="top-user-item">
+                  <span>${user.email}</span>
+                  <span>${user.exports} exports</span>
+                </div>
+              `).join('') || '<div class="empty-state">No data</div>'}
+            </div>
+          </div>
+
+          <div class="analytics-section">
+            <h4>🗺️ Popular Base Maps (This Month)</h4>
+            <div class="usage-chart">
+              ${Object.entries(stats.popular_bases || {}).map(([base, count]) => `
+                <div class="usage-bar">
+                  <div class="usage-label">${base.toUpperCase()}</div>
+                  <div class="usage-bar-fill">
+                    <div class="usage-bar-progress" style="width: ${maxCount ? (count / maxCount) * 100 : 0}%"></div>
+                  </div>
+                  <div class="usage-count">${count}</div>
+                </div>
+              `).join('') || '<div class="empty-state">No data</div>'}
+            </div>
+          </div>
+        `;
+      };
+
+      const showUserStats = async (userId, email) => {
+        try {
+          document.getElementById('modalUserName').textContent = `${email} - Statistics`;
+          document.getElementById('userStatsModal').style.display = 'flex';
+          document.getElementById('modalContent').innerHTML = 'Loading...';
+
+          const res = await fetch(`${API}/admin/users/${userId}/stats`, { headers: getAuthHeaders() });
+          if (!res.ok) throw new Error('Failed to load user stats');
+
+          const data = await res.json();
+          renderUserStatsModal(data.user, data.stats);
+        } catch (error) {
+          document.getElementById('modalContent').innerHTML = `<div class="alert error">Error: ${error.message}</div>`;
+        }
+      };
+
+      const renderUserStatsModal = (user, stats) => {
+        const getProgressColor = (used, limit) => {
+          if (limit === -1) return 'var(--accent)';
+          const ratio = used / limit;
+          if (ratio >= 1) return 'var(--danger)';
+          if (ratio >= 0.8) return 'var(--warning)';
+          return 'var(--success)';
+        };
+
+        const getProgressPercentage = (used, limit) => {
+          if (limit === -1) return 0;
+          return Math.min((used / limit) * 100, 100);
+        };
+
+        document.getElementById('modalContent').innerHTML = `
+          <div class="stats" style="margin-bottom: 20px;">
+            <div class="stat-card">
+              <div class="stat-number">${stats.today}</div>
+              <div class="stat-label">Today</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number">${stats.week}</div>
+              <div class="stat-label">This Week</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number">${stats.month}</div>
+              <div class="stat-label">This Month</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number">${stats.total}</div>
+              <div class="stat-label">All Time</div>
+            </div>
+          </div>
+
+          <div class="analytics-grid">
+            <div class="analytics-section">
+              <h4>📊 Export Limits Status</h4>
+              <div class="progress-ring">
+                <div class="progress-circle" style="--progress: ${getProgressPercentage(stats.today, user.limit_day)}%; background: conic-gradient(${getProgressColor(stats.today, user.limit_day)} ${getProgressPercentage(stats.today, user.limit_day)}%, var(--bg-2) 0%);">
+                  ${user.limit_day === -1 ? '∞' : stats.today + '/' + user.limit_day}
+                </div>
+                <div class="progress-info">
+                  <strong>Daily</strong><br>
+                  ${user.limit_day === -1 ? 'Unlimited' : (user.limit_day - stats.today) + ' remaining'}
+                </div>
+              </div>
+
+              <div class="progress-ring">
+                <div class="progress-circle" style="--progress: ${getProgressPercentage(stats.week, user.limit_week)}%; background: conic-gradient(${getProgressColor(stats.week, user.limit_week)} ${getProgressPercentage(stats.week, user.limit_week)}%, var(--bg-2) 0%);">
+                  ${user.limit_week === -1 ? '∞' : stats.week + '/' + user.limit_week}
+                </div>
+                <div class="progress-info">
+                  <strong>Weekly</strong><br>
+                  ${user.limit_week === -1 ? 'Unlimited' : (user.limit_week - stats.week) + ' remaining'}
+                </div>
+              </div>
+
+              <div class="progress-ring">
+                <div class="progress-circle" style="--progress: ${getProgressPercentage(stats.month, user.limit_month)}%; background: conic-gradient(${getProgressColor(stats.month, user.limit_month)} ${getProgressPercentage(stats.month, user.limit_month)}%, var(--bg-2) 0%);">
+                  ${user.limit_month === -1 ? '∞' : stats.month + '/' + user.limit_month}
+                </div>
+                <div class="progress-info">
+                  <strong>Monthly</strong><br>
+                  ${user.limit_month === -1 ? 'Unlimited' : (user.limit_month - stats.month) + ' remaining'}
+                </div>
+              </div>
+            </div>
+
+            <div class="analytics-section">
+              <h4>🗺️ Base Map Usage (This Month)</h4>
+              <div class="usage-chart">
+                ${Object.entries(stats.base_usage || {}).length ? Object.entries(stats.base_usage).map(([base, count]) => {
+                  const maxUsage = Math.max(...Object.values(stats.base_usage));
+                  return `
+                    <div class="usage-bar">
+                      <div class="usage-label">${base.toUpperCase()}</div>
+                      <div class="usage-bar-fill">
+                        <div class="usage-bar-progress" style="width: ${(count / maxUsage) * 100}%"></div>
+                      </div>
+                      <div class="usage-count">${count}</div>
+                    </div>
+                  `;
+                }).join('') : '<div class="empty-state">No exports this month</div>'}
+              </div>
+            </div>
+          </div>
+
+          ${stats.recent?.length ? `
+            <div class="analytics-section" style="margin-top: 20px;">
+              <h4>📅 Recent Exports</h4>
+              <div style="max-height: 200px; overflow-y: auto;">
+                ${stats.recent.map(exp => `
+                  <div class="top-user-item" style="margin-bottom: 4px;">
+                    <span>${exp.date} - ${exp.base.toUpperCase()}</span>
+                    <span>${Object.keys(exp.overlays).filter(k => exp.overlays[k]).join(', ') || 'No overlays'}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+        `;
+      };
+
+      const closeUserStatsModal = () => {
+        document.getElementById('userStatsModal').style.display = 'none';
+      };
+
+      // Close modal on outside click
+      document.getElementById('userStatsModal').addEventListener('click', (e) => {
+        if (e.target.id === 'userStatsModal') closeUserStatsModal();
+      });
+
+      // Initialize
+      (async () => {
+        // Check authentication
+        const token = localStorage.getItem('token');
+        const cachedUser = JSON.parse(localStorage.getItem('user') || 'null');
+
+        if (!token || !cachedUser) {
+          location.href = 'login.html';
+          return;
+        }
+
+        // Verify token is valid and user is still admin
+        try {
+          const res = await fetch('/auth/me', {
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+
+          if (!res.ok) {
+            // Token invalid, redirect to login
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            location.href = 'login.html';
+            return;
+          }
+
+          const data = await res.json();
+          const user = data.user;
+
+          // Update cached user data
+          localStorage.setItem('user', JSON.stringify(user));
+
+          // Check if user is admin
+          if (!user?.is_admin) {
+            // Not an admin, redirect to main app
+            location.href = 'index.html';
+            return;
+          }
+
+          // User is authenticated and is admin, load data
+          loadUsers();
+          loadSystemAnalytics();
+        } catch(e) {
+          // Network error, fall back to cached check
+          if (!cachedUser?.is_admin) {
+            location.href = 'login.html';
+            return;
+          }
+          // Try to load with cached credentials
+          loadUsers();
+          loadSystemAnalytics();
+        }
+      })();
+    </script>
+  </body>
+</html>

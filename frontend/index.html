@@ -1,0 +1,378 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title> → Scepmaps </title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <!-- MapLibre GL for vector tile density layer -->
+    <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="toolbar/toolbar.css">
+    <link rel="stylesheet" href="tools/tools.css">
+    <link rel="stylesheet" href="zoom/zoom.css">
+    <link rel="stylesheet" href="settings/settings.css">
+  </head>
+  <body>
+    <!-- Loading screen shown until auth check completes -->
+    <div id="authLoading">
+      <canvas id="particleCanvas"></canvas>
+      <div class="loading-content">
+        <div class="loading-logo">SCEPMAPS</div>
+        <div class="loading-text">Calibrating navigation systems...</div>
+      </div>
+    </div>
+
+    <div id="app" style="display: none;">
+      <div class="topbar">
+        <div class="brand topbar-tool topbar-tool--fixed"><span class="glow-dot"></span>SCEPMAPS</div>
+
+        <div class="toolbar-section topbar-map-section topbar-tool topbar-tool--flex">
+          <span class="toolbar-label">Map:</span>
+          <div class="emoji-btn-group" id="mapBtnGroup">
+            <button class="emoji-btn" id="btnOsm" data-base="osm" title="OpenStreetMap">🗺️</button>
+            <button class="emoji-btn" id="btnEsri" data-base="esri" title="Satellite">🛰️</button>
+            <button class="emoji-btn" id="btnNavigation" data-base="navigation" title="Navigation">🧭</button>
+            <button class="emoji-btn" id="btnNight" data-base="night" title="Night">🌙</button>
+            <button class="emoji-btn" id="btnTopo" data-base="topo" title="Topographic">⛰️</button>
+            <button class="emoji-btn" id="btnOcean" data-base="ocean" title="Navigation Dark">🌊</button>
+            <button class="emoji-btn" id="btnShom" data-base="shom" title="Charts">⚓</button>
+            <button class="emoji-btn" id="btnUkho" data-base="ukho" title="UKHO Charts">🇬🇧</button>
+            <button class="emoji-btn" id="btnGbsouth" data-base="gbsouth" title="GB South Aviation">✈️</button>
+            <div class="more-btn-wrapper">
+              <button class="emoji-btn more-btn" id="btnMoreMaps" title="More maps">···</button>
+              <div class="more-dropdown" id="moreMapDropdown"></div>
+            </div>
+          </div>
+        </div>
+
+        <span class="divider topbar-tool topbar-tool--fixed"></span>
+
+        <div class="toolbar-section topbar-tool topbar-tool--flex">
+          <span class="toolbar-label">Overlay:</span>
+          <div class="emoji-btn-group" id="overlayBtnGroup">
+            <button class="emoji-btn" id="btnSeamarks" data-overlay="seamarks" title="Seamarks">⚓</button>
+            <button class="emoji-btn" id="btnOpenaip" data-overlay="openaip" title="Airspace">✈️</button>
+            <button class="emoji-btn" id="btnLabel" data-overlay="label" title="Names">🏷️</button>
+            <button class="emoji-btn" id="btnDensity" data-overlay="density" title="Population Density">🏘️</button>
+            <button class="emoji-btn active" id="btnHistory" data-overlay="history" title="History">🕐</button>
+            <div class="more-btn-wrapper">
+              <button class="emoji-btn more-btn" id="btnMoreOverlays" title="More overlays">···</button>
+              <div class="more-dropdown" id="moreOverlayDropdown"></div>
+            </div>
+          </div>
+        </div>
+
+        <span class="divider topbar-tool topbar-tool--fixed"></span>
+
+        <input id="exportFilename" class="topbar-tool topbar-tool--fixed" type="text" placeholder="optional filename"/>
+
+        <button class="btn topbar-tool topbar-tool--fixed" id="exportBtn"><span class="spinner" style="display:none;margin-right:6px">⏳</span><span class="label">Export View</span></button>
+
+        <div class="topbar-actions topbar-tool topbar-tool--fixed">
+          <button class="btn" id="settingsBtn">⚙️</button>
+          <button class="btn" id="adminBtn">Admin</button>
+        </div>
+      </div>
+
+      <!-- Hidden elements to maintain compatibility with existing code -->
+      <select id="baseLayer" style="display: none;">
+        <option value="osm">OpenStreetMap</option>
+        <option value="esri">Satellite</option>
+        <option value="topo">Topographic</option>
+        <option value="navigation">Navigation</option>
+        <option value="night">Night</option>
+        <option value="ocean">Ocean</option>
+        <option value="shom">SHOM Charts</option>
+        <option value="ukho">UKHO Charts</option>
+        <option value="gbsouth">GB South Aviation</option>
+      </select>
+      <input type="checkbox" id="seamarks" style="display: none;"/>
+      <input type="checkbox" id="openaip" style="display: none;"/>
+      <input type="checkbox" id="label" style="display: none;"/>
+      <input type="checkbox" id="density" style="display: none;"/>
+      <input type="checkbox" id="historyToggle" checked style="display: none;"/>
+      <select id="exportSystem" style="display: none;">
+        <option value="UAS" selected>UAS</option>
+      </select>
+      <select id="exportQuality" style="display: none;">
+        <option value="SD" selected>SD</option>
+        <option value="HD">HD</option>
+      </select>
+
+      <div id="map"></div>
+    </div>
+
+    <div class="attribution" id="attrib"></div>
+
+    <!-- Population Density Legend -->
+    <div class="density-legend" id="densityLegend">
+      <div class="info-row">
+        <div class="default-title" id="densityDefaultTitle">Population Density (p/km²)</div>
+        <div class="hover-info" id="densityHoverInfo">
+          <div class="area-info">
+            <div class="area-name" id="densityAreaName"></div>
+            <div class="area-code" id="densityAreaCode"></div>
+          </div>
+          <div class="density-value-display">
+            <span id="densityValueDisplay"></span>
+            <span class="density-unit">p/km²</span>
+          </div>
+        </div>
+      </div>
+      <div class="bar-container">
+        <div class="bar"></div>
+        <div class="marker" id="densityMarker"></div>
+      </div>
+      <div class="labels">
+        <span>0</span>
+        <span>1k</span>
+        <span>5k</span>
+        <span>10k</span>
+        <span>15k+</span>
+      </div>
+    </div>
+
+    <!-- User Stats Modal -->
+    <div id="userStatsModal" class="stats-modal" style="z-index: 1100;">
+      <div class="stats-modal-content">
+        <div class="stats-modal-header">
+          <h3>📊 My Export Statistics</h3>
+          <button class="btn" id="closeStatsBtn">&times;</button>
+        </div>
+        <div class="stats-modal-body" id="statsModalContent">
+          Loading...
+        </div>
+      </div>
+    </div>
+
+    <!-- User Settings Modal -->
+    <div id="userSettingsModal" class="stats-modal">
+      <div class="stats-modal-content">
+        <div class="stats-modal-header">
+          <h3>⚙️ User Preferences</h3>
+          <div class="settings-header-actions">
+            <button class="btn settings-save-btn" id="savePreferencesBtn" style="display:none;">💾 Save Changes</button>
+            <button class="btn" id="closeSettingsBtn">&times;</button>
+          </div>
+        </div>
+        <div class="stats-modal-body">
+          <div style="margin-bottom: 20px; display: flex; gap: 8px;">
+            <button class="btn" id="statsBtn" style="flex: 1;">
+              📊 My Stats
+            </button>
+            <button class="btn" id="logoutBtn" style="flex: 1;">
+              🚪 Logout
+            </button>
+          </div>
+
+          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <h4>Default Layer Settings</h4>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
+              Set your preferred base map and overlays
+            </p>
+
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px;">
+              <div>
+                <label style="display: block; margin-bottom: 4px;">Base Map</label>
+                <select id="settingsBase" style="width: 100%;">
+                  <option value="">-- None --</option>
+                  <option value="osm">OpenStreetMap</option>
+                  <option value="esri">Satellite</option>
+                  <option value="topo">Topographic</option>
+                  <option value="navigation">Navigation</option>
+                  <option value="night">Night</option>
+                  <option value="shom">SHOM Charts</option>
+                  <option value="ukho">UKHO Charts</option>
+                  <option value="gbsouth">GB South Aviation</option>
+                </select>
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 4px;">Overlays</label>
+                <div style="display: flex; gap: 12px; align-items: center; height: 100%; flex-wrap: wrap;">
+                  <label><input type="checkbox" id="settingsSeamarks"/> Seamarks</label>
+                  <label><input type="checkbox" id="settingsOpenaip"/> Air Space</label>
+                  <label><input type="checkbox" id="settingsDensity"/> Population Density</label>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn" id="useCurrentLayersBtn" style="margin-right: 8px;">
+              🗺️ Use Current Layer Settings
+            </button>
+          </div>
+
+          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <h4>⭐ Favorite Buttons</h4>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
+              Choose up to 4 map and 4 overlay buttons to show in the toolbar
+            </p>
+
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600;">Map Buttons</label>
+              <div class="favorites-grid">
+                <select id="favMap1" class="fav-select"><option value="">-- None --</option></select>
+                <select id="favMap2" class="fav-select"><option value="">-- None --</option></select>
+                <select id="favMap3" class="fav-select"><option value="">-- None --</option></select>
+                <select id="favMap4" class="fav-select"><option value="">-- None --</option></select>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600;">Overlay Buttons</label>
+              <div class="favorites-grid">
+                <select id="favOverlay1" class="fav-select"><option value="">-- None --</option></select>
+                <select id="favOverlay2" class="fav-select"><option value="">-- None --</option></select>
+                <select id="favOverlay3" class="fav-select"><option value="">-- None --</option></select>
+                <select id="favOverlay4" class="fav-select"><option value="">-- None --</option></select>
+              </div>
+            </div>
+
+            <button class="btn" id="clearFavoritesBtn">
+              ✗ Clear All
+            </button>
+          </div>
+
+          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <h4>Tool Settings</h4>
+            <div style="margin-bottom: 12px;">
+              <label style="display: block; margin-bottom: 4px;">Ruler Units</label>
+              <select id="settingsRulerUnit" style="width: 100%;">
+                <option value="m">Meters (m)</option>
+                <option value="km">Kilometers (km)</option>
+                <option value="ft">Feet (ft)</option>
+                <option value="mi">Miles (mi)</option>
+                <option value="nm">Nautical Miles (nm)</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="settingsDensitySection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <h4>🏘️ Population Density Overlay</h4>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
+              Customize the population density overlay appearance
+            </p>
+
+            <div style="margin-bottom: 12px;">
+              <label style="display: block; margin-bottom: 4px;">Layer Opacity</label>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <input type="range" id="settingsDensityOpacity" min="0" max="1" step="0.05" value="0.65"
+                       style="flex: 1; accent-color: var(--accent);" />
+                <span id="densityOpacityValue" style="min-width: 40px; text-align: right;">65%</span>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+              <div>
+                <label style="display: block; margin-bottom: 4px;">Border Color</label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input type="color" id="settingsDensityBorderColor" value="#ffffff"
+                         style="width: 40px; height: 32px; border: 1px solid var(--stroke); border-radius: 4px; cursor: pointer;" />
+                  <input type="range" id="settingsDensityBorderOpacity" min="0" max="1" step="0.1" value="0.2"
+                         style="flex: 1; accent-color: var(--accent);" />
+                  <span id="borderOpacityValue" style="min-width: 30px; font-size: 12px;">20%</span>
+                </div>
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 4px;">Hover Border Color</label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input type="color" id="settingsDensityHoverColor" value="#000000"
+                         style="width: 40px; height: 32px; border: 1px solid var(--stroke); border-radius: 4px; cursor: pointer;" />
+                  <input type="range" id="settingsDensityHoverOpacity" min="0" max="1" step="0.1" value="0.9"
+                         style="flex: 1; accent-color: var(--accent);" />
+                  <span id="hoverOpacityValue" style="min-width: 30px; font-size: 12px;">90%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <h4>Export settings</h4>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
+              Set your preferred export system and quality
+            </p>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+              <div>
+                <label style="display: block; margin-bottom: 4px;">System</label>
+                <select id="settingsSystem" style="width: 100%;">
+                  <option value="UAS">UAS</option>
+                </select>
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 4px;">Quality</label>
+                <select id="settingsQuality" style="width: 100%;">
+                  <option value="SD">SD</option>
+                  <option value="HD">HD</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="margin-top: 12px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="exportAttribution" checked style="width: 16px; height: 16px;"/>
+                Show attribution in exports
+              </label>
+            </div>
+          </div>
+
+          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <h4>Default Map Position</h4>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
+              Set your preferred starting position when you open the map
+            </p>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+              <div>
+                <label style="display: block; margin-bottom: 4px;">Latitude</label>
+                <input type="number" id="settingsLat" step="0.000001" min="-90" max="90"
+                       placeholder="e.g. 48.8566" style="width: 100%;" />
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 4px;">Longitude</label>
+                <input type="number" id="settingsLon" step="0.000001" min="-180" max="180"
+                       placeholder="e.g. 2.3522" style="width: 100%;" />
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 4px;">Zoom Level</label>
+                <input type="number" id="settingsZoom" min="0" max="18"
+                       placeholder="e.g. 12" style="width: 100%;" />
+              </div>
+            </div>
+
+            <button class="btn" id="setCurrentPositionBtn" style="margin-right: 8px;">
+              📍 Use Current Map Position
+            </button>
+            <button class="btn" id="clearPositionBtn">
+              🗑️ Clear Saved Position
+            </button>
+          </div>
+
+          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <span id="preferencesMessage" style="color: var(--accent); display: none;">
+              ✓ Preferences saved!
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- MapLibre GL for vector tile density layer -->
+    <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+    <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
+
+    <!-- Interactive Mapping Grid System -->
+    <script src="particles.js"></script>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
