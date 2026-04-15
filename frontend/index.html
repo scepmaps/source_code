@@ -197,17 +197,14 @@
               </div>
               <div>
                 <label style="display: block; margin-bottom: 4px;">Overlays</label>
-                <div style="display: flex; gap: 12px; align-items: center; height: 100%; flex-wrap: wrap;">
-                  <label><input type="checkbox" id="settingsSeamarks"/> Seamarks</label>
-                  <label><input type="checkbox" id="settingsOpenaip"/> Air Space</label>
-                  <label><input type="checkbox" id="settingsDensity"/> Population Density</label>
-                </div>
+                <div id="settingsOverlaysList" class="settings-overlays-list"></div>
               </div>
             </div>
 
-            <button class="btn" id="useCurrentLayersBtn" style="margin-right: 8px;">
-              🗺️ Use Current Layer Settings
+            <button class="btn" id="useCurrentLayersBtn">
+              🗺️ Use Current as Default Layer Settings
             </button>
+
           </div>
 
           <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
@@ -235,10 +232,6 @@
                 <select id="favOverlay4" class="fav-select"><option value="">-- None --</option></select>
               </div>
             </div>
-
-            <button class="btn" id="clearFavoritesBtn">
-              ✗ Clear All
-            </button>
           </div>
 
           <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
@@ -317,9 +310,12 @@
             </div>
 
             <div style="margin-top: 12px;">
-              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                <input type="checkbox" id="exportAttribution" checked style="width: 16px; height: 16px;"/>
-                Show attribution in exports
+              <label class="settings-switch-row">
+                <span class="settings-overlay-label">Show attribution in exports</span>
+                <span class="settings-switch">
+                  <input type="checkbox" id="exportAttribution" checked />
+                  <span class="settings-switch-slider" aria-hidden="true"></span>
+                </span>
               </label>
             </div>
           </div>
@@ -350,9 +346,6 @@
 
             <button class="btn" id="setCurrentPositionBtn" style="margin-right: 8px;">
               📍 Use Current Map Position
-            </button>
-            <button class="btn" id="clearPositionBtn">
-              🗑️ Clear Saved Position
             </button>
           </div>
 

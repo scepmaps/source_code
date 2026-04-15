@@ -2240,7 +2240,7 @@ def update_preferences():
         if not isinstance(default_overlays, list):
             return ({"error": "Invalid overlays format"}, 400)
         for overlay in default_overlays:
-            if overlay not in ["seamarks", "openaip", "density"]:
+            if overlay not in ["seamarks", "openaip", "density", "history", "label"]:
                 return ({"error": f"Invalid overlay: {overlay}"}, 400)
 
     if default_system is not None:

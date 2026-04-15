@@ -11,6 +11,13 @@ export function initSettingsController(opts) {
     seamarksCb,
     openaipCb,
     densityCb,
+    historyToggle,
+    getIsNamesOverlayEnabled,
+    setIsNamesOverlayEnabled,
+    shouldShowNamesOverlayForBase,
+    applyNamesOverlayForBase,
+    setAttrib,
+    updateOverlayButtonStates,
     exportSystem,
     exportQuality,
     setRulerUnits,
@@ -25,7 +32,55 @@ export function initSettingsController(opts) {
   const settingsModal = document.getElementById('userSettingsModal');
   const settingsBody = settingsModal.querySelector('.stats-modal-body');
   const saveBtn = document.getElementById('savePreferencesBtn');
+  const settingsOverlaysList = document.getElementById('settingsOverlaysList');
   let initialSettingsSnapshot = '';
+
+  function bindIfExists(elementId, eventName, handler) {
+    const el = document.getElementById(elementId);
+    if (el) el.addEventListener(eventName, handler);
+  }
+  const settingsOverlayDefs = [
+    {
+      key: 'seamarks',
+      label: 'Seamarks',
+      inputId: 'settingsOverlaySeamarks',
+      isAvailable: () => allowedOver.includes('seamarks'),
+      getChecked: () => !!seamarksCb?.checked,
+      setChecked: (next) => { if (seamarksCb) seamarksCb.checked = !!next; },
+    },
+    {
+      key: 'openaip',
+      label: 'Air Space',
+      inputId: 'settingsOverlayOpenaip',
+      isAvailable: () => allowedOver.includes('openaip'),
+      getChecked: () => !!openaipCb?.checked,
+      setChecked: (next) => { if (openaipCb) openaipCb.checked = !!next; },
+    },
+    {
+      key: 'density',
+      label: 'Population Density',
+      inputId: 'settingsOverlayDensity',
+      isAvailable: () => allowedOver.includes('density'),
+      getChecked: () => !!densityCb?.checked,
+      setChecked: (next) => { if (densityCb) densityCb.checked = !!next; },
+    },
+    {
+      key: 'label',
+      label: 'Name Tags',
+      inputId: 'settingsOverlayLabel',
+      isAvailable: () => allowedOver.includes('label'),
+      getChecked: () => !!getIsNamesOverlayEnabled?.(),
+      setChecked: (next) => { if (setIsNamesOverlayEnabled) setIsNamesOverlayEnabled(!!next); },
+    },
+    {
+      key: 'history',
+      label: 'History',
+      inputId: 'settingsOverlayHistory',
+      isAvailable: () => allowedOver.includes('history'),
+      getChecked: () => !!historyToggle?.checked,
+      setChecked: (next) => { if (historyToggle) historyToggle.checked = !!next; },
+    },
+  ];
 
   function getSettingsSnapshot() {
     const fields = settingsBody.querySelectorAll('input, select, textarea');
@@ -67,6 +122,57 @@ export function initSettingsController(opts) {
     updateDensityBorderColors(hexToRgba(borderHex, borderOpacity), hexToRgba(hoverHex, hoverOpacity));
   }
 
+  function getSelectedSettingsBase() {
+    const settingsBase = document.getElementById('settingsBase');
+    return settingsBase?.value || baseSelect?.value || '';
+  }
+
+  function isNamesOverlayAvailableForBase(baseType) {
+    if (!allowedOver.includes('label')) return false;
+    if (!shouldShowNamesOverlayForBase) return true;
+    return shouldShowNamesOverlayForBase(baseType);
+  }
+
+  function getVisibleOverlayDefs(selectedBase = getSelectedSettingsBase()) {
+    return settingsOverlayDefs.filter((overlayDef) => {
+      if (overlayDef.key !== 'label') return overlayDef.isAvailable();
+      return isNamesOverlayAvailableForBase(selectedBase);
+    });
+  }
+
+  function renderOverlayOptions(selectedBase = getSelectedSettingsBase()) {
+    if (!settingsOverlaysList) return;
+    const checkedByKey = {};
+    settingsOverlayDefs.forEach((overlayDef) => {
+      const input = document.getElementById(overlayDef.inputId);
+      if (input) checkedByKey[overlayDef.key] = input.checked;
+    });
+    if (checkedByKey.label === undefined) {
+      checkedByKey.label = !!getIsNamesOverlayEnabled?.();
+    }
+    settingsOverlaysList.innerHTML = '';
+    getVisibleOverlayDefs(selectedBase).forEach((overlayDef) => {
+      const row = document.createElement('label');
+      row.className = 'settings-overlay-item';
+      row.innerHTML = `
+        <span class="settings-overlay-label">${overlayDef.label}</span>
+        <span class="settings-switch">
+          <input type="checkbox" id="${overlayDef.inputId}" />
+          <span class="settings-switch-slider" aria-hidden="true"></span>
+        </span>
+      `;
+      const input = row.querySelector('input');
+      if (input) {
+        if (checkedByKey[overlayDef.key] !== undefined) {
+          input.checked = checkedByKey[overlayDef.key];
+        } else {
+          input.checked = overlayDef.getChecked();
+        }
+      }
+      settingsOverlaysList.appendChild(row);
+    });
+  }
+
   const showUserSettings = () => {
     const user = userRef();
     document.body.classList.add('settings-modal-open');
@@ -75,21 +181,22 @@ export function initSettingsController(opts) {
     Array.from(setBase.options).forEach(opt => {
       opt.style.display = (opt.value && !allowedBases.includes(opt.value)) ? 'none' : '';
     });
-    document.getElementById('settingsSeamarks').closest('label').style.display = allowedOver.includes('seamarks') ? '' : 'none';
-    document.getElementById('settingsOpenaip').closest('label').style.display = allowedOver.includes('openaip') ? '' : 'none';
-    document.getElementById('settingsDensity').closest('label').style.display = allowedOver.includes('density') ? '' : 'none';
+    setBase.value = user.default_base || baseSelect.value || '';
+    renderOverlayOptions(setBase.value);
     const densitySection = document.getElementById('settingsDensitySection');
     if (densitySection) densitySection.style.display = allowedOver.includes('density') ? '' : 'none';
 
     if (user.default_lat != null) document.getElementById('settingsLat').value = user.default_lat;
     if (user.default_lon != null) document.getElementById('settingsLon').value = user.default_lon;
     if (user.default_zoom != null) document.getElementById('settingsZoom').value = user.default_zoom;
-    setBase.value = user.default_base || '';
 
     const defaultOverlays = user.default_overlays || [];
-    document.getElementById('settingsSeamarks').checked = defaultOverlays.includes('seamarks');
-    document.getElementById('settingsOpenaip').checked = defaultOverlays.includes('openaip');
-    document.getElementById('settingsDensity').checked = defaultOverlays.includes('density');
+    getVisibleOverlayDefs(setBase.value).forEach((overlayDef) => {
+      const input = document.getElementById(overlayDef.inputId);
+      if (input) {
+        input.checked = defaultOverlays.includes(overlayDef.key);
+      }
+    });
     document.getElementById('settingsRulerUnit').value = user.default_units || 'm';
     document.getElementById('settingsSystem').value = user.default_system === 'UAS' ? 'UAS' : 'UAS';
     document.getElementById('settingsQuality').value = user.default_quality === 'HD' ? 'HD' : 'SD';
@@ -155,9 +262,11 @@ export function initSettingsController(opts) {
       preferences.density_border_hover_color = hexToRgba(hoverHex, hoverOpacity);
     }
     const overlays = [];
-    if (document.getElementById('settingsSeamarks').checked) overlays.push('seamarks');
-    if (document.getElementById('settingsOpenaip').checked) overlays.push('openaip');
-    if (allowedOver.includes('density') && document.getElementById('settingsDensity').checked) overlays.push('density');
+    getVisibleOverlayDefs(base).forEach((overlayDef) => {
+      const input = document.getElementById(overlayDef.inputId);
+      if (!input) return;
+      if (input.checked) overlays.push(overlayDef.key);
+    });
     preferences.default_overlays = overlays;
 
     try {
@@ -197,34 +306,35 @@ export function initSettingsController(opts) {
     document.getElementById('settingsZoom').value = zoom;
     refreshSaveButtonVisibility();
   };
-  const clearPosition = () => {
-    document.getElementById('settingsLat').value = '';
-    document.getElementById('settingsLon').value = '';
-    document.getElementById('settingsZoom').value = '';
-    refreshSaveButtonVisibility();
-  };
   const useCurrentLayers = () => {
     document.getElementById('settingsBase').value = baseSelect.value;
-    document.getElementById('settingsSeamarks').checked = seamarksCb.checked;
-    document.getElementById('settingsOpenaip').checked = openaipCb.checked;
-    document.getElementById('settingsDensity').checked = densityCb.checked;
+    renderOverlayOptions(baseSelect.value);
+    getVisibleOverlayDefs(baseSelect.value).forEach((overlayDef) => {
+      const input = document.getElementById(overlayDef.inputId);
+      if (input) input.checked = overlayDef.getChecked();
+    });
+    // Ensure hidden names option never lingers as selected in the snapshot state.
+    if (!isNamesOverlayAvailableForBase(baseSelect.value)) {
+      const namesInput = document.getElementById('settingsOverlayLabel');
+      if (namesInput) namesInput.checked = false;
+    }
     refreshSaveButtonVisibility();
   };
   function init() {
-    document.getElementById('settingsDensityOpacity').addEventListener('input', (e) => {
+    bindIfExists('settingsDensityOpacity', 'input', (e) => {
       const opacity = parseFloat(e.target.value);
       document.getElementById('densityOpacityValue').textContent = Math.round(opacity * 100) + '%';
       updateDensityOpacity(opacity);
       refreshSaveButtonVisibility();
     });
-    document.getElementById('settingsDensityBorderColor').addEventListener('input', updateBorderColorsFromInputs);
-    document.getElementById('settingsDensityBorderOpacity').addEventListener('input', (e) => {
+    bindIfExists('settingsDensityBorderColor', 'input', updateBorderColorsFromInputs);
+    bindIfExists('settingsDensityBorderOpacity', 'input', (e) => {
       document.getElementById('borderOpacityValue').textContent = Math.round(parseFloat(e.target.value) * 100) + '%';
       updateBorderColorsFromInputs();
       refreshSaveButtonVisibility();
     });
-    document.getElementById('settingsDensityHoverColor').addEventListener('input', updateBorderColorsFromInputs);
-    document.getElementById('settingsDensityHoverOpacity').addEventListener('input', (e) => {
+    bindIfExists('settingsDensityHoverColor', 'input', updateBorderColorsFromInputs);
+    bindIfExists('settingsDensityHoverOpacity', 'input', (e) => {
       document.getElementById('hoverOpacityValue').textContent = Math.round(parseFloat(e.target.value) * 100) + '%';
       updateBorderColorsFromInputs();
       refreshSaveButtonVisibility();
@@ -240,12 +350,16 @@ export function initSettingsController(opts) {
         closeSettingsModal();
       }
     });
-    document.getElementById('settingsBtn').addEventListener('click', showUserSettings);
-    document.getElementById('closeSettingsBtn').addEventListener('click', closeSettingsModal);
-    document.getElementById('savePreferencesBtn').addEventListener('click', savePreferences);
-    document.getElementById('setCurrentPositionBtn').addEventListener('click', setCurrentPosition);
-    document.getElementById('clearPositionBtn').addEventListener('click', clearPosition);
-    document.getElementById('useCurrentLayersBtn').addEventListener('click', useCurrentLayers);
+    bindIfExists('settingsBtn', 'click', showUserSettings);
+    bindIfExists('closeSettingsBtn', 'click', closeSettingsModal);
+    bindIfExists('savePreferencesBtn', 'click', savePreferences);
+    bindIfExists('setCurrentPositionBtn', 'click', setCurrentPosition);
+    bindIfExists('useCurrentLayersBtn', 'click', useCurrentLayers);
+    bindIfExists('settingsBase', 'change', (e) => {
+      const selectedBase = e.target.value;
+      renderOverlayOptions(selectedBase);
+      refreshSaveButtonVisibility();
+    });
   }
 
   return { init };

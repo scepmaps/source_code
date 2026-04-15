@@ -270,36 +270,55 @@ export function createToolbarController(opts) {
     const groupWidth = group.clientWidth || 0;
     const moreWidth = moreWrapper.getBoundingClientRect().width || 44;
     const gap = parseFloat(getComputedStyle(group).gap || '6') || 6;
-    const available = Math.max(0, groupWidth - moreWidth - gap);
-    let used = 0;
-    const overflow = [...forcedOverflow];
 
-    priority.forEach(k => {
-      const btn = document.getElementById(idMap[k]);
-      if (!btn) return;
-      const w = btn.getBoundingClientRect().width || 44;
-      if ((used + w) <= available) {
-        btn.style.display = '';
-        used += w + gap;
-      } else {
-        btn.style.display = 'none';
-        if (!overflow.includes(k)) overflow.push(k);
-      }
-    });
+    const runLayoutPass = (reserveMoreButtonSpace) => {
+      const available = Math.max(0, groupWidth - (reserveMoreButtonSpace ? (moreWidth + gap) : 0));
+      let used = 0;
+      const overflow = [...forcedOverflow];
 
-    keys.forEach((k) => {
-      if (!priority.includes(k)) {
+      priority.forEach(k => {
         const btn = document.getElementById(idMap[k]);
-        if (btn) btn.style.display = 'none';
-        if (!overflow.includes(k)) overflow.push(k);
-      }
-    });
-    keys.forEach((k) => {
-      const btn = document.getElementById(idMap[k]);
-      if (!btn || getComputedStyle(btn).display === 'none') {
-        if (!overflow.includes(k)) overflow.push(k);
-      }
-    });
+        if (!btn) return;
+        const w = btn.getBoundingClientRect().width || 44;
+        if ((used + w) <= available) {
+          btn.style.display = '';
+          used += w + gap;
+        } else {
+          btn.style.display = 'none';
+          if (!overflow.includes(k)) overflow.push(k);
+        }
+      });
+
+      keys.forEach((k) => {
+        if (!priority.includes(k)) {
+          const btn = document.getElementById(idMap[k]);
+          if (btn) btn.style.display = 'none';
+          if (!overflow.includes(k)) overflow.push(k);
+        }
+      });
+      keys.forEach((k) => {
+        const btn = document.getElementById(idMap[k]);
+        if (!btn || getComputedStyle(btn).display === 'none') {
+          if (!overflow.includes(k)) overflow.push(k);
+        }
+      });
+
+      return overflow;
+    };
+
+    // First pass: do not reserve width for the more button.
+    // If everything fits, hide "..." completely.
+    let overflow = runLayoutPass(false);
+    if (overflow.length === 0) {
+      moreWrapper.style.display = 'none';
+      document.getElementById(dropdownId)?.classList.remove('open');
+      populateMoreDropdown(dropdownId, [], emojis, type);
+      return;
+    }
+
+    // Second pass: overflow exists, reserve room for "..." and recompute.
+    moreWrapper.style.display = '';
+    overflow = runLayoutPass(true);
     populateMoreDropdown(dropdownId, overflow, emojis, type);
   }
 
@@ -363,18 +382,21 @@ export function createToolbarController(opts) {
     if (mapBtnGroupEl) new ResizeObserver(scheduleToolbarOverflowLayout).observe(mapBtnGroupEl);
     if (overlayBtnGroupEl) new ResizeObserver(scheduleToolbarOverflowLayout).observe(overlayBtnGroupEl);
 
-    document.getElementById('clearFavoritesBtn').addEventListener('click', () => {
+    const clearFavoritesBtn = document.getElementById('clearFavoritesBtn');
+    clearFavoritesBtn?.addEventListener('click', () => {
       localStorage.removeItem('scepmaps_favorites');
       for (let i = 1; i <= 4; i++) {
         const mapSel = document.getElementById(`favMap${i}`);
         const overSel = document.getElementById(`favOverlay${i}`);
+        if (!mapSel || !overSel) continue;
         mapSel.value = '';
         overSel.value = '';
         mapSel.dispatchEvent(new Event('change', { bubbles: true }));
         overSel.dispatchEvent(new Event('change', { bubbles: true }));
       }
       applyFavorites(false);
-      const btn = document.getElementById('clearFavoritesBtn');
+      const btn = clearFavoritesBtn;
+      if (!btn) return;
       const originalText = btn.textContent;
       btn.textContent = '✓ Cleared!';
       setTimeout(() => { btn.textContent = originalText; }, 1500);

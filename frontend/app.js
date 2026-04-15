@@ -935,6 +935,13 @@ async function applyUserPreferences() {
     if (user.default_overlays.includes('label') && allowedOver.includes('label')) {
       isNamesOverlayEnabled = true;
     }
+    if (user.default_overlays.includes('history') && allowedOver.includes('history')) {
+      historyToggle.checked = true;
+      exportHistory.addTo(map);
+    } else {
+      historyToggle.checked = false;
+      map.removeLayer(exportHistory);
+    }
   }
 
   // Apply ruler unit preference
@@ -3260,6 +3267,15 @@ initSettingsController({
   seamarksCb,
   openaipCb,
   densityCb,
+  historyToggle,
+  getIsNamesOverlayEnabled: () => isNamesOverlayEnabled,
+  setIsNamesOverlayEnabled: (next) => { isNamesOverlayEnabled = next; },
+  shouldShowNamesOverlayForBase: (baseType) => (
+    allowedOver.includes('label') && !baseHasNames(baseType) && supportsNamesOverlay(baseType)
+  ),
+  applyNamesOverlayForBase,
+  setAttrib,
+  updateOverlayButtonStates,
   exportSystem,
   exportQuality,
   setRulerUnits: (next) => { rulerUnits = next; },
