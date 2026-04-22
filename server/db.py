@@ -152,7 +152,11 @@ def ensure_default_admin(email: str, password_hash: str):
     if row[0] == 0:
         cur.execute(
             """
-            INSERT INTO users (email, name, password_hash, is_admin, allowed_bases, allowed_overlays, limit_day, limit_week, limit_month)
+            INSERT INTO users (
+                email, name, password_hash, is_admin,
+                allowed_bases, allowed_overlays, allowed_tools,
+                limit_day, limit_week, limit_month
+            )
             VALUES (?, ?, ?, 1, ?, ?, ?, -1, -1, -1)
             """,
             (
