@@ -62,9 +62,13 @@ const defaultZoom = (user.default_zoom !== null && user.default_zoom !== undefin
 const map = L.map('map', { zoomControl: true }).setView([defaultLat, defaultLon], defaultZoom);
 map.invalidateSize(); // Ensure map renders correctly after display change
 const DEFAULT_MAP_ZOOM_LIMITS = { min: 1, max: 20 };
+const BASE_NATIVE_MAX_ZOOM = {
+  // ArcGIS World Imagery currently stops serving tiles beyond z19 in this setup.
+  esri: 19
+};
 const BASE_ZOOM_LIMITS = {
   osm: { min: 1, max: 20 },
-  esri: { min: 1, max: 20 },
+  esri: { min: 1, max: 19 },
   // Vector basemaps: cap at 19 to avoid over-zoom beyond typical source detail.
   topo: { min: 1, max: 19 },
   navigation: { min: 1, max: 19 },
@@ -77,6 +81,19 @@ const BASE_ZOOM_LIMITS = {
 
 function getZoomLimitsForBase(baseType) {
   return BASE_ZOOM_LIMITS[baseType] || DEFAULT_MAP_ZOOM_LIMITS;
+}
+
+function createBaseRasterLayer(baseType, url, attribution) {
+  const opts = {
+    attribution,
+    maxZoom: DEFAULT_MAP_ZOOM_LIMITS.max,
+    pane: 'basePane'
+  };
+  const maxNativeZoom = BASE_NATIVE_MAX_ZOOM[baseType];
+  if (Number.isFinite(maxNativeZoom)) {
+    opts.maxNativeZoom = maxNativeZoom;
+  }
+  return L.tileLayer(url, opts);
 }
 
 function applyZoomLimitsForBase(baseType) {
@@ -259,8 +276,8 @@ if (rawTools === null || rawTools === undefined) {
 }
 const layerDefs = {};
 // OSM and ArcGIS maps are true base layers
-if (allowedBases.includes('osm'))  layerDefs.osm  = L.tileLayer(LAYERS.osm.url,  { attribution: LAYERS.osm.attribution,  maxZoom: 20, pane: 'basePane' });
-if (allowedBases.includes('esri')) layerDefs.esri = L.tileLayer(LAYERS.esri.url, { attribution: LAYERS.esri.attribution, maxZoom: 20, pane: 'basePane' });
+if (allowedBases.includes('osm'))  layerDefs.osm  = createBaseRasterLayer('osm', LAYERS.osm.url, LAYERS.osm.attribution);
+if (allowedBases.includes('esri')) layerDefs.esri = createBaseRasterLayer('esri', LAYERS.esri.url, LAYERS.esri.attribution);
 // Topo is now a vector layer, so we don't create it here - it will be created via createTopoLayer() when selected
 // if (allowedBases.includes('topo')) layerDefs.topo = ... // Topo is now vector, handled separately
 // Navigation is now a vector layer, so we don't create it here - it will be created via createNavigationLayer() when selected
@@ -784,11 +801,7 @@ async function refreshBaseLayer() {
     }
 
     // Create new layer with correct URL
-    currentBase = L.tileLayer(url, {
-      attribution: getLayerAttribution(baseType),
-      maxZoom: 20,
-      pane: 'basePane'
-    });
+    currentBase = createBaseRasterLayer(baseType, url, getLayerAttribution(baseType));
 
     currentBase.addTo(map);
   }
@@ -846,7 +859,7 @@ async function applyUserPreferences() {
     if (selectedBase === 'shom' && shomOverlay) {
       const baseUrl = LAYERS.osm.url;
       const baseAttrib = LAYERS.osm.attribution;
-      currentBase = L.tileLayer(baseUrl, { attribution: baseAttrib, maxZoom: 20, pane: 'basePane' });
+      currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
       currentOverlay = shomOverlay;
       currentBase.addTo(map);
       currentOverlay.addTo(map);
@@ -855,7 +868,7 @@ async function applyUserPreferences() {
     else if (selectedBase === 'gbsouth' && gbsouthOverlay) {
       const baseUrl = LAYERS.osm.url;
       const baseAttrib = LAYERS.osm.attribution;
-      currentBase = L.tileLayer(baseUrl, { attribution: baseAttrib, maxZoom: 20, pane: 'basePane' });
+      currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
       currentOverlay = gbsouthOverlay;
       currentBase.addTo(map);
       currentOverlay.addTo(map);
@@ -864,7 +877,7 @@ async function applyUserPreferences() {
     else if (selectedBase === 'ukho' && ukhoOverlay) {
       const baseUrl = LAYERS.osm.url;
       const baseAttrib = LAYERS.osm.attribution;
-      currentBase = L.tileLayer(baseUrl, { attribution: baseAttrib, maxZoom: 20, pane: 'basePane' });
+      currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
       currentOverlay = ukhoOverlay;
       currentBase.addTo(map);
       currentOverlay.addTo(map);
@@ -943,8 +956,13 @@ async function applyUserPreferences() {
       const url = getLayerUrl(selectedBase);
       const attrib = getLayerAttribution(selectedBase);
       if (url) {
-        currentBase = L.tileLayer(url, { attribution: attrib, maxZoom: 20, pane: 'basePane' });
+        currentBase = createBaseRasterLayer(selectedBase, url, attrib);
         currentBase.addTo(map);
+      } else {
+        console.warn(`[Base Layer] Missing URL for "${selectedBase}", falling back to OSM.`);
+        currentBase = osm || layerDefs.osm;
+        if (currentBase) currentBase.addTo(map);
+        activeBaseType = 'osm';
       }
       currentOverlay = null;
     }
@@ -1059,7 +1077,7 @@ baseSelect.addEventListener('change', async () => {
     // SHOM uses OSM underlay
     const baseUrl = LAYERS.osm.url;
     const baseAttrib = LAYERS.osm.attribution;
-    currentBase = L.tileLayer(baseUrl, { attribution: baseAttrib, maxZoom: 20, pane: 'basePane' });
+    currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
     currentOverlay = shomOverlay;
     currentBase.addTo(map);
     currentOverlay.addTo(map);
@@ -1069,7 +1087,7 @@ baseSelect.addEventListener('change', async () => {
     // GB South uses OSM underlay
     const baseUrl = LAYERS.osm.url;
     const baseAttrib = LAYERS.osm.attribution;
-    currentBase = L.tileLayer(baseUrl, { attribution: baseAttrib, maxZoom: 20, pane: 'basePane' });
+    currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
     currentOverlay = gbsouthOverlay;
     currentBase.addTo(map);
     currentOverlay.addTo(map);
@@ -1078,7 +1096,7 @@ baseSelect.addEventListener('change', async () => {
   else if (selectedBase === 'ukho' && ukhoOverlay) {
     const baseUrl = LAYERS.osm.url;
     const baseAttrib = LAYERS.osm.attribution;
-    currentBase = L.tileLayer(baseUrl, { attribution: baseAttrib, maxZoom: 20, pane: 'basePane' });
+    currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
     currentOverlay = ukhoOverlay;
     currentBase.addTo(map);
     currentOverlay.addTo(map);
@@ -1179,8 +1197,13 @@ baseSelect.addEventListener('change', async () => {
     const url = getLayerUrl(selectedBase);
     const attrib = getLayerAttribution(selectedBase);
     if (url) {
-      currentBase = L.tileLayer(url, { attribution: attrib, maxZoom: 20, pane: 'basePane' });
+      currentBase = createBaseRasterLayer(selectedBase, url, attrib);
       currentBase.addTo(map);
+    } else {
+      console.warn(`[Base Layer] Missing URL for "${selectedBase}", falling back to OSM.`);
+      currentBase = osm || layerDefs.osm;
+      if (currentBase) currentBase.addTo(map);
+      activeBaseType = 'osm';
     }
     currentOverlay = null;
   }
