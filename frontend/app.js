@@ -61,6 +61,37 @@ const defaultZoom = (user.default_zoom !== null && user.default_zoom !== undefin
 
 const map = L.map('map', { zoomControl: true }).setView([defaultLat, defaultLon], defaultZoom);
 map.invalidateSize(); // Ensure map renders correctly after display change
+const DEFAULT_MAP_ZOOM_LIMITS = { min: 1, max: 20 };
+const BASE_ZOOM_LIMITS = {
+  osm: { min: 1, max: 20 },
+  esri: { min: 1, max: 20 },
+  // Vector basemaps: cap at 18 to avoid over-zoom beyond typical source detail.
+  topo: { min: 1, max: 18 },
+  navigation: { min: 1, max: 18 },
+  night: { min: 1, max: 18 },
+  ocean: { min: 1, max: 18 },
+  shom: { min: 1, max: 18 },
+  ukho: { min: 1, max: 18 },
+  gbsouth: { min: 6, max: 12 }
+};
+
+function getZoomLimitsForBase(baseType) {
+  return BASE_ZOOM_LIMITS[baseType] || DEFAULT_MAP_ZOOM_LIMITS;
+}
+
+function applyZoomLimitsForBase(baseType) {
+  const limits = getZoomLimitsForBase(baseType);
+  map.setMinZoom(limits.min);
+  map.setMaxZoom(limits.max);
+
+  const currentZoom = map.getZoom();
+  if (currentZoom < limits.min) {
+    map.setZoom(limits.min);
+  } else if (currentZoom > limits.max) {
+    map.setZoom(limits.max);
+  }
+}
+
 map.createPane('basePane'); map.getPane('basePane').style.zIndex = 200;
 map.createPane('chartsPane'); map.getPane('chartsPane').style.zIndex = 300; // SHOM/GBSouth charts
 map.createPane('densityPane'); map.getPane('densityPane').style.zIndex = 350; // Population density
@@ -361,6 +392,7 @@ let isNamesOverlayEnabled = false; // Track "Names" labels-only overlay state
 
 if (currentBase) {
   currentBase.addTo(map);
+  applyZoomLimitsForBase('osm');
 } else {
   if (!allowedBases.includes('topo') && !allowedBases.includes('navigation') && !allowedBases.includes('night') && !allowedBases.includes('ocean') && !allowedBases.includes('shom') && !allowedBases.includes('ukho') && !allowedBases.includes('gbsouth')) {
     alert('Your account has no base map access. Please contact an administrator.');
@@ -804,6 +836,7 @@ async function applyUserPreferences() {
     baseSelect.value = user.default_base;
     // Switch to the preferred base layer
     const selectedBase = user.default_base;
+    let activeBaseType = selectedBase;
 
     // Remove current layers
     if (currentBase) map.removeLayer(currentBase);
@@ -847,6 +880,7 @@ async function applyUserPreferences() {
       if (!currentBase) {
         currentBase = osm || layerDefs.osm;
         if (currentBase) currentBase.addTo(map);
+        activeBaseType = 'osm';
       }
       currentOverlay = null;
     }
@@ -862,6 +896,7 @@ async function applyUserPreferences() {
       if (!currentBase) {
         currentBase = osm || layerDefs.osm;
         if (currentBase) currentBase.addTo(map);
+        activeBaseType = 'osm';
       }
       currentOverlay = null;
     }
@@ -878,6 +913,7 @@ async function applyUserPreferences() {
       if (!currentBase) {
         currentBase = osm || layerDefs.osm;
         if (currentBase) currentBase.addTo(map);
+        activeBaseType = 'osm';
       }
       currentOverlay = null;
     }
@@ -894,6 +930,7 @@ async function applyUserPreferences() {
       if (!currentBase) {
         currentBase = osm || layerDefs.osm;
         if (currentBase) currentBase.addTo(map);
+        activeBaseType = 'osm';
       }
       currentOverlay = null;
     }
@@ -911,6 +948,7 @@ async function applyUserPreferences() {
       }
       currentOverlay = null;
     }
+    applyZoomLimitsForBase(activeBaseType);
     applyNamesOverlayForBase(selectedBase);
   }
 
@@ -1010,6 +1048,7 @@ function setAttrib(){
 
 baseSelect.addEventListener('change', async () => {
   const selectedBase = baseSelect.value;
+  let activeBaseType = selectedBase;
 
   // Remove current layers
   if (currentBase) map.removeLayer(currentBase);
@@ -1060,6 +1099,7 @@ baseSelect.addEventListener('change', async () => {
       console.warn('[Ocean] Failed to load ocean layer, falling back to OSM');
       currentBase = osm || layerDefs.osm;
       if (currentBase) currentBase.addTo(map);
+      activeBaseType = 'osm';
     }
     currentOverlay = null;
   }
@@ -1080,6 +1120,7 @@ baseSelect.addEventListener('change', async () => {
       console.warn('[Topo] Failed to load topo layer, falling back to OSM');
       currentBase = osm || layerDefs.osm;
       if (currentBase) currentBase.addTo(map);
+      activeBaseType = 'osm';
     }
     currentOverlay = null;
   }
@@ -1101,6 +1142,7 @@ baseSelect.addEventListener('change', async () => {
       console.warn('[Night] Failed to load night layer, falling back to OSM');
       currentBase = osm || layerDefs.osm;
       if (currentBase) currentBase.addTo(map);
+      activeBaseType = 'osm';
     }
     currentOverlay = null;
   }
@@ -1122,6 +1164,7 @@ baseSelect.addEventListener('change', async () => {
       console.warn('[Navigation] Failed to load navigation layer, falling back to OSM');
       currentBase = osm || layerDefs.osm;
       if (currentBase) currentBase.addTo(map);
+      activeBaseType = 'osm';
     }
     currentOverlay = null;
   }
@@ -1141,6 +1184,7 @@ baseSelect.addEventListener('change', async () => {
     }
     currentOverlay = null;
   }
+  applyZoomLimitsForBase(activeBaseType);
 
   // Re-add other overlays on top
   if (seamarksCb.checked && seamarks) seamarks.addTo(map).bringToFront();
