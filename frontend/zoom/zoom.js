@@ -24,13 +24,13 @@ export function updateZoomDisplay(map, elementId = 'zoomLevel') {
   // Keep topbar display for compatibility with existing layout.
   const zoomLevelEl = document.getElementById(elementId);
   if (zoomLevelEl) {
-    zoomLevelEl.textContent = `${inverseZoom.toFixed(1)} · z${zoom.toFixed(1)}`;
+    zoomLevelEl.textContent = inverseZoom.toFixed(1);
   }
 
   // Show current map zoom directly on the zoom control itself.
   const badge = ensureZoomToolLevelBadge(map);
   if (badge) {
-    badge.textContent = `z${zoom.toFixed(1)}`;
+    badge.textContent = `${inverseZoom.toFixed(1)}`;
     badge.title = `Export zoom z${inverseZoom.toFixed(1)} (map zoom ${zoom.toFixed(1)}, max ${maxZoom.toFixed(1)})`;
   }
 }
