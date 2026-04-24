@@ -18,7 +18,8 @@ function ensureZoomToolLevelBadge(map) {
 
 export function updateZoomDisplay(map, elementId = 'zoomLevel') {
   const zoom = map.getZoom();
-  const inverseZoom = 21 - zoom;
+  const maxZoom = Number.isFinite(map.getMaxZoom()) ? map.getMaxZoom() : 20;
+  const inverseZoom = (maxZoom + 1) - zoom;
 
   // Keep topbar display for compatibility with existing layout.
   const zoomLevelEl = document.getElementById(elementId);
@@ -30,7 +31,7 @@ export function updateZoomDisplay(map, elementId = 'zoomLevel') {
   const badge = ensureZoomToolLevelBadge(map);
   if (badge) {
     badge.textContent = `${inverseZoom.toFixed(1)}`;
-    badge.title = `Export zoom z${inverseZoom.toFixed(1)} (map zoom ${zoom.toFixed(1)})`;
+    badge.title = `Export zoom z${inverseZoom.toFixed(1)} (map zoom ${zoom.toFixed(1)}, max ${maxZoom.toFixed(1)})`;
   }
 }
 

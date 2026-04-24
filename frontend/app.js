@@ -65,11 +65,11 @@ const DEFAULT_MAP_ZOOM_LIMITS = { min: 1, max: 20 };
 const BASE_ZOOM_LIMITS = {
   osm: { min: 1, max: 20 },
   esri: { min: 1, max: 20 },
-  // Vector basemaps: cap at 18 to avoid over-zoom beyond typical source detail.
-  topo: { min: 1, max: 18 },
-  navigation: { min: 1, max: 18 },
-  night: { min: 1, max: 18 },
-  ocean: { min: 1, max: 18 },
+  // Vector basemaps: cap at 19 to avoid over-zoom beyond typical source detail.
+  topo: { min: 1, max: 19 },
+  navigation: { min: 1, max: 19 },
+  night: { min: 1, max: 19 },
+  ocean: { min: 1, max: 19 },
   shom: { min: 1, max: 18 },
   ukho: { min: 1, max: 18 },
   gbsouth: { min: 6, max: 12 }
