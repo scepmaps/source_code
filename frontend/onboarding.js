@@ -54,10 +54,10 @@ function buildTourStepDefinitions() {
   // Edit tutorial text here: each title/description below is shown in the walkthrough.
   return [
     {
-      selector: '#map',
+      selector: '#mapBtnGroup',
       popover: {
-        title: 'Map View',
-        description: 'This is the main map workspace where you pan, zoom, and inspect layers.'
+        title: 'Base Map Selector',
+        description: 'Pick the base map style here (satellite, topo, navigation, charts, and more).'
       }
     },
     {
@@ -89,10 +89,10 @@ function buildTourStepDefinitions() {
       }
     },
     {
-      selector: '#mapBtnGroup',
+      selector: '#map',
       popover: {
-        title: 'Base Map Selector',
-        description: 'Pick the base map style here (satellite, topo, navigation, charts, and more).'
+        title: 'Map View',
+        description: 'This is the main map workspace where you pan, zoom, and inspect layers.'
       }
     },
     {
