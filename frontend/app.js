@@ -194,6 +194,18 @@ function applyZoomLimitsForBase(baseType) {
   }
 }
 
+function clampZoomToBaseLimits(zoomValue, baseType) {
+  const limits = getEffectiveZoomLimitsForBase(baseType);
+  const normalized = Math.round(Number(zoomValue));
+  if (!Number.isFinite(normalized)) return limits.max;
+  return Math.max(limits.min, Math.min(limits.max, normalized));
+}
+
+function getInverseExportZoomForBase(zoomValue, baseType) {
+  const limits = getEffectiveZoomLimitsForBase(baseType);
+  return Math.max(1, Math.round((limits.max + 1) - zoomValue));
+}
+
 map.createPane('basePane'); map.getPane('basePane').style.zIndex = 200;
 map.createPane('chartsPane'); map.getPane('chartsPane').style.zIndex = 300; // SHOM/GBSouth charts
 map.createPane('densityPane'); map.getPane('densityPane').style.zIndex = 350; // Population density
@@ -494,10 +506,12 @@ let navigationGlMap = null;
 let currentBase = (osm||esri);
 let currentOverlay = null; // Track which chart overlay base is active (shom/ukho/gbsouth)
 let isNamesOverlayEnabled = false; // Track "Names" labels-only overlay state
+let baseSwitchRequestId = 0;
 
 if (currentBase) {
   currentBase.addTo(map);
-  applyZoomLimitsForBase('osm');
+  const initialBaseType = document.getElementById('baseLayer')?.value || 'osm';
+  applyZoomLimitsForBase(initialBaseType);
 } else {
   if (!allowedBases.includes('topo') && !allowedBases.includes('navigation') && !allowedBases.includes('night') && !allowedBases.includes('ocean') && !allowedBases.includes('shom') && !allowedBases.includes('ukho') && !allowedBases.includes('gbsouth')) {
     alert('Your account has no base map access. Please contact an administrator.');
@@ -934,6 +948,8 @@ toolbarController.init();
 async function applyUserPreferences() {
   // Apply base layer preference if set
   if (user.default_base && allowedBases.includes(user.default_base)) {
+    const requestId = ++baseSwitchRequestId;
+    const isStaleRequest = () => requestId !== baseSwitchRequestId;
     baseSelect.value = user.default_base;
     // Switch to the preferred base layer
     const selectedBase = user.default_base;
@@ -978,6 +994,7 @@ async function applyUserPreferences() {
       removeOceanLayer();
       removeTopoLayer();
       currentBase = await createOceanLayer();
+      if (isStaleRequest()) return;
       if (!currentBase) {
         currentBase = osm || layerDefs.osm;
         if (currentBase) currentBase.addTo(map);
@@ -994,6 +1011,7 @@ async function applyUserPreferences() {
       removeTopoLayer();
       removeNightLayer();
       currentBase = await createTopoLayer();
+      if (isStaleRequest()) return;
       if (!currentBase) {
         currentBase = osm || layerDefs.osm;
         if (currentBase) currentBase.addTo(map);
@@ -1011,6 +1029,7 @@ async function applyUserPreferences() {
       removeNightLayer();
       removeNavigationLayer();
       currentBase = await createNightLayer();
+      if (isStaleRequest()) return;
       if (!currentBase) {
         currentBase = osm || layerDefs.osm;
         if (currentBase) currentBase.addTo(map);
@@ -1028,6 +1047,7 @@ async function applyUserPreferences() {
       removeNightLayer();
       removeNavigationLayer();
       currentBase = await createNavigationLayer();
+      if (isStaleRequest()) return;
       if (!currentBase) {
         currentBase = osm || layerDefs.osm;
         if (currentBase) currentBase.addTo(map);
@@ -1054,8 +1074,10 @@ async function applyUserPreferences() {
       }
       currentOverlay = null;
     }
+    if (isStaleRequest()) return;
     applyZoomLimitsForBase(activeBaseType);
-    applyNamesOverlayForBase(selectedBase);
+    await applyNamesOverlayForBase(selectedBase);
+    if (isStaleRequest()) return;
   }
 
   // Apply overlay preferences if set
@@ -1126,6 +1148,7 @@ applyUserPreferences();
 function setAttrib(){
   const a = [];
   const base = baseSelect.value;
+  const exportLimits = getEffectiveZoomLimitsForBase(base);
 
   // Simple if/else to get attribution
   const attrib = getLayerAttribution(base);
@@ -1153,6 +1176,8 @@ function setAttrib(){
 }
 
 baseSelect.addEventListener('change', async () => {
+  const requestId = ++baseSwitchRequestId;
+  const isStaleRequest = () => requestId !== baseSwitchRequestId;
   const selectedBase = baseSelect.value;
   let activeBaseType = selectedBase;
 
@@ -1200,6 +1225,7 @@ baseSelect.addEventListener('change', async () => {
 
     // Create ocean vector tile layer
     currentBase = await createOceanLayer();
+    if (isStaleRequest()) return;
     if (!currentBase) {
       // Fallback to OSM if ocean fails
       console.warn('[Ocean] Failed to load ocean layer, falling back to OSM');
@@ -1221,6 +1247,7 @@ baseSelect.addEventListener('change', async () => {
 
     // Create topo vector tile layer
     currentBase = await createTopoLayer();
+    if (isStaleRequest()) return;
     if (!currentBase) {
       // Fallback to OSM if topo fails
       console.warn('[Topo] Failed to load topo layer, falling back to OSM');
@@ -1243,6 +1270,7 @@ baseSelect.addEventListener('change', async () => {
 
     // Create night vector tile layer
     currentBase = await createNightLayer();
+    if (isStaleRequest()) return;
     if (!currentBase) {
       // Fallback to OSM if night fails
       console.warn('[Night] Failed to load night layer, falling back to OSM');
@@ -1265,6 +1293,7 @@ baseSelect.addEventListener('change', async () => {
 
     // Create navigation vector tile layer
     currentBase = await createNavigationLayer();
+    if (isStaleRequest()) return;
     if (!currentBase) {
       // Fallback to OSM if navigation fails
       console.warn('[Navigation] Failed to load navigation layer, falling back to OSM');
@@ -1295,12 +1324,14 @@ baseSelect.addEventListener('change', async () => {
     }
     currentOverlay = null;
   }
+  if (isStaleRequest()) return;
   applyZoomLimitsForBase(activeBaseType);
 
   // Re-add other overlays on top
   if (seamarksCb.checked && seamarks) seamarks.addTo(map).bringToFront();
   if (openaipCb.checked && openaipLayer) openaipLayer.addTo(map).bringToFront();
-  applyNamesOverlayForBase(selectedBase);
+  await applyNamesOverlayForBase(selectedBase);
+  if (isStaleRequest()) return;
 
   // Update button states
   updateBaseButtonStates();
@@ -3068,12 +3099,13 @@ exportBtn.addEventListener('click', async () => {
     const R = 6378137;
     const metersPerPixelAtZ0 = Math.cos(lat * Math.PI/180) * 2 * Math.PI * R / 256;
     const z = Math.log2(metersPerPixelAtZ0 / targetMpp);
-    return Math.max(0, Math.min(20, Math.round(z)));
+    return clampZoomToBaseLimits(z, base);
   }
   const radarPixel = system === 'RADAR_overview' ? 25 : (system === 'RADAR_detailed' ? 5 : null);
   const oversample = radarPixel ? (exportQuality.value === 'HD' ? 3 : 2) : 1;
   const detailBoost = (selectionRect && exportQuality.value === 'HD') ? 1 : 0; // fetch higher-res tiles for HD box
-  const usedZoom = radarPixel ? zoomForMetersPerPixel(radarPixel / oversample, latMid) : Math.min(20, zoom + detailBoost);
+  const targetZoom = radarPixel ? zoomForMetersPerPixel(radarPixel / oversample, latMid) : (zoom + detailBoost);
+  const usedZoom = clampZoomToBaseLimits(targetZoom, base);
 
   console.log('[Export] Zoom & Resolution Settings:', {
     system: system,
@@ -3082,6 +3114,7 @@ exportBtn.addEventListener('click', async () => {
     detailBoost: detailBoost,
     originalZoom: zoom,
     calculatedZoom: usedZoom,
+    activeBaseZoomLimits: exportLimits,
     zoomAdjustment: usedZoom !== zoom ? `Adjusted from ${zoom} to ${usedZoom}` : 'No adjustment'
   });
 
@@ -3182,7 +3215,20 @@ exportBtn.addEventListener('click', async () => {
     const partName = customName ? (total>1 ? `${customName}_${partSuffix}` : customName) : (total>1 ? `export_${partSuffix}` : 'export');
     const endpoint = endpointBase;
     const showAttribution = document.getElementById('exportAttribution')?.checked ?? true;
-    const payload = { bbox: partBbox, zoom: usedZoom, width: partWidth, height: partHeight, base, overlays, system, crs: outCrs, quality: exportQuality.value, filename: partName, showAttribution };
+    const payload = {
+      bbox: partBbox,
+      zoom: usedZoom,
+      zoomMax: exportLimits.max,
+      width: partWidth,
+      height: partHeight,
+      base,
+      overlays,
+      system,
+      crs: outCrs,
+      quality: exportQuality.value,
+      filename: partName,
+      showAttribution
+    };
 
     console.log(`[Export] Part ${i+1}/${total} Starting:`, {
       partNumber: i + 1,
@@ -3234,7 +3280,7 @@ exportBtn.addEventListener('click', async () => {
       const match = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
       const serverName = match ? decodeURIComponent((match[1] || match[2] || '').trim()) : '';
     const ts   = new Date().toISOString().replace(/[:.]/g,'');
-      const inverseZoom = 21 - zoom;
+      const inverseZoom = getInverseExportZoomForBase(usedZoom, base);
       const prefix = `z${inverseZoom}_`;
       const defaultName = total>1 ? `${prefix}export_${system}_${ts}_${partSuffix}.tif` : `${prefix}export_${system}_${ts}.tif`;
       const finalName   = serverName || `${prefix}${partName}.tif` || defaultName;
@@ -3267,7 +3313,7 @@ exportBtn.addEventListener('click', async () => {
       weight: 2, pane: 'exportPane', interactive: false
     }).addTo(exportHistory);
   const ts   = new Date().toISOString().replace(/[:.]/g,'');
-  const inverseZoom = 21 - usedZoom;
+  const inverseZoom = getInverseExportZoomForBase(usedZoom, base);
   const prefix = `z${inverseZoom}_`;
   const baseName = (customName ? `${prefix}${customName}.tif` : `${prefix}export_${system}_${ts}.tif`);
   const tooltip = total>1 ? `${baseName} (${total} parts)` : baseName;
