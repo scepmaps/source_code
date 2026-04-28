@@ -182,6 +182,9 @@ function createBaseRasterLayer(baseType, url, attribution) {
 }
 
 function applyZoomLimitsForBase(baseType) {
+  const staticLimits = getZoomLimitsForBase(baseType);
+  // Keep zoom readout stable even when dynamic runtime cap changes by area.
+  map._scepmapsDisplayMaxZoom = staticLimits.max;
   const limits = getEffectiveZoomLimitsForBase(baseType);
   map.setMinZoom(limits.min);
   map.setMaxZoom(limits.max);
