@@ -60,7 +60,11 @@ const defaultLat = (user.default_lat !== null && user.default_lat !== undefined)
 const defaultLon = (user.default_lon !== null && user.default_lon !== undefined) ? user.default_lon : 0.9325;
 const defaultZoom = (user.default_zoom !== null && user.default_zoom !== undefined) ? user.default_zoom : 15;
 
-const map = L.map('map', { zoomControl: true }).setView([defaultLat, defaultLon], defaultZoom);
+const map = L.map('map', {
+  zoomControl: true,
+  // Prevent temporary over-zoom "bounce" past min/max on gesture zoom.
+  bounceAtZoomLimits: false
+}).setView([defaultLat, defaultLon], defaultZoom);
 map.invalidateSize(); // Ensure map renders correctly after display change
 const DEFAULT_MAP_ZOOM_LIMITS = { min: 1, max: 20 };
 const BASE_NATIVE_MAX_ZOOM = {
