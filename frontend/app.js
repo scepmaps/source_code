@@ -101,6 +101,7 @@ const tileEvidenceByBase = new Map();
 const zoomProbeCache = new Map();
 const zoomProbeInflight = new Map();
 let zoomProbeDebounceTimer = null;
+const lastResolvedRegionByBase = new Map();
 
 function getZoomLimitsForBase(baseType) {
   return BASE_ZOOM_LIMITS[baseType] || DEFAULT_MAP_ZOOM_LIMITS;
@@ -274,28 +275,33 @@ async function probeZoomLevelAvailability(baseType, z) {
   }
 }
 
+async function resolveRegionZoomCap(baseType) {
+  if (!baseType || !baseSupportsZoomProbe(baseType)) return;
+
+  const staticLimits = getZoomLimitsForBase(baseType);
+  const regionKey = getCurrentRegionKeyForBase(baseType);
+  const regionSignature = `${baseType}:${regionKey}`;
+  if (lastResolvedRegionByBase.get(baseType) === regionSignature) return;
+  lastResolvedRegionByBase.set(baseType, regionSignature);
+
+  let resolvedMax = staticLimits.min;
+  for (let z = staticLimits.max; z >= staticLimits.min; z -= 1) {
+    const available = await probeZoomLevelAvailability(baseType, z);
+    if (available) {
+      resolvedMax = z;
+      break;
+    }
+  }
+
+  setDynamicMaxForRegion(baseType, regionKey, resolvedMax);
+  refreshDynamicZoomForActiveBase(baseType);
+}
+
 async function maybeProbeNextZoomLevel() {
   const activeBase = document.getElementById('baseLayer')?.value;
   if (!activeBase || !baseSupportsZoomProbe(activeBase)) return;
 
-  const staticLimits = getZoomLimitsForBase(activeBase);
-  const effectiveLimits = getEffectiveZoomLimitsForBase(activeBase);
-  const currentZoom = map.getZoom();
-  const probeZoom = effectiveLimits.max + 1;
-
-  // Only probe near the ceiling and only for one level ahead.
-  if (currentZoom < (effectiveLimits.max - 1)) return;
-  if (probeZoom > staticLimits.max) return;
-
-  const available = await probeZoomLevelAvailability(activeBase, probeZoom);
-  if (!available) return;
-
-  const currentRegionKey = getCurrentRegionKeyForBase(activeBase);
-  const currentDynamic = getDynamicMaxForBase(activeBase, staticLimits.max);
-  if (probeZoom > currentDynamic) {
-    setDynamicMaxForRegion(activeBase, currentRegionKey, probeZoom);
-    refreshDynamicZoomForActiveBase(activeBase);
-  }
+  await resolveRegionZoomCap(activeBase);
 }
 
 function scheduleEdgeZoomProbe() {
@@ -330,12 +336,7 @@ function registerDynamicTileZoomTracking(baseType, layer) {
     const entry = getEvidenceForZoom(baseType, z, regionKey);
     entry.loads += 1;
 
-    // If tiles render at the current ceiling, let users try one level deeper.
-    const currentDynamic = dynamicMaxZoomByBase.get(regionKey) ?? staticLimits.max;
-    if (z >= currentDynamic && currentDynamic < staticLimits.max) {
-      setDynamicMaxForRegion(baseType, regionKey, Math.min(staticLimits.max, z + 1));
-      refreshDynamicZoomForActiveBase(baseType);
-    }
+    // Keep evidence only; strict cap is resolved via probe pass.
   });
 
   layer.on('tileerror', (e) => {
@@ -351,13 +352,12 @@ function registerDynamicTileZoomTracking(baseType, layer) {
     const entry = getEvidenceForZoom(baseType, z, regionKey);
     entry.errors += 1;
 
-    // If a zoom level repeatedly fails with no successful tiles, cap below it.
+    // If current region starts failing at active edge, quickly trigger re-resolution.
     if (entry.loads === 0 && entry.errors >= DYNAMIC_ZOOM_ERROR_THRESHOLD) {
-      const reducedMax = Math.max(staticLimits.min, z - 1);
-      const currentDynamic = dynamicMaxZoomByBase.get(regionKey) ?? staticLimits.max;
-      if (reducedMax < currentDynamic) {
-        setDynamicMaxForRegion(baseType, regionKey, reducedMax);
-        refreshDynamicZoomForActiveBase(baseType);
+      const activeBase = document.getElementById('baseLayer')?.value;
+      if (activeBase === baseType) {
+        lastResolvedRegionByBase.delete(baseType);
+        scheduleEdgeZoomProbe();
       }
     }
   });
