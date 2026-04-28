@@ -54,6 +54,15 @@ function buildTourStepDefinitions() {
   // Edit tutorial text here: each title/description below is shown in the walkthrough.
   return [
     {
+      selector: null,
+      popover: {
+        title: 'Welcome to SCEPMAPS',
+        description: 'This quick tour will walk you through the main controls.',
+        side: 'over',
+        align: 'center'
+      }
+    },
+    {
       selector: '#map',
       popover: {
         title: 'Map View',
@@ -142,9 +151,15 @@ function buildTourStepDefinitions() {
 
 function getExistingSteps(stepDefs) {
   return stepDefs
-    .map((def) => ({ ...def, element: document.querySelector(def.selector) }))
-    .filter((def) => isElementVisible(def.element))
-    .map((def) => ({ element: def.selector, popover: def.popover }));
+    .map((def) => {
+      if (!def.selector) {
+        return { popover: def.popover };
+      }
+      const element = document.querySelector(def.selector);
+      if (!isElementVisible(element)) return null;
+      return { element: def.selector, popover: def.popover };
+    })
+    .filter(Boolean);
 }
 
 function getTourSeenStorageKey(userId = null, onboardingResetVersion = 0) {
