@@ -84,8 +84,22 @@ const BASE_ZOOM_LIMITS = {
   gbsouth: { min: 6, max: 12 }
 };
 const DYNAMIC_ZOOM_ERROR_THRESHOLD = 8;
+const DYNAMIC_ZOOM_PROBE_TTL_MS = 45000;
+const DYNAMIC_ZOOM_PROBE_DEBOUNCE_MS = 280;
+const DYNAMIC_ZOOM_PROBE_TIMEOUT_MS = 1800;
+const DYNAMIC_ZOOM_PROBE_MIN_SUCCESS = 2;
+const DYNAMIC_ZOOM_PROBE_SAMPLE_OFFSETS = [
+  [0, 0],
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1]
+];
 const dynamicMaxZoomByBase = new Map();
 const tileEvidenceByBase = new Map();
+const zoomProbeCache = new Map();
+const zoomProbeInflight = new Map();
+let zoomProbeDebounceTimer = null;
 
 function getZoomLimitsForBase(baseType) {
   return BASE_ZOOM_LIMITS[baseType] || DEFAULT_MAP_ZOOM_LIMITS;
@@ -118,6 +132,139 @@ function getEvidenceForZoom(baseType, zoom) {
     evidence.set(zoom, entry);
   }
   return entry;
+}
+
+function baseSupportsZoomProbe(baseType) {
+  return ['osm', 'esri', 'shom', 'ukho', 'gbsouth'].includes(baseType);
+}
+
+function getProbeUrlTemplate(baseType) {
+  return LAYERS?.[baseType]?.url || null;
+}
+
+function modulo(n, m) {
+  return ((n % m) + m) % m;
+}
+
+function buildProbeTileUrl(baseType, z, x, y) {
+  const template = getProbeUrlTemplate(baseType);
+  if (!template) return null;
+
+  const maxTiles = 2 ** z;
+  if (y < 0 || y >= maxTiles) return null;
+  const wrappedX = modulo(x, maxTiles);
+
+  return template
+    .replace('{s}', 'a')
+    .replace('{z}', String(z))
+    .replace('{x}', String(wrappedX))
+    .replace('{y}', String(y));
+}
+
+function probeTileByImage(url, timeoutMs = DYNAMIC_ZOOM_PROBE_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve(false);
+      return;
+    }
+
+    const img = new Image();
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+
+    img.onload = () => finish(true);
+    img.onerror = () => finish(false);
+    img.decoding = 'async';
+    img.referrerPolicy = 'no-referrer-when-downgrade';
+    img.src = url;
+  });
+}
+
+function buildProbeKey(baseType, z, x, y) {
+  // Bucket key reduces duplicate probes during small pans.
+  const bucketX = Math.floor(x / 2);
+  const bucketY = Math.floor(y / 2);
+  return `${baseType}:${z}:${bucketX}:${bucketY}`;
+}
+
+async function probeZoomLevelAvailability(baseType, z) {
+  if (!baseSupportsZoomProbe(baseType)) return null;
+  const maxTiles = 2 ** z;
+  if (!Number.isFinite(maxTiles) || maxTiles <= 0) return null;
+
+  const center = map.getCenter();
+  const centerPx = map.project(center, z);
+  const centerX = Math.floor(centerPx.x / 256);
+  const centerY = Math.floor(centerPx.y / 256);
+  const probeKey = buildProbeKey(baseType, z, centerX, centerY);
+  const now = Date.now();
+
+  const cached = zoomProbeCache.get(probeKey);
+  if (cached && (now - cached.ts) < DYNAMIC_ZOOM_PROBE_TTL_MS) {
+    return cached.ok;
+  }
+
+  const inflight = zoomProbeInflight.get(probeKey);
+  if (inflight) return inflight;
+
+  const probePromise = (async () => {
+    const urls = DYNAMIC_ZOOM_PROBE_SAMPLE_OFFSETS
+      .map(([dx, dy]) => buildProbeTileUrl(baseType, z, centerX + dx, centerY + dy))
+      .filter(Boolean);
+
+    if (!urls.length) return false;
+
+    const outcomes = await Promise.all(urls.map((url) => probeTileByImage(url)));
+    const successCount = outcomes.filter(Boolean).length;
+    const ok = successCount >= Math.min(DYNAMIC_ZOOM_PROBE_MIN_SUCCESS, urls.length);
+    zoomProbeCache.set(probeKey, { ok, ts: Date.now() });
+    return ok;
+  })();
+
+  zoomProbeInflight.set(probeKey, probePromise);
+  try {
+    return await probePromise;
+  } finally {
+    zoomProbeInflight.delete(probeKey);
+  }
+}
+
+async function maybeProbeNextZoomLevel() {
+  const activeBase = document.getElementById('baseLayer')?.value;
+  if (!activeBase || !baseSupportsZoomProbe(activeBase)) return;
+
+  const staticLimits = getZoomLimitsForBase(activeBase);
+  const effectiveLimits = getEffectiveZoomLimitsForBase(activeBase);
+  const currentZoom = map.getZoom();
+  const probeZoom = effectiveLimits.max + 1;
+
+  // Only probe near the ceiling and only for one level ahead.
+  if (currentZoom < (effectiveLimits.max - 1)) return;
+  if (probeZoom > staticLimits.max) return;
+
+  const available = await probeZoomLevelAvailability(activeBase, probeZoom);
+  if (!available) return;
+
+  const currentDynamic = dynamicMaxZoomByBase.get(activeBase) ?? staticLimits.max;
+  if (probeZoom > currentDynamic) {
+    dynamicMaxZoomByBase.set(activeBase, probeZoom);
+    refreshDynamicZoomForActiveBase(activeBase);
+  }
+}
+
+function scheduleEdgeZoomProbe() {
+  if (zoomProbeDebounceTimer) clearTimeout(zoomProbeDebounceTimer);
+  zoomProbeDebounceTimer = setTimeout(() => {
+    maybeProbeNextZoomLevel().catch((err) => {
+      console.debug('[Zoom Probe] Probe failed:', err);
+    });
+  }, DYNAMIC_ZOOM_PROBE_DEBOUNCE_MS);
 }
 
 function refreshDynamicZoomForActiveBase(baseType) {
@@ -1081,6 +1228,7 @@ async function applyUserPreferences() {
     applyZoomLimitsForBase(activeBaseType);
     await applyNamesOverlayForBase(selectedBase);
     if (isStaleRequest()) return;
+    scheduleEdgeZoomProbe();
   }
 
   // Apply overlay preferences if set
@@ -1335,6 +1483,7 @@ baseSelect.addEventListener('change', async () => {
   if (openaipCb.checked && openaipLayer) openaipLayer.addTo(map).bringToFront();
   await applyNamesOverlayForBase(selectedBase);
   if (isStaleRequest()) return;
+  scheduleEdgeZoomProbe();
 
   // Update button states
   updateBaseButtonStates();
@@ -1347,6 +1496,7 @@ initZoomMechanics(map, {
   onViewportSettled: () => {
     applyLabelEnhancement();
     refreshHgtControlButton();
+    scheduleEdgeZoomProbe();
   }
 });
 
