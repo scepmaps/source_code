@@ -88,6 +88,7 @@ const DYNAMIC_ZOOM_PROBE_TTL_MS = 45000;
 const DYNAMIC_ZOOM_PROBE_DEBOUNCE_MS = 40;
 const DYNAMIC_ZOOM_PROBE_TIMEOUT_MS = 450;
 const DYNAMIC_ZOOM_PROBE_MIN_SUCCESS = 1;
+const DYNAMIC_ZOOM_REGION_Z = 5;
 const DYNAMIC_ZOOM_PROBE_SAMPLE_OFFSETS = [
   [0, 0],
   [1, 0],
@@ -105,9 +106,45 @@ function getZoomLimitsForBase(baseType) {
   return BASE_ZOOM_LIMITS[baseType] || DEFAULT_MAP_ZOOM_LIMITS;
 }
 
+function buildDynamicRegionKey(baseType, regionX, regionY) {
+  return `${baseType}:${regionX}:${regionY}`;
+}
+
+function getRegionCoordsFromTileCoords(z, x, y) {
+  const sourceZ = Number(z);
+  const sourceX = Number(x);
+  const sourceY = Number(y);
+  if (!Number.isFinite(sourceZ) || !Number.isFinite(sourceX) || !Number.isFinite(sourceY)) return null;
+
+  if (sourceZ >= DYNAMIC_ZOOM_REGION_Z) {
+    const div = 2 ** (sourceZ - DYNAMIC_ZOOM_REGION_Z);
+    return { x: Math.floor(sourceX / div), y: Math.floor(sourceY / div) };
+  }
+
+  const mul = 2 ** (DYNAMIC_ZOOM_REGION_Z - sourceZ);
+  return { x: Math.floor(sourceX * mul), y: Math.floor(sourceY * mul) };
+}
+
+function getCurrentRegionKeyForBase(baseType) {
+  const center = map.getCenter();
+  const centerPx = map.project(center, DYNAMIC_ZOOM_REGION_Z);
+  const regionX = Math.floor(centerPx.x / 256);
+  const regionY = Math.floor(centerPx.y / 256);
+  return buildDynamicRegionKey(baseType, regionX, regionY);
+}
+
+function getDynamicMaxForBase(baseType, fallbackMax) {
+  const dynamicMax = dynamicMaxZoomByBase.get(getCurrentRegionKeyForBase(baseType));
+  return Number.isFinite(dynamicMax) ? dynamicMax : fallbackMax;
+}
+
+function setDynamicMaxForRegion(baseType, regionKey, nextMax) {
+  dynamicMaxZoomByBase.set(regionKey, nextMax);
+}
+
 function getEffectiveZoomLimitsForBase(baseType) {
   const staticLimits = getZoomLimitsForBase(baseType);
-  const dynamicMax = dynamicMaxZoomByBase.get(baseType);
+  const dynamicMax = getDynamicMaxForBase(baseType, staticLimits.max);
   if (!Number.isFinite(dynamicMax)) return staticLimits;
   return {
     min: staticLimits.min,
@@ -124,12 +161,14 @@ function getEvidenceStoreForBase(baseType) {
   return evidence;
 }
 
-function getEvidenceForZoom(baseType, zoom) {
+function getEvidenceForZoom(baseType, zoom, regionKey = null) {
   const evidence = getEvidenceStoreForBase(baseType);
-  let entry = evidence.get(zoom);
+  const resolvedRegionKey = regionKey || getCurrentRegionKeyForBase(baseType);
+  const evidenceKey = `${resolvedRegionKey}:z${zoom}`;
+  let entry = evidence.get(evidenceKey);
   if (!entry) {
     entry = { loads: 0, errors: 0 };
-    evidence.set(zoom, entry);
+    evidence.set(evidenceKey, entry);
   }
   return entry;
 }
@@ -251,9 +290,10 @@ async function maybeProbeNextZoomLevel() {
   const available = await probeZoomLevelAvailability(activeBase, probeZoom);
   if (!available) return;
 
-  const currentDynamic = dynamicMaxZoomByBase.get(activeBase) ?? staticLimits.max;
+  const currentRegionKey = getCurrentRegionKeyForBase(activeBase);
+  const currentDynamic = getDynamicMaxForBase(activeBase, staticLimits.max);
   if (probeZoom > currentDynamic) {
-    dynamicMaxZoomByBase.set(activeBase, probeZoom);
+    setDynamicMaxForRegion(activeBase, currentRegionKey, probeZoom);
     refreshDynamicZoomForActiveBase(activeBase);
   }
 }
@@ -279,34 +319,44 @@ function registerDynamicTileZoomTracking(baseType, layer) {
 
   layer.on('tileload', (e) => {
     const z = e?.coords?.z;
+    const x = e?.coords?.x;
+    const y = e?.coords?.y;
     if (!Number.isFinite(z)) return;
+    const regionCoords = getRegionCoordsFromTileCoords(z, x, y);
+    if (!regionCoords) return;
+    const regionKey = buildDynamicRegionKey(baseType, regionCoords.x, regionCoords.y);
 
     const staticLimits = getZoomLimitsForBase(baseType);
-    const entry = getEvidenceForZoom(baseType, z);
+    const entry = getEvidenceForZoom(baseType, z, regionKey);
     entry.loads += 1;
 
     // If tiles render at the current ceiling, let users try one level deeper.
-    const currentDynamic = dynamicMaxZoomByBase.get(baseType) ?? staticLimits.max;
+    const currentDynamic = dynamicMaxZoomByBase.get(regionKey) ?? staticLimits.max;
     if (z >= currentDynamic && currentDynamic < staticLimits.max) {
-      dynamicMaxZoomByBase.set(baseType, Math.min(staticLimits.max, z + 1));
+      setDynamicMaxForRegion(baseType, regionKey, Math.min(staticLimits.max, z + 1));
       refreshDynamicZoomForActiveBase(baseType);
     }
   });
 
   layer.on('tileerror', (e) => {
     const z = e?.coords?.z;
+    const x = e?.coords?.x;
+    const y = e?.coords?.y;
     if (!Number.isFinite(z)) return;
+    const regionCoords = getRegionCoordsFromTileCoords(z, x, y);
+    if (!regionCoords) return;
+    const regionKey = buildDynamicRegionKey(baseType, regionCoords.x, regionCoords.y);
 
     const staticLimits = getZoomLimitsForBase(baseType);
-    const entry = getEvidenceForZoom(baseType, z);
+    const entry = getEvidenceForZoom(baseType, z, regionKey);
     entry.errors += 1;
 
     // If a zoom level repeatedly fails with no successful tiles, cap below it.
     if (entry.loads === 0 && entry.errors >= DYNAMIC_ZOOM_ERROR_THRESHOLD) {
       const reducedMax = Math.max(staticLimits.min, z - 1);
-      const currentDynamic = dynamicMaxZoomByBase.get(baseType) ?? staticLimits.max;
+      const currentDynamic = dynamicMaxZoomByBase.get(regionKey) ?? staticLimits.max;
       if (reducedMax < currentDynamic) {
-        dynamicMaxZoomByBase.set(baseType, reducedMax);
+        setDynamicMaxForRegion(baseType, regionKey, reducedMax);
         refreshDynamicZoomForActiveBase(baseType);
       }
     }
