@@ -125,6 +125,13 @@ def init_db():
     except Exception:
         pass
 
+    # Migration: Add onboarding reset version for admin-triggered tour replay
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN onboarding_reset_version INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
+    except Exception:
+        pass
+
     # Sanitize any legacy rows where permissions were stored as '[]' JSON instead of unrestricted
     try:
         cur.execute("UPDATE users SET allowed_bases = '' WHERE allowed_bases = '[]'")
@@ -271,6 +278,11 @@ def user_from_row(row):
     except (KeyError, IndexError, json.JSONDecodeError, TypeError):
         favorite_overlays = None
 
+    try:
+        onboarding_reset_version = int(row["onboarding_reset_version"] or 0)
+    except (KeyError, IndexError, TypeError, ValueError):
+        onboarding_reset_version = 0
+
     return {
         "id": row["id"],
         "email": row["email"],
@@ -295,6 +307,7 @@ def user_from_row(row):
         "density_border_hover_color": density_border_hover_color,
         "favorite_maps": favorite_maps,
         "favorite_overlays": favorite_overlays,
+        "onboarding_reset_version": onboarding_reset_version,
         "fun": fun,
     }
 
@@ -389,6 +402,7 @@ def update_user(
     density_border_hover_color: str | None = None,
     favorite_maps=None,
     favorite_overlays=None,
+    onboarding_reset_version: int | None = None,
     fun: bool | None = None,
 ):
     fields = []
@@ -462,6 +476,9 @@ def update_user(
     if favorite_overlays is not None:
         fields.append("favorite_overlays = ?")
         params.append(json.dumps(favorite_overlays) if isinstance(favorite_overlays, list) else favorite_overlays)
+    if onboarding_reset_version is not None:
+        fields.append("onboarding_reset_version = ?")
+        params.append(int(onboarding_reset_version))
     if fun is not None:
         fields.append("fun = ?")
         params.append(1 if fun else 0)

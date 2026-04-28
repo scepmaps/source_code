@@ -1,4 +1,4 @@
-const TOUR_SEEN_KEY = 'scepmaps_onboarding_seen_v1';
+const TOUR_SEEN_KEY_PREFIX = 'scepmaps_onboarding_seen_v1';
 const DRIVER_CSS_ID = 'driverjs-css';
 const DRIVER_SCRIPT_ID = 'driverjs-script';
 const TOUR_ZOOM_CONTROL_ID = 'zoomControls';
@@ -68,6 +68,27 @@ function buildTourStepDefinitions() {
       }
     },
     {
+      selector: '.map-tool-btn--ruler',
+      popover: {
+        title: 'Ruler Tool',
+        description: 'Measure distances by placing points on the map. Click points to refine your route.'
+      }
+    },
+    {
+      selector: '.map-tool-btn--box',
+      popover: {
+        title: 'Selection Box Tool',
+        description: 'Draw or remove a map selection box used for focused area operations.'
+      }
+    },
+    {
+      selector: '.map-tool-btn--hgt',
+      popover: {
+        title: 'HGT Tool',
+        description: 'Create an HGT elevation selection area when this tool is enabled for your account.'
+      }
+    },
+    {
       selector: '#mapBtnGroup',
       popover: {
         title: 'Base Map Selector',
@@ -119,10 +140,6 @@ function buildTourStepDefinitions() {
   ];
 }
 
-function markTourSeen() {
-  localStorage.setItem(TOUR_SEEN_KEY, 'true');
-}
-
 function getExistingSteps(stepDefs) {
   return stepDefs
     .map((def) => ({ ...def, element: document.querySelector(def.selector) }))
@@ -130,16 +147,24 @@ function getExistingSteps(stepDefs) {
     .map((def) => ({ element: def.selector, popover: def.popover }));
 }
 
-export function shouldAutoStartOnboardingTour() {
-  return localStorage.getItem(TOUR_SEEN_KEY) !== 'true';
+function getTourSeenStorageKey(userId = null, onboardingResetVersion = 0) {
+  const normalizedUserId = userId == null ? 'anon' : String(userId);
+  const normalizedVersion = Number.isFinite(Number(onboardingResetVersion)) ? Number(onboardingResetVersion) : 0;
+  return `${TOUR_SEEN_KEY_PREFIX}:${normalizedUserId}:v${normalizedVersion}`;
 }
 
-export function resetOnboardingTourSeenFlag() {
-  localStorage.removeItem(TOUR_SEEN_KEY);
+export function shouldAutoStartOnboardingTour(userId = null, onboardingResetVersion = 0) {
+  const key = getTourSeenStorageKey(userId, onboardingResetVersion);
+  return localStorage.getItem(key) !== 'true';
+}
+
+export function resetOnboardingTourSeenFlag(userId = null, onboardingResetVersion = 0) {
+  const key = getTourSeenStorageKey(userId, onboardingResetVersion);
+  localStorage.removeItem(key);
 }
 
 export async function startOnboardingTour(options = {}) {
-  const { onFinished } = options;
+  const { onFinished, userId = null, onboardingResetVersion = 0 } = options;
   try {
     ensureZoomControlId();
     ensureDriverCssLoaded();
@@ -160,7 +185,8 @@ export async function startOnboardingTour(options = {}) {
       prevBtnText: 'Back',
       popoverClass: 'scepmaps-tour-popover',
       onDestroyed: () => {
-        markTourSeen();
+        const key = getTourSeenStorageKey(userId, onboardingResetVersion);
+        localStorage.setItem(key, 'true');
         if (typeof onFinished === 'function') onFinished();
       },
       steps

@@ -3371,6 +3371,8 @@ function setupTourControlIds() {
 async function runOnboardingTour(options = {}) {
   const { showFailureNotice = false } = options;
   const started = await startOnboardingTour({
+    userId: user?.id ?? null,
+    onboardingResetVersion: Number(user?.onboarding_reset_version || 0),
     onFinished: () => {
       // Keep Leaflet stable after overlay teardown.
       map.invalidateSize();
@@ -3391,7 +3393,7 @@ helpTourBtn?.addEventListener('click', () => {
 setupTourControlIds();
 map.whenReady(() => {
   setTimeout(() => {
-    if (!shouldAutoStartOnboardingTour()) return;
+    if (!shouldAutoStartOnboardingTour(user?.id ?? null, Number(user?.onboarding_reset_version || 0))) return;
     runOnboardingTour();
   }, 350);
 });

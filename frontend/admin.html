@@ -587,6 +587,27 @@
         }
       };
 
+      const resetUserOnboarding = async (userId, email) => {
+        if (!confirm(`Reset onboarding tutorial for ${email}? They will see it once on next app load.`)) return;
+        try {
+          setLoading(true);
+          const res = await fetch(`${API}/admin/users/${userId}/reset-onboarding`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+          });
+          if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            throw new Error(error.error || 'Failed to reset onboarding');
+          }
+          showAlert(`Onboarding reset for ${email}`);
+          loadUsers();
+        } catch (error) {
+          showAlert('Failed to reset onboarding: ' + error.message, 'error');
+        } finally {
+          setLoading(false);
+        }
+      };
+
       // Rendering
       const renderUsers = (users) => {
         const tbody = document.getElementById('usersTableBody');
@@ -639,6 +660,9 @@
               </button>
               <button class="btn" style="padding: 4px 8px; font-size: 12px;" onclick="showUserStats(${user.id}, '${user.email}')">
                 📊 Stats
+              </button>
+              <button class="btn" style="padding: 4px 8px; font-size: 12px;" onclick="resetUserOnboarding(${user.id}, '${user.email.replace(/'/g, "\\'")}')">
+                🧭 Reset Tutorial
               </button>
               <button class="btn danger" style="padding: 4px 8px; font-size: 12px;" onclick="deleteUser(${user.id})">
                 🗑️ Delete

@@ -2432,6 +2432,22 @@ def admin_delete_user(user_id: int):
     return {"ok": True}
 
 
+@app.post("/admin/users/<int:user_id>/reset-onboarding")
+def admin_reset_user_onboarding(user_id: int):
+    admin = _require_admin(request)
+    if not admin:
+        return ({"error": "Unauthorized"}, 401)
+
+    target_user = get_user_by_id(user_id)
+    if not target_user:
+        return ({"error": "User not found"}, 404)
+
+    current_version = int(target_user.get("onboarding_reset_version") or 0)
+    next_version = current_version + 1
+    update_user(user_id, onboarding_reset_version=next_version)
+    return {"ok": True, "onboarding_reset_version": next_version}
+
+
 @app.get("/admin/stats")
 def admin_stats():
     admin = _require_admin(request)
