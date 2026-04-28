@@ -3,6 +3,7 @@ import { createToolbarController } from './toolbar/toolbar.js';
 import { initSettingsController } from './settings/settings.js';
 import { initZoomMechanics } from './zoom/zoom.js';
 import { initMapToolControls } from './tools/tools.js';
+import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js';
 
 // Auth gate: require login, attach token to export calls
 let token = localStorage.getItem('token');
@@ -3356,3 +3357,41 @@ initSettingsController({
 }).init();
 
 // Toolbar behavior moved to source_code/frontend/toolbar/toolbar.js
+
+function setupTourControlIds() {
+  // Keep optional selectors stable for onboarding without changing behavior.
+  const potentialSearchControl = document.querySelector(
+    '.leaflet-control-geocoder, .leaflet-control-locate, .leaflet-control-search, [data-control="search"]'
+  );
+  if (potentialSearchControl && !potentialSearchControl.id) {
+    potentialSearchControl.id = 'searchControl';
+  }
+}
+
+async function runOnboardingTour(options = {}) {
+  const { showFailureNotice = false } = options;
+  const started = await startOnboardingTour({
+    onFinished: () => {
+      // Keep Leaflet stable after overlay teardown.
+      map.invalidateSize();
+    }
+  });
+
+  if (!started && showFailureNotice) {
+    alert('Tutorial is temporarily unavailable. Please try again later.');
+  }
+}
+
+const helpTourBtn = document.getElementById('helpTourBtn');
+helpTourBtn?.addEventListener('click', () => {
+  runOnboardingTour({ showFailureNotice: true });
+});
+
+// Start the tour once for first-time users after controls finish rendering.
+setupTourControlIds();
+map.whenReady(() => {
+  setTimeout(() => {
+    if (!shouldAutoStartOnboardingTour()) return;
+    runOnboardingTour();
+  }, 350);
+});

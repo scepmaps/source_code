@@ -461,3 +461,14 @@ label{ font-size:13px; color:var(--muted); }
   color: rgba(215, 227, 255, 0.75);
   text-decoration: underline;
 }
+
+/* Onboarding tour overlays should sit above Leaflet panes and controls */
+.driver-overlay,
+.driver-stage,
+.driver-popover {
+  z-index: 5000 !important;
+}
+
+.scepmaps-tour-popover {
+  max-width: 320px;
+}
