@@ -86,9 +86,9 @@ def health():
     return {"status": "ok"}
 
 
-def _download_name(out_crs: str, zoom: int, filename: str | None, max_zoom: int = 20) -> str:
-    # Convert to inverse zoom level: z1 = max zoom, higher numbers = more zoomed out.
-    inverse_zoom = max(1, (int(max_zoom) + 1) - int(zoom))
+def _download_name(out_crs: str, zoom: int, filename: str | None) -> str:
+    # Convert to inverse zoom level: z1 = max zoom (20), higher numbers = more zoomed out
+    inverse_zoom = 21 - zoom
 
     if filename:
         # sanitize a bit
@@ -194,7 +194,6 @@ def export_endpoint():
         quality = data.get("quality")
         out_crs = data.get("crs") or "EPSG:4326"
         filename = data.get("filename")
-        zoom_max = int(data.get("zoomMax", 20))
 
         logger.info(f"[Export] ========== Tile-based Export Started ==========")
         logger.info(
@@ -225,7 +224,7 @@ def export_endpoint():
             buf,
             mimetype="image/tiff",
             as_attachment=True,
-            download_name=_download_name(out_crs, zoom, filename, max_zoom=zoom_max),
+            download_name=_download_name(out_crs, zoom, filename),
         )
     except Exception as e:
         logger.error(f"[Export] ========== Tile-based Export Failed ==========")
@@ -257,7 +256,6 @@ def export_headless():
         out_crs = data.get("crs") or "EPSG:4326"
         filename = data.get("filename")
         show_attribution = data.get("showAttribution", True)
-        zoom_max = int(data.get("zoomMax", 20))
 
         logger.info(f"[Export] ========== Headless Export Started ==========")
         logger.info(
@@ -291,7 +289,7 @@ def export_headless():
             io.BytesIO(out_bytes),
             mimetype="image/tiff",
             as_attachment=True,
-            download_name=_download_name(out_crs, zoom, filename, max_zoom=zoom_max),
+            download_name=_download_name(out_crs, zoom, filename),
         )
         if user:
             try:
@@ -2234,7 +2232,7 @@ def update_preferences():
 
     if default_zoom is not None:
         default_zoom = int(default_zoom)
-        if not (0 <= default_zoom <= 20):
+        if not (0 <= default_zoom <= 18):
             return ({"error": "Invalid zoom level"}, 400)
 
     if default_base is not None:

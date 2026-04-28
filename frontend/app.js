@@ -60,11 +60,7 @@ const defaultLat = (user.default_lat !== null && user.default_lat !== undefined)
 const defaultLon = (user.default_lon !== null && user.default_lon !== undefined) ? user.default_lon : 0.9325;
 const defaultZoom = (user.default_zoom !== null && user.default_zoom !== undefined) ? user.default_zoom : 15;
 
-const map = L.map('map', {
-  zoomControl: true,
-  // Prevent temporary over-zoom "bounce" past min/max on gesture zoom.
-  bounceAtZoomLimits: false
-}).setView([defaultLat, defaultLon], defaultZoom);
+const map = L.map('map', { zoomControl: true }).setView([defaultLat, defaultLon], defaultZoom);
 map.invalidateSize(); // Ensure map renders correctly after display change
 const DEFAULT_MAP_ZOOM_LIMITS = { min: 1, max: 20 };
 const BASE_NATIVE_MAX_ZOOM = {
@@ -83,284 +79,9 @@ const BASE_ZOOM_LIMITS = {
   ukho: { min: 1, max: 18 },
   gbsouth: { min: 6, max: 12 }
 };
-const DYNAMIC_ZOOM_ERROR_THRESHOLD = 2;
-const DYNAMIC_ZOOM_PROBE_TTL_MS = 45000;
-const DYNAMIC_ZOOM_PROBE_DEBOUNCE_MS = 40;
-const DYNAMIC_ZOOM_PROBE_TIMEOUT_MS = 450;
-const DYNAMIC_ZOOM_PROBE_MIN_SUCCESS = 1;
-const DYNAMIC_ZOOM_REGION_Z = 5;
-const DYNAMIC_ZOOM_PROBE_SAMPLE_OFFSETS = [
-  [0, 0],
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1]
-];
-const dynamicMaxZoomByBase = new Map();
-const tileEvidenceByBase = new Map();
-const zoomProbeCache = new Map();
-const zoomProbeInflight = new Map();
-let zoomProbeDebounceTimer = null;
-const lastResolvedRegionByBase = new Map();
 
 function getZoomLimitsForBase(baseType) {
   return BASE_ZOOM_LIMITS[baseType] || DEFAULT_MAP_ZOOM_LIMITS;
-}
-
-function buildDynamicRegionKey(baseType, regionX, regionY) {
-  return `${baseType}:${regionX}:${regionY}`;
-}
-
-function getRegionCoordsFromTileCoords(z, x, y) {
-  const sourceZ = Number(z);
-  const sourceX = Number(x);
-  const sourceY = Number(y);
-  if (!Number.isFinite(sourceZ) || !Number.isFinite(sourceX) || !Number.isFinite(sourceY)) return null;
-
-  if (sourceZ >= DYNAMIC_ZOOM_REGION_Z) {
-    const div = 2 ** (sourceZ - DYNAMIC_ZOOM_REGION_Z);
-    return { x: Math.floor(sourceX / div), y: Math.floor(sourceY / div) };
-  }
-
-  const mul = 2 ** (DYNAMIC_ZOOM_REGION_Z - sourceZ);
-  return { x: Math.floor(sourceX * mul), y: Math.floor(sourceY * mul) };
-}
-
-function getCurrentRegionKeyForBase(baseType) {
-  const center = map.getCenter();
-  const centerPx = map.project(center, DYNAMIC_ZOOM_REGION_Z);
-  const regionX = Math.floor(centerPx.x / 256);
-  const regionY = Math.floor(centerPx.y / 256);
-  return buildDynamicRegionKey(baseType, regionX, regionY);
-}
-
-function getDynamicMaxForBase(baseType, fallbackMax) {
-  const dynamicMax = dynamicMaxZoomByBase.get(getCurrentRegionKeyForBase(baseType));
-  return Number.isFinite(dynamicMax) ? dynamicMax : fallbackMax;
-}
-
-function setDynamicMaxForRegion(baseType, regionKey, nextMax) {
-  dynamicMaxZoomByBase.set(regionKey, nextMax);
-}
-
-function getEffectiveZoomLimitsForBase(baseType) {
-  const staticLimits = getZoomLimitsForBase(baseType);
-  const dynamicMax = getDynamicMaxForBase(baseType, staticLimits.max);
-  if (!Number.isFinite(dynamicMax)) return staticLimits;
-  return {
-    min: staticLimits.min,
-    max: Math.max(staticLimits.min, Math.min(staticLimits.max, dynamicMax))
-  };
-}
-
-function getEvidenceStoreForBase(baseType) {
-  let evidence = tileEvidenceByBase.get(baseType);
-  if (!evidence) {
-    evidence = new Map();
-    tileEvidenceByBase.set(baseType, evidence);
-  }
-  return evidence;
-}
-
-function getEvidenceForZoom(baseType, zoom, regionKey = null) {
-  const evidence = getEvidenceStoreForBase(baseType);
-  const resolvedRegionKey = regionKey || getCurrentRegionKeyForBase(baseType);
-  const evidenceKey = `${resolvedRegionKey}:z${zoom}`;
-  let entry = evidence.get(evidenceKey);
-  if (!entry) {
-    entry = { loads: 0, errors: 0 };
-    evidence.set(evidenceKey, entry);
-  }
-  return entry;
-}
-
-function baseSupportsZoomProbe(baseType) {
-  return ['osm', 'esri', 'shom', 'ukho', 'gbsouth'].includes(baseType);
-}
-
-function getProbeUrlTemplate(baseType) {
-  return LAYERS?.[baseType]?.url || null;
-}
-
-function modulo(n, m) {
-  return ((n % m) + m) % m;
-}
-
-function buildProbeTileUrl(baseType, z, x, y) {
-  const template = getProbeUrlTemplate(baseType);
-  if (!template) return null;
-
-  const maxTiles = 2 ** z;
-  if (y < 0 || y >= maxTiles) return null;
-  const wrappedX = modulo(x, maxTiles);
-
-  return template
-    .replace('{s}', 'a')
-    .replace('{z}', String(z))
-    .replace('{x}', String(wrappedX))
-    .replace('{y}', String(y));
-}
-
-function probeTileByImage(url, timeoutMs = DYNAMIC_ZOOM_PROBE_TIMEOUT_MS) {
-  return new Promise((resolve) => {
-    if (!url) {
-      resolve(false);
-      return;
-    }
-
-    const img = new Image();
-    let done = false;
-    const finish = (ok) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      resolve(ok);
-    };
-    const timer = setTimeout(() => finish(false), timeoutMs);
-
-    img.onload = () => finish(true);
-    img.onerror = () => finish(false);
-    img.decoding = 'async';
-    img.referrerPolicy = 'no-referrer-when-downgrade';
-    img.src = url;
-  });
-}
-
-function buildProbeKey(baseType, z, x, y) {
-  // Bucket key reduces duplicate probes during small pans.
-  const bucketX = Math.floor(x / 2);
-  const bucketY = Math.floor(y / 2);
-  return `${baseType}:${z}:${bucketX}:${bucketY}`;
-}
-
-async function probeZoomLevelAvailability(baseType, z) {
-  if (!baseSupportsZoomProbe(baseType)) return null;
-  const maxTiles = 2 ** z;
-  if (!Number.isFinite(maxTiles) || maxTiles <= 0) return null;
-
-  const center = map.getCenter();
-  const centerPx = map.project(center, z);
-  const centerX = Math.floor(centerPx.x / 256);
-  const centerY = Math.floor(centerPx.y / 256);
-  const probeKey = buildProbeKey(baseType, z, centerX, centerY);
-  const now = Date.now();
-
-  const cached = zoomProbeCache.get(probeKey);
-  if (cached && (now - cached.ts) < DYNAMIC_ZOOM_PROBE_TTL_MS) {
-    return cached.ok;
-  }
-
-  const inflight = zoomProbeInflight.get(probeKey);
-  if (inflight) return inflight;
-
-  const probePromise = (async () => {
-    const urls = DYNAMIC_ZOOM_PROBE_SAMPLE_OFFSETS
-      .map(([dx, dy]) => buildProbeTileUrl(baseType, z, centerX + dx, centerY + dy))
-      .filter(Boolean);
-
-    if (!urls.length) return false;
-
-    const outcomes = await Promise.all(urls.map((url) => probeTileByImage(url)));
-    const successCount = outcomes.filter(Boolean).length;
-    const ok = successCount >= Math.min(DYNAMIC_ZOOM_PROBE_MIN_SUCCESS, urls.length);
-    zoomProbeCache.set(probeKey, { ok, ts: Date.now() });
-    return ok;
-  })();
-
-  zoomProbeInflight.set(probeKey, probePromise);
-  try {
-    return await probePromise;
-  } finally {
-    zoomProbeInflight.delete(probeKey);
-  }
-}
-
-async function resolveRegionZoomCap(baseType) {
-  if (!baseType || !baseSupportsZoomProbe(baseType)) return;
-
-  const staticLimits = getZoomLimitsForBase(baseType);
-  const regionKey = getCurrentRegionKeyForBase(baseType);
-  const regionSignature = `${baseType}:${regionKey}`;
-  if (lastResolvedRegionByBase.get(baseType) === regionSignature) return;
-  lastResolvedRegionByBase.set(baseType, regionSignature);
-
-  let resolvedMax = staticLimits.min;
-  for (let z = staticLimits.max; z >= staticLimits.min; z -= 1) {
-    const available = await probeZoomLevelAvailability(baseType, z);
-    if (available) {
-      resolvedMax = z;
-      break;
-    }
-  }
-
-  setDynamicMaxForRegion(baseType, regionKey, resolvedMax);
-  refreshDynamicZoomForActiveBase(baseType);
-}
-
-async function maybeProbeNextZoomLevel() {
-  const activeBase = document.getElementById('baseLayer')?.value;
-  if (!activeBase || !baseSupportsZoomProbe(activeBase)) return;
-
-  await resolveRegionZoomCap(activeBase);
-}
-
-function scheduleEdgeZoomProbe() {
-  if (zoomProbeDebounceTimer) clearTimeout(zoomProbeDebounceTimer);
-  zoomProbeDebounceTimer = setTimeout(() => {
-    maybeProbeNextZoomLevel().catch((err) => {
-      console.debug('[Zoom Probe] Probe failed:', err);
-    });
-  }, DYNAMIC_ZOOM_PROBE_DEBOUNCE_MS);
-}
-
-function refreshDynamicZoomForActiveBase(baseType) {
-  const activeBaseSelect = document.getElementById('baseLayer');
-  if (activeBaseSelect?.value === baseType) {
-    applyZoomLimitsForBase(baseType);
-  }
-}
-
-function registerDynamicTileZoomTracking(baseType, layer) {
-  if (!layer || typeof layer.on !== 'function') return;
-
-  layer.on('tileload', (e) => {
-    const z = e?.coords?.z;
-    const x = e?.coords?.x;
-    const y = e?.coords?.y;
-    if (!Number.isFinite(z)) return;
-    const regionCoords = getRegionCoordsFromTileCoords(z, x, y);
-    if (!regionCoords) return;
-    const regionKey = buildDynamicRegionKey(baseType, regionCoords.x, regionCoords.y);
-
-    const staticLimits = getZoomLimitsForBase(baseType);
-    const entry = getEvidenceForZoom(baseType, z, regionKey);
-    entry.loads += 1;
-
-    // Keep evidence only; strict cap is resolved via probe pass.
-  });
-
-  layer.on('tileerror', (e) => {
-    const z = e?.coords?.z;
-    const x = e?.coords?.x;
-    const y = e?.coords?.y;
-    if (!Number.isFinite(z)) return;
-    const regionCoords = getRegionCoordsFromTileCoords(z, x, y);
-    if (!regionCoords) return;
-    const regionKey = buildDynamicRegionKey(baseType, regionCoords.x, regionCoords.y);
-
-    const staticLimits = getZoomLimitsForBase(baseType);
-    const entry = getEvidenceForZoom(baseType, z, regionKey);
-    entry.errors += 1;
-
-    // If current region starts failing at active edge, quickly trigger re-resolution.
-    if (entry.loads === 0 && entry.errors >= DYNAMIC_ZOOM_ERROR_THRESHOLD) {
-      const activeBase = document.getElementById('baseLayer')?.value;
-      if (activeBase === baseType) {
-        lastResolvedRegionByBase.delete(baseType);
-        scheduleEdgeZoomProbe();
-      }
-    }
-  });
 }
 
 function createBaseRasterLayer(baseType, url, attribution) {
@@ -373,16 +94,11 @@ function createBaseRasterLayer(baseType, url, attribution) {
   if (Number.isFinite(maxNativeZoom)) {
     opts.maxNativeZoom = maxNativeZoom;
   }
-  const layer = L.tileLayer(url, opts);
-  registerDynamicTileZoomTracking(baseType, layer);
-  return layer;
+  return L.tileLayer(url, opts);
 }
 
 function applyZoomLimitsForBase(baseType) {
-  const staticLimits = getZoomLimitsForBase(baseType);
-  // Keep zoom readout stable even when dynamic runtime cap changes by area.
-  map._scepmapsDisplayMaxZoom = staticLimits.max;
-  const limits = getEffectiveZoomLimitsForBase(baseType);
+  const limits = getZoomLimitsForBase(baseType);
   map.setMinZoom(limits.min);
   map.setMaxZoom(limits.max);
 
@@ -392,18 +108,6 @@ function applyZoomLimitsForBase(baseType) {
   } else if (currentZoom > limits.max) {
     map.setZoom(limits.max);
   }
-}
-
-function clampZoomToBaseLimits(zoomValue, baseType) {
-  const limits = getEffectiveZoomLimitsForBase(baseType);
-  const normalized = Math.round(Number(zoomValue));
-  if (!Number.isFinite(normalized)) return limits.max;
-  return Math.max(limits.min, Math.min(limits.max, normalized));
-}
-
-function getInverseExportZoomForBase(zoomValue, baseType) {
-  const limits = getEffectiveZoomLimitsForBase(baseType);
-  return Math.max(1, Math.round((limits.max + 1) - zoomValue));
 }
 
 map.createPane('basePane'); map.getPane('basePane').style.zIndex = 200;
@@ -591,7 +295,6 @@ if (allowedBases.includes('shom')) {
     maxZoom: 18, // SHOM tiles are typically available up to zoom 18
     pane: 'chartsPane'
   });
-  registerDynamicTileZoomTracking('shom', shomOverlay);
 
   // Track failed tiles and retry attempts
   const failedTiles = new Map();
@@ -633,7 +336,6 @@ if (allowedBases.includes('gbsouth')) {
     minZoom: 6,  // GB South tiles start at zoom 6
     pane: 'chartsPane'
   });
-  registerDynamicTileZoomTracking('gbsouth', gbsouthOverlay);
 
   // Make tiles transparent on error so OSM base shows through
   gbsouthOverlay.on('tileerror', (e) => {
@@ -649,7 +351,6 @@ if (allowedBases.includes('ukho')) {
     maxZoom: 18,
     pane: 'chartsPane'
   });
-  registerDynamicTileZoomTracking('ukho', ukhoOverlay);
 
   // Make tiles transparent on error so OSM base shows through.
   // Discovery API may return empty/transparent coverage depending on area/entitlement.
@@ -1278,7 +979,6 @@ async function applyUserPreferences() {
     applyZoomLimitsForBase(activeBaseType);
     await applyNamesOverlayForBase(selectedBase);
     if (isStaleRequest()) return;
-    scheduleEdgeZoomProbe();
   }
 
   // Apply overlay preferences if set
@@ -1349,7 +1049,6 @@ applyUserPreferences();
 function setAttrib(){
   const a = [];
   const base = baseSelect.value;
-  const exportLimits = getEffectiveZoomLimitsForBase(base);
 
   // Simple if/else to get attribution
   const attrib = getLayerAttribution(base);
@@ -1533,7 +1232,6 @@ baseSelect.addEventListener('change', async () => {
   if (openaipCb.checked && openaipLayer) openaipLayer.addTo(map).bringToFront();
   await applyNamesOverlayForBase(selectedBase);
   if (isStaleRequest()) return;
-  scheduleEdgeZoomProbe();
 
   // Update button states
   updateBaseButtonStates();
@@ -1546,7 +1244,6 @@ initZoomMechanics(map, {
   onViewportSettled: () => {
     applyLabelEnhancement();
     refreshHgtControlButton();
-    scheduleEdgeZoomProbe();
   }
 });
 
@@ -3302,13 +2999,12 @@ exportBtn.addEventListener('click', async () => {
     const R = 6378137;
     const metersPerPixelAtZ0 = Math.cos(lat * Math.PI/180) * 2 * Math.PI * R / 256;
     const z = Math.log2(metersPerPixelAtZ0 / targetMpp);
-    return clampZoomToBaseLimits(z, base);
+    return Math.max(0, Math.min(20, Math.round(z)));
   }
   const radarPixel = system === 'RADAR_overview' ? 25 : (system === 'RADAR_detailed' ? 5 : null);
   const oversample = radarPixel ? (exportQuality.value === 'HD' ? 3 : 2) : 1;
   const detailBoost = (selectionRect && exportQuality.value === 'HD') ? 1 : 0; // fetch higher-res tiles for HD box
-  const targetZoom = radarPixel ? zoomForMetersPerPixel(radarPixel / oversample, latMid) : (zoom + detailBoost);
-  const usedZoom = clampZoomToBaseLimits(targetZoom, base);
+  const usedZoom = radarPixel ? zoomForMetersPerPixel(radarPixel / oversample, latMid) : Math.min(20, zoom + detailBoost);
 
   console.log('[Export] Zoom & Resolution Settings:', {
     system: system,
@@ -3317,7 +3013,6 @@ exportBtn.addEventListener('click', async () => {
     detailBoost: detailBoost,
     originalZoom: zoom,
     calculatedZoom: usedZoom,
-    activeBaseZoomLimits: exportLimits,
     zoomAdjustment: usedZoom !== zoom ? `Adjusted from ${zoom} to ${usedZoom}` : 'No adjustment'
   });
 
@@ -3418,20 +3113,7 @@ exportBtn.addEventListener('click', async () => {
     const partName = customName ? (total>1 ? `${customName}_${partSuffix}` : customName) : (total>1 ? `export_${partSuffix}` : 'export');
     const endpoint = endpointBase;
     const showAttribution = document.getElementById('exportAttribution')?.checked ?? true;
-    const payload = {
-      bbox: partBbox,
-      zoom: usedZoom,
-      zoomMax: exportLimits.max,
-      width: partWidth,
-      height: partHeight,
-      base,
-      overlays,
-      system,
-      crs: outCrs,
-      quality: exportQuality.value,
-      filename: partName,
-      showAttribution
-    };
+    const payload = { bbox: partBbox, zoom: usedZoom, width: partWidth, height: partHeight, base, overlays, system, crs: outCrs, quality: exportQuality.value, filename: partName, showAttribution };
 
     console.log(`[Export] Part ${i+1}/${total} Starting:`, {
       partNumber: i + 1,
@@ -3483,7 +3165,7 @@ exportBtn.addEventListener('click', async () => {
       const match = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
       const serverName = match ? decodeURIComponent((match[1] || match[2] || '').trim()) : '';
     const ts   = new Date().toISOString().replace(/[:.]/g,'');
-      const inverseZoom = getInverseExportZoomForBase(usedZoom, base);
+      const inverseZoom = 21 - zoom;
       const prefix = `z${inverseZoom}_`;
       const defaultName = total>1 ? `${prefix}export_${system}_${ts}_${partSuffix}.tif` : `${prefix}export_${system}_${ts}.tif`;
       const finalName   = serverName || `${prefix}${partName}.tif` || defaultName;
@@ -3516,7 +3198,7 @@ exportBtn.addEventListener('click', async () => {
       weight: 2, pane: 'exportPane', interactive: false
     }).addTo(exportHistory);
   const ts   = new Date().toISOString().replace(/[:.]/g,'');
-  const inverseZoom = getInverseExportZoomForBase(usedZoom, base);
+  const inverseZoom = 21 - usedZoom;
   const prefix = `z${inverseZoom}_`;
   const baseName = (customName ? `${prefix}${customName}.tif` : `${prefix}export_${system}_${ts}.tif`);
   const tooltip = total>1 ? `${baseName} (${total} parts)` : baseName;

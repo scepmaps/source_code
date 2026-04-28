@@ -18,11 +18,7 @@ function ensureZoomToolLevelBadge(map) {
 
 export function updateZoomDisplay(map, elementId = 'zoomLevel') {
   const mapZoom = map.getZoom();
-  // Use stable base max for display to avoid jumps when dynamic caps tighten/relax.
-  const displayMaxZoom = Number.isFinite(map?._scepmapsDisplayMaxZoom)
-    ? map._scepmapsDisplayMaxZoom
-    : map.getMaxZoom();
-  const maxZoom = Number.isFinite(displayMaxZoom) ? displayMaxZoom : 20;
+  const maxZoom = Number.isFinite(map.getMaxZoom()) ? map.getMaxZoom() : 20;
   // Export mode is the naming/source-of-truth shown to users.
   const exportZoom = (maxZoom + 1) - mapZoom;
 
