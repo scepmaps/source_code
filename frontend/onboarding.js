@@ -2,7 +2,6 @@ const TOUR_SEEN_KEY_PREFIX = 'scepmaps_onboarding_seen_v1';
 const DRIVER_CSS_ID = 'driverjs-css';
 const DRIVER_SCRIPT_ID = 'driverjs-script';
 const TOUR_ZOOM_CONTROL_ID = 'zoomControls';
-const TOUR_INTRO_ANCHOR_ID = 'tourIntroAnchor';
 
 function isElementVisible(el) {
   if (!el) return false;
@@ -16,35 +15,6 @@ function ensureZoomControlId() {
   if (zoomControl && !zoomControl.id) {
     zoomControl.id = TOUR_ZOOM_CONTROL_ID;
   }
-}
-
-function ensureIntroAnchor() {
-  let anchor = document.getElementById(TOUR_INTRO_ANCHOR_ID);
-  if (anchor) return anchor;
-
-  anchor = document.createElement('div');
-  anchor.id = TOUR_INTRO_ANCHOR_ID;
-  anchor.textContent = 'Welcome to SCEPMAPS';
-  anchor.style.position = 'fixed';
-  anchor.style.top = '24px';
-  anchor.style.left = '50%';
-  anchor.style.transform = 'translateX(-50%)';
-  anchor.style.zIndex = '4500';
-  anchor.style.padding = '8px 12px';
-  anchor.style.borderRadius = '10px';
-  anchor.style.border = '1px solid rgba(77, 226, 255, 0.55)';
-  anchor.style.background = 'rgba(11, 16, 32, 0.92)';
-  anchor.style.color = '#d7e3ff';
-  anchor.style.fontSize = '13px';
-  anchor.style.fontWeight = '600';
-  anchor.style.pointerEvents = 'none';
-  document.body.appendChild(anchor);
-  return anchor;
-}
-
-function cleanupIntroAnchor() {
-  const anchor = document.getElementById(TOUR_INTRO_ANCHOR_ID);
-  if (anchor) anchor.remove();
 }
 
 function ensureDriverCssLoaded() {
@@ -83,15 +53,6 @@ function ensureDriverScriptLoaded() {
 function buildTourStepDefinitions() {
   // Edit tutorial text here: each title/description below is shown in the walkthrough.
   return [
-    {
-      selector: `#${TOUR_INTRO_ANCHOR_ID}`,
-      popover: {
-        title: 'Welcome to SCEPMAPS',
-        description: 'This quick tour will walk you through the main controls.',
-        side: 'bottom',
-        align: 'center'
-      }
-    },
     {
       selector: '#map',
       popover: {
@@ -211,7 +172,6 @@ export function resetOnboardingTourSeenFlag(userId = null, onboardingResetVersio
 export async function startOnboardingTour(options = {}) {
   const { onFinished, userId = null, onboardingResetVersion = 0 } = options;
   try {
-    ensureIntroAnchor();
     ensureZoomControlId();
     ensureDriverCssLoaded();
     await ensureDriverScriptLoaded();
@@ -231,7 +191,6 @@ export async function startOnboardingTour(options = {}) {
       prevBtnText: 'Back',
       popoverClass: 'scepmaps-tour-popover',
       onDestroyed: () => {
-        cleanupIntroAnchor();
         const key = getTourSeenStorageKey(userId, onboardingResetVersion);
         localStorage.setItem(key, 'true');
         if (typeof onFinished === 'function') onFinished();
