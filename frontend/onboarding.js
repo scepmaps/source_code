@@ -95,7 +95,7 @@ function buildTourStepDefinitions(context = {}) {
       isEnabled: () => hasPermission(allowedTools, 'hgt'),
       popover: {
         title: 'HGT Tool',
-        description: 'Create an HGT elevation selection area when this tool is enabled for your account.'
+        description: 'Create an HGT elevation selection area.'
       }
     },
     {
