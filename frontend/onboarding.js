@@ -50,7 +50,16 @@ function ensureDriverScriptLoaded() {
   });
 }
 
-function buildTourStepDefinitions() {
+function hasPermission(list, value) {
+  return Array.isArray(list) && list.includes(value);
+}
+
+function buildTourStepDefinitions(context = {}) {
+  const {
+    allowedBases = [],
+    allowedOverlays = [],
+    allowedTools = []
+  } = context;
   // Edit tutorial text here: each title/description below is shown in the walkthrough.
   return [
     {
@@ -83,6 +92,7 @@ function buildTourStepDefinitions() {
     },
     {
       selector: '.map-tool-btn--hgt',
+      isEnabled: () => hasPermission(allowedTools, 'hgt'),
       popover: {
         title: 'HGT Tool',
         description: 'Create an HGT elevation selection area when this tool is enabled for your account.'
@@ -97,6 +107,7 @@ function buildTourStepDefinitions() {
     },
     {
       selector: '#overlayBtnGroup',
+      isEnabled: () => allowedOverlays.length > 0,
       popover: {
         title: 'Overlay Selector',
         description: 'Toggle overlays like seamarks, airspace, labels, density, and history.'
@@ -104,6 +115,7 @@ function buildTourStepDefinitions() {
     },
     {
       selector: '#btnShom',
+      isEnabled: () => hasPermission(allowedBases, 'shom'),
       popover: {
         title: 'Nautical Charts (SHOM)',
         description: 'Switch to SHOM nautical charts when this button is available for your account.'
@@ -150,6 +162,7 @@ function buildTourStepDefinitions() {
 function getExistingSteps(stepDefs) {
   return stepDefs
     .map((def) => {
+      if (typeof def.isEnabled === 'function' && !def.isEnabled()) return null;
       if (!def.selector) {
         return { popover: def.popover };
       }
@@ -177,13 +190,20 @@ export function resetOnboardingTourSeenFlag(userId = null, onboardingResetVersio
 }
 
 export async function startOnboardingTour(options = {}) {
-  const { onFinished, userId = null, onboardingResetVersion = 0 } = options;
+  const {
+    onFinished,
+    userId = null,
+    onboardingResetVersion = 0,
+    allowedBases = [],
+    allowedOverlays = [],
+    allowedTools = []
+  } = options;
   try {
     ensureZoomControlId();
     ensureDriverCssLoaded();
     await ensureDriverScriptLoaded();
 
-    const stepDefs = buildTourStepDefinitions();
+    const stepDefs = buildTourStepDefinitions({ allowedBases, allowedOverlays, allowedTools });
     const steps = getExistingSteps(stepDefs);
     if (!steps.length) return false;
 

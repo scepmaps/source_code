@@ -3399,6 +3399,9 @@ async function runOnboardingTour(options = {}) {
   const started = await startOnboardingTour({
     userId: user?.id ?? null,
     onboardingResetVersion: Number(user?.onboarding_reset_version || 0),
+    allowedBases,
+    allowedOverlays: allowedOver,
+    allowedTools,
     onFinished: () => {
       // Keep Leaflet stable after overlay teardown.
       map.invalidateSize();
