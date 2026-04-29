@@ -62,13 +62,18 @@ const defaultZoom = (user.default_zoom !== null && user.default_zoom !== undefin
 
 const map = L.map('map', { zoomControl: true }).setView([defaultLat, defaultLon], defaultZoom);
 map.invalidateSize(); // Ensure map renders correctly after display change
-const DEFAULT_MAP_ZOOM_LIMITS = { min: 1, max: 20 };
+const DEFAULT_MAP_ZOOM_LIMITS = { min: 1, max: 19 };
 const BASE_NATIVE_MAX_ZOOM = {
+  // OSM standard slippy tiles are typically served up to z19.
+  osm: 19,
   // ArcGIS World Imagery currently stops serving tiles beyond z19 in this setup.
-  esri: 19
+  esri: 19,
+  shom: 18,
+  ukho: 18,
+  gbsouth: 12
 };
 const BASE_ZOOM_LIMITS = {
-  osm: { min: 1, max: 20 },
+  osm: { min: 1, max: 19 },
   esri: { min: 1, max: 19 },
   // Vector basemaps: cap at 19 to avoid over-zoom beyond typical source detail.
   topo: { min: 1, max: 19 },
@@ -293,6 +298,7 @@ if (allowedBases.includes('shom')) {
   shomOverlay = L.tileLayer(LAYERS.shom.url, {
     attribution: LAYERS.shom.attribution,
     maxZoom: 18, // SHOM tiles are typically available up to zoom 18
+    maxNativeZoom: 18,
     pane: 'chartsPane'
   });
 
@@ -333,6 +339,7 @@ if (allowedBases.includes('gbsouth')) {
   gbsouthOverlay = L.tileLayer(LAYERS.gbsouth.url, {
     attribution: LAYERS.gbsouth.attribution,
     maxZoom: 12, // GB South tiles available up to zoom 12
+    maxNativeZoom: 12,
     minZoom: 6,  // GB South tiles start at zoom 6
     pane: 'chartsPane'
   });
@@ -349,6 +356,7 @@ if (allowedBases.includes('ukho')) {
   ukhoOverlay = L.tileLayer(LAYERS.ukho.url, {
     attribution: LAYERS.ukho.attribution,
     maxZoom: 18,
+    maxNativeZoom: 18,
     pane: 'chartsPane'
   });
 
@@ -3404,6 +3412,11 @@ async function runOnboardingTour(options = {}) {
 
 const helpTourBtn = document.getElementById('helpTourBtn');
 helpTourBtn?.addEventListener('click', () => {
+  const settingsModal = document.getElementById('userSettingsModal');
+  if (settingsModal?.style.display === 'flex') {
+    document.body.classList.remove('settings-modal-open');
+    settingsModal.style.display = 'none';
+  }
   runOnboardingTour({ showFailureNotice: true });
 });
 
