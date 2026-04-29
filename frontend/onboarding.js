@@ -117,6 +117,13 @@ function buildTourStepDefinitions() {
       }
     },
     {
+      selector: '#exportFilename',
+      popover: {
+        title: 'Export Name',
+        description: 'Enter an optional filename for your export. Leave it empty to use an automatic name.'
+      }
+    },
+    {
       selector: '#exportBtn',
       popover: {
         title: 'Export',
