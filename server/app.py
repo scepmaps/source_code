@@ -89,6 +89,7 @@ def health():
 def _download_name(out_crs: str, zoom: int, filename: str | None) -> str:
     # Convert to inverse zoom level: z1 = max zoom (20), higher numbers = more zoomed out
     inverse_zoom = 21 - zoom
+    ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
 
     if filename:
         # sanitize a bit
@@ -99,9 +100,9 @@ def _download_name(out_crs: str, zoom: int, filename: str | None) -> str:
         safe = None
 
     if safe:
-        return f"z{inverse_zoom}_{safe}.tif"
+        return f"z{inverse_zoom}_{safe}_{ts}.tif"
     else:
-        return f"z{inverse_zoom}_export_{out_crs.replace(':','_')}.tif"
+        return f"z{inverse_zoom}_export_{out_crs.replace(':','_')}_{ts}.tif"
 
 
 def _export_headless_geotiff_bytes(
@@ -873,7 +874,7 @@ def export_hgt():
             zip_buf,
             mimetype="application/zip",
             as_attachment=True,
-            download_name=f"{zip_base}.zip",
+            download_name=f"{zip_base}_{time.strftime('%Y%m%d_%H%M%S', time.gmtime())}.zip",
         )
     except Exception as e:
         logger.exception("[HGT] Export failed")
