@@ -425,7 +425,7 @@ def _build_hgt_overlay_rgba_for_grid(requested_tiles, present_tile_names, synthe
     return rgba, transform
 
 
-def _build_hgt_map_with_grid_tiff_bytes(
+def _build_hgt_map_with_grid_png_bytes(
     requested_tiles, present_tile_names, synthetic_water_tile_names, base: str, zoom: int, system: str | None
 ):
     import logging
@@ -446,8 +446,6 @@ def _build_hgt_map_with_grid_tiff_bytes(
             candidate_bases.append(fallback)
 
     base_data = None
-    transform = None
-    crs = None
     h = None
     w = None
     for base_candidate in candidate_bases:
@@ -472,8 +470,6 @@ def _build_hgt_map_with_grid_tiff_bytes(
                     # If the layer is mostly transparent (e.g. no chart coverage), try fallback basemap.
                     if alpha_coverage > 0.02 or base_candidate == candidate_bases[-1]:
                         base_data = data
-                        transform = src.transform
-                        crs = src.crs
                         h = src.height
                         w = src.width
                         break
@@ -481,7 +477,7 @@ def _build_hgt_map_with_grid_tiff_bytes(
             logger.warning("[HGT] Headless base layer build failed for base=%s: %s", base_candidate, e)
 
     if base_data is None:
-        raise RuntimeError("Failed to render map underlay for HGT overlay TIFF")
+        raise RuntimeError("Failed to render map underlay for HGT overlay PNG")
 
     if base_data.shape[0] >= 3:
         base_rgb = base_data[:3].astype(np.float32)
@@ -565,30 +561,9 @@ def _build_hgt_map_with_grid_tiff_bytes(
     ts_y = y0 + content_h + 2
     draw.text((ts_x, ts_y), ts_txt, fill=(255, 255, 255, 220), font=font)
 
-    out = np.transpose(np.array(pil_img, dtype=np.uint8), (2, 0, 1))
-
-    with MemoryFile() as mem_out:
-        with mem_out.open(
-            driver="GTiff",
-            width=w,
-            height=h,
-            count=4,
-            dtype="uint8",
-            crs=crs or "EPSG:4326",
-            transform=transform,
-            compress="DEFLATE",
-            tiled=True,
-            photometric="RGB",
-            nodata=0,
-        ) as dst:
-            dst.write(out)
-            dst.colorinterp = (
-                rasterio.enums.ColorInterp.red,
-                rasterio.enums.ColorInterp.green,
-                rasterio.enums.ColorInterp.blue,
-                rasterio.enums.ColorInterp.alpha,
-            )
-        return mem_out.read()
+    png_buf = io.BytesIO()
+    pil_img.save(png_buf, format="PNG")
+    return png_buf.getvalue()
 
 
 def _load_hgt_missing_allowlist():
@@ -856,10 +831,10 @@ def export_hgt():
         zoom = int(data.get("zoom") or 8)
         system = data.get("system")
 
-        map_overlay_tiff_bytes = None
-        tiff_name = None
+        map_overlay_png_bytes = None
+        png_name = None
         try:
-            map_overlay_tiff_bytes = _build_hgt_map_with_grid_tiff_bytes(
+            map_overlay_png_bytes = _build_hgt_map_with_grid_png_bytes(
                 requested_tiles,
                 present_tile_names,
                 synthetic_tile_names,
@@ -867,10 +842,10 @@ def export_hgt():
                 zoom,
                 system,
             )
-            tiff_ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
-            tiff_name = f"{zip_base}_map_with_hgt_grid_{tiff_ts}.tif"
+            png_ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+            png_name = f"{zip_base}_map_with_hgt_grid_{png_ts}.png"
         except Exception as e:
-            logger.warning("[HGT] Failed to build map-overlay TIFF for zip export: %s", e)
+            logger.warning("[HGT] Failed to build map-overlay PNG for zip export: %s", e)
 
         zip_buf = io.BytesIO()
         with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -878,8 +853,8 @@ def export_hgt():
                 zf.write(p, arcname=f"hgt/{p.name}")
             for tile_name in synthetic_water_tiles:
                 zf.writestr(f"hgt/{tile_name}", _HGT_WATER_TILE_BYTES)
-            if map_overlay_tiff_bytes is not None and tiff_name is not None:
-                zf.writestr(tiff_name, map_overlay_tiff_bytes)
+            if map_overlay_png_bytes is not None and png_name is not None:
+                zf.writestr(png_name, map_overlay_png_bytes)
         zip_buf.seek(0)
 
         logger.info(
@@ -907,7 +882,7 @@ def export_hgt():
 
 @app.route("/export_hgt_map_tiff", methods=["POST"])
 def export_hgt_map_tiff():
-    """Map + HGT grid overlay GeoTIFF; separate download from the HGT zip (same bbox/auth as /export_hgt)."""
+    """Map + HGT grid overlay PNG; separate download from the HGT zip (same bbox/auth as /export_hgt)."""
     import logging
 
     logger = logging.getLogger(__name__)
@@ -936,7 +911,7 @@ def export_hgt_map_tiff():
         system = data.get("system")
 
         try:
-            map_overlay_tiff_bytes = _build_hgt_map_with_grid_tiff_bytes(
+            map_overlay_png_bytes = _build_hgt_map_with_grid_png_bytes(
                 requested_tiles,
                 present_tile_names,
                 synthetic_tile_names,
@@ -945,21 +920,21 @@ def export_hgt_map_tiff():
                 system,
             )
         except Exception as e:
-            logger.exception("[HGT] Map TIFF build failed")
-            return (f"HGT map TIFF failed: {str(e)}", 500)
+            logger.exception("[HGT] Map PNG build failed")
+            return (f"HGT map PNG failed: {str(e)}", 500)
 
-        tiff_buf = io.BytesIO(map_overlay_tiff_bytes)
-        tiff_buf.seek(0)
-        tiff_ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+        png_buf = io.BytesIO(map_overlay_png_bytes)
+        png_buf.seek(0)
+        png_ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
         return send_file(
-            tiff_buf,
-            mimetype="image/tiff",
+            png_buf,
+            mimetype="image/png",
             as_attachment=True,
-            download_name=f"{zip_base}_map_with_hgt_grid_{tiff_ts}.tif",
+            download_name=f"{zip_base}_map_with_hgt_grid_{png_ts}.png",
         )
     except Exception as e:
-        logger.exception("[HGT] Map TIFF export failed")
-        return (f"HGT map TIFF export failed: {str(e)}", 500)
+        logger.exception("[HGT] Map PNG export failed")
+        return (f"HGT map PNG export failed: {str(e)}", 500)
 
 
 # --- SHOM tile proxy ---------------------------------------------------------
