@@ -123,7 +123,7 @@ HTML = """<!doctype html>
     const now = new Date();
     const timestamp = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
     attributionControl = L.control.attribution({
-      prefix: '<a href="https://leafletjs.com" title="A JavaScript library for interactive maps">Leaflet</a> | ' + timestamp
+      prefix: timestamp
     }).addTo(map);
   }
   map.setView([(bbox[1]+bbox[3])/2,(bbox[0]+bbox[2])/2], zoom);
