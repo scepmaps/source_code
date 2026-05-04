@@ -65,7 +65,7 @@ function buildTourStepDefinitions(context = {}) {
     {
       selector: '#map',
       popover: {
-        title: 'Map View',
+        title: 'Tutorial',
         description: 'This is the main map workspace where you pan, zoom, and inspect layers.'
       }
     },
