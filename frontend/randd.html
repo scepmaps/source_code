@@ -1,0 +1,420 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>R&amp;D — Backend Monitoring</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+      :root{
+        --bg:#0b1020; --bg-2:#0e1530; --card:#0f1a39cc; --stroke:#243167;
+        --text:#d7e3ff; --muted:#8aa0d6; --accent:#4de2ff; --danger:#ff4d6d;
+        --success:#4dff88; --warning:#ffa04d; --shadow:0 10px 30px rgba(0,0,0,.4);
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--text);
+        margin: 0; line-height: 1.5;
+      }
+      .header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 16px 24px; border-bottom: 1px solid var(--stroke);
+        background: linear-gradient(180deg, var(--bg-2), var(--bg));
+      }
+      .brand { font-size: 18px; font-weight: 600; }
+      .nav { display: flex; gap: 12px; flex-wrap: wrap; }
+      .btn {
+        padding: 8px 16px; border: 1px solid var(--stroke); background: var(--card);
+        color: var(--text); border-radius: 8px; cursor: pointer; font-size: 14px;
+        transition: all 0.2s; text-decoration: none; display: inline-flex;
+        align-items: center; gap: 6px;
+      }
+      .btn:hover { background: var(--bg-2); transform: translateY(-1px); }
+      .btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+      .btn.danger { background: var(--danger); color: white; border-color: var(--danger); }
+
+      .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+      .card {
+        background: var(--card); border: 1px solid var(--stroke); border-radius: 12px;
+        padding: 20px; box-shadow: var(--shadow);
+      }
+      .card h3 { margin: 0 0 16px 0; font-size: 16px; font-weight: 600; }
+
+      .stats {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;
+      }
+      .stat-card {
+        background: var(--card); border: 1px solid var(--stroke); border-radius: 8px;
+        padding: 16px; text-align: center;
+      }
+      .stat-number { font-size: 24px; font-weight: 600; color: var(--accent); }
+      .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+      .metric-grid {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;
+      }
+      .metric-item {
+        padding: 12px; background: var(--bg-2); border-radius: 8px; border: 1px solid var(--stroke);
+      }
+      .metric-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+      .metric-value { font-size: 16px; font-weight: 600; margin-top: 4px; }
+
+      .status-badge {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500;
+      }
+      .status-badge.ok { background: rgba(77, 255, 136, 0.15); color: var(--success); border: 1px solid var(--success); }
+      .status-badge.warn { background: rgba(255, 160, 77, 0.15); color: var(--warning); border: 1px solid var(--warning); }
+      .status-badge.err { background: rgba(255, 77, 109, 0.15); color: var(--danger); border: 1px solid var(--danger); }
+
+      .progress-bar {
+        height: 8px; background: var(--bg-2); border-radius: 4px; overflow: hidden; margin-top: 8px;
+      }
+      .progress-fill {
+        height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s ease;
+      }
+      .progress-fill.warn { background: var(--warning); }
+      .progress-fill.err { background: var(--danger); }
+
+      .users-table {
+        width: 100%; border-collapse: collapse; margin-top: 16px;
+        background: var(--bg-2); border-radius: 8px; overflow: hidden;
+      }
+      .users-table th, .users-table td {
+        padding: 12px; text-align: left; border-bottom: 1px solid var(--stroke);
+      }
+      .users-table th {
+        background: var(--card); font-weight: 600; font-size: 13px;
+        color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;
+      }
+      .users-table tbody tr:hover { background: var(--card); }
+
+      .user-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;
+      }
+      .user-badge.admin { background: var(--accent); color: var(--bg); }
+      .user-badge.user { background: var(--stroke); color: var(--muted); }
+
+      .provider-list { display: flex; flex-wrap: wrap; gap: 8px; }
+      .provider-tag {
+        padding: 6px 10px; border-radius: 6px; font-size: 12px; font-weight: 500;
+        border: 1px solid var(--stroke); background: var(--bg-2);
+      }
+      .provider-tag.on { border-color: var(--success); color: var(--success); }
+      .provider-tag.off { border-color: var(--stroke); color: var(--muted); }
+
+      .refresh-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+      .empty-state { text-align: center; padding: 40px; color: var(--muted); }
+      .loading { opacity: 0.6; pointer-events: none; }
+
+      @media (max-width: 768px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+        .grid-2 { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="brand">🔬 R&amp;D — Backend Monitoring</div>
+      <div class="nav">
+        <button class="btn primary" onclick="refreshAll()">🔄 Refresh</button>
+        <a href="admin.html" class="btn">🛡️ Admin</a>
+        <a href="index.html" class="btn">🗺️ Back to Map</a>
+        <button class="btn danger" onclick="logout()">🚪 Logout</button>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-number" id="uptimeStat">—</div>
+          <div class="stat-label">Uptime</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="memoryStat">—</div>
+          <div class="stat-label">Memory Used</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="diskStat">—</div>
+          <div class="stat-label">Disk Used (root)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="exportsTodayStat">—</div>
+          <div class="stat-label">Exports Today</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>⚙️ System Health</h3>
+          <div id="systemHealth">Loading...</div>
+          <div class="refresh-note" id="lastUpdated"></div>
+        </div>
+        <div class="card">
+          <h3>💾 Storage &amp; Database</h3>
+          <div id="storageInfo">Loading...</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom: 24px;">
+        <h3>🔌 Provider Configuration</h3>
+        <div id="providerStatus" class="provider-list">Loading...</div>
+      </div>
+
+      <div class="card">
+        <h3>👥 Users</h3>
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Role</th>
+              <th>Export Limits</th>
+              <th>Activity</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            <tr>
+              <td colspan="4" class="empty-state">Loading users...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      const API = '';
+      let refreshTimer = null;
+
+      const getToken = () => localStorage.getItem('token') || '';
+      const getAuthHeaders = () => ({ 'Authorization': 'Bearer ' + getToken() });
+      const logout = () => { localStorage.clear(); location.href = 'login.html'; };
+
+      const setLoading = (loading) => {
+        document.body.classList.toggle('loading', loading);
+      };
+
+      const progressClass = (pct) => {
+        if (pct === null || pct === undefined) return '';
+        if (pct >= 90) return 'err';
+        if (pct >= 75) return 'warn';
+        return '';
+      };
+
+      const renderProgress = (label, usedPct, detail) => {
+        const cls = progressClass(usedPct);
+        const pct = usedPct ?? 0;
+        return `
+          <div class="metric-item">
+            <div class="metric-label">${label}</div>
+            <div class="metric-value">${usedPct !== null && usedPct !== undefined ? pct + '%' : 'n/a'}</div>
+            <div class="progress-bar">
+              <div class="progress-fill ${cls}" style="width: ${pct}%"></div>
+            </div>
+            <div class="refresh-note">${detail || ''}</div>
+          </div>
+        `;
+      };
+
+      const renderRandd = (m) => {
+        document.getElementById('uptimeStat').textContent = m.uptime || '—';
+        document.getElementById('memoryStat').textContent =
+          m.memory?.used_percent !== null && m.memory?.used_percent !== undefined
+            ? m.memory.used_percent + '%'
+            : 'n/a';
+        document.getElementById('diskStat').textContent =
+          m.disk?.root?.used_percent !== undefined ? m.disk.root.used_percent + '%' : '—';
+        document.getElementById('exportsTodayStat').textContent = m.exports?.today ?? '—';
+
+        const healthStatus = m.health?.status === 'ok' ? 'ok' : 'warn';
+        document.getElementById('systemHealth').innerHTML = `
+          <div style="margin-bottom: 16px;">
+            <span class="status-badge ${healthStatus}">● ${m.health?.status?.toUpperCase() || 'UNKNOWN'}</span>
+          </div>
+          <div class="metric-grid">
+            <div class="metric-item">
+              <div class="metric-label">Environment</div>
+              <div class="metric-value">${m.environment || 'unknown'}</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Process ID</div>
+              <div class="metric-value">${m.process?.pid ?? 'n/a'}</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Active Threads</div>
+              <div class="metric-value">${m.process?.threads ?? 'n/a'}</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Load Average (1m)</div>
+              <div class="metric-value">${m.process?.load_average?.['1m'] ?? 'n/a'}</div>
+            </div>
+            ${renderProgress('Memory', m.memory?.used_percent, `${m.memory?.used || 'n/a'} / ${m.memory?.total || 'n/a'}`)}
+            ${renderProgress('Disk (root)', m.disk?.root?.used_percent, `${m.disk?.root?.used || 'n/a'} / ${m.disk?.root?.total || 'n/a'}`)}
+          </div>
+        `;
+
+        document.getElementById('storageInfo').innerHTML = `
+          <div class="metric-grid">
+            <div class="metric-item">
+              <div class="metric-label">Database Size</div>
+              <div class="metric-value">${m.database?.size || 'n/a'}</div>
+              <div class="refresh-note">${m.database?.path || ''}</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Data Directory</div>
+              <div class="metric-value">${m.storage?.data_dir || 'n/a'}</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Exports Directory</div>
+              <div class="metric-value">${m.storage?.exports_dir || 'n/a'}</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Total Exports</div>
+              <div class="metric-value">${m.exports?.total ?? 0}</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Exports This Week</div>
+              <div class="metric-value">${m.exports?.week ?? 0}</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Exports This Month</div>
+              <div class="metric-value">${m.exports?.month ?? 0}</div>
+            </div>
+          </div>
+        `;
+
+        const providers = m.providers || {};
+        document.getElementById('providerStatus').innerHTML = Object.entries(providers).map(([name, on]) => `
+          <span class="provider-tag ${on ? 'on' : 'off'}">${on ? '✓' : '✗'} ${name.toUpperCase()}</span>
+        `).join('');
+
+        const ts = m.timestamp ? new Date(m.timestamp * 1000).toLocaleString() : 'unknown';
+        document.getElementById('lastUpdated').textContent = `Last updated: ${ts} · auto-refresh every 30s`;
+      };
+
+      const renderUsers = (users) => {
+        const tbody = document.getElementById('usersTableBody');
+        if (!users.length) {
+          tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No users found</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = users.map(user => {
+          const limits = [
+            user.limit_day === -1 ? 'Day: ∞' : `Day: ${user.limit_day}`,
+            user.limit_week === -1 ? 'Week: ∞' : `Week: ${user.limit_week}`,
+            user.limit_month === -1 ? 'Month: ∞' : `Month: ${user.limit_month}`,
+          ].join(' · ');
+
+          const activity = [
+            `Today: ${user.count_day ?? 0}`,
+            `Week: ${user.count_week ?? 0}`,
+            `Month: ${user.count_month ?? 0}`,
+            `Total: ${user.count_total ?? 0}`,
+          ].join(' · ');
+
+          return `
+            <tr>
+              <td>
+                <div style="font-weight: 500;">${user.name || 'No name'}</div>
+                <div style="font-size: 12px; color: var(--muted);">${user.email}</div>
+              </td>
+              <td>
+                <span class="user-badge ${user.is_admin ? 'admin' : 'user'}">
+                  ${user.is_admin ? '👑 Admin' : '👤 User'}
+                </span>
+              </td>
+              <td style="font-size: 12px;">${limits}</td>
+              <td style="font-size: 12px;">${activity}</td>
+            </tr>
+          `;
+        }).join('');
+      };
+
+      const loadRandd = async () => {
+        const res = await fetch(`${API}/admin/randd`, { headers: getAuthHeaders() });
+        if (!res.ok) {
+          if (res.status === 401) {
+            logout();
+            return;
+          }
+          throw new Error('Failed to load R&D data');
+        }
+        const data = await res.json();
+        renderRandd(data.randd);
+      };
+
+      const loadUsers = async () => {
+        const res = await fetch(`${API}/admin/users`, { headers: getAuthHeaders() });
+        if (!res.ok) {
+          if (res.status === 401) {
+            logout();
+            return;
+          }
+          throw new Error('Failed to load users');
+        }
+        const data = await res.json();
+        renderUsers(data.users);
+      };
+
+      const refreshAll = async () => {
+        try {
+          setLoading(true);
+          await Promise.all([loadRandd(), loadUsers()]);
+        } catch (error) {
+          console.error(error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const startAutoRefresh = () => {
+        if (refreshTimer) clearInterval(refreshTimer);
+        refreshTimer = setInterval(refreshAll, 30000);
+      };
+
+      (async () => {
+        const token = localStorage.getItem('token');
+        const cachedUser = JSON.parse(localStorage.getItem('user') || 'null');
+
+        if (!token || !cachedUser) {
+          location.href = 'login.html';
+          return;
+        }
+
+        try {
+          const res = await fetch('/auth/me', {
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+
+          if (!res.ok) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            location.href = 'login.html';
+            return;
+          }
+
+          const data = await res.json();
+          const user = data.user;
+          localStorage.setItem('user', JSON.stringify(user));
+
+          if (!user?.is_admin) {
+            location.href = 'index.html';
+            return;
+          }
+
+          await refreshAll();
+          startAutoRefresh();
+        } catch (e) {
+          if (!cachedUser?.is_admin) {
+            location.href = 'login.html';
+            return;
+          }
+          await refreshAll();
+          startAutoRefresh();
+        }
+      })();
+    </script>
+  </body>
+</html>
