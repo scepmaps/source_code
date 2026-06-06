@@ -37,7 +37,6 @@ from exporter import export_geotiff  # server-side tiles → mosaic → GeoTIFF
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from headless import render_headless_map  # Playwright path (browser-rendered bitmap)
-from randd import get_randd_data
 from PIL import Image, ImageDraw, ImageFont
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine
@@ -70,11 +69,6 @@ def serve_login_page():
 @app.route("/admin.html")
 def serve_admin_page():
     return app.send_static_file("admin.html")
-
-
-@app.route("/randd.html")
-def serve_randd_page():
-    return app.send_static_file("randd.html")
 
 
 @app.route("/data/<path:filename>")
@@ -2444,18 +2438,6 @@ def admin_stats():
         return {"stats": stats}
     except Exception as e:
         return ({"error": f"Failed to get stats: {str(e)}"}, 500)
-
-
-@app.get("/admin/randd")
-def admin_randd():
-    admin = _require_admin(request)
-    if not admin:
-        return ({"error": "Unauthorized"}, 401)
-
-    try:
-        return {"randd": get_randd_data()}
-    except Exception as e:
-        return ({"error": f"Failed to get R&D data: {str(e)}"}, 500)
 
 
 @app.get("/admin/users/<int:user_id>/stats")
