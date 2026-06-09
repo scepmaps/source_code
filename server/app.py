@@ -32,6 +32,9 @@ from db import (
 )
 from dotenv import load_dotenv
 
+# Activity emitter — stdout/syslog transport (no whatchman imports)
+import activity
+
 # Our modules
 from exporter import export_geotiff  # server-side tiles → mosaic → GeoTIFF
 from flask import Flask, jsonify, request, send_file
@@ -54,6 +57,16 @@ ensure_default_admin(
 
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
 CORS(app)
+
+
+@app.before_request
+def _activity_start():
+    activity.on_request_start()
+
+
+@app.after_request
+def _activity_end(response):
+    return activity.on_request_end(response)
 
 
 @app.route("/")
@@ -208,9 +221,31 @@ def export_endpoint():
         else:
             logger.info(f"[Export] Export without authentication (public access)")
 
+        # Activity — request params + resolved identity (before heavy work starts)
+        activity.enrich(
+            user=user,
+            export_type="tile",
+            base=base,
+            overlays=overlays,
+            bbox=bbox,
+            bbox_area_km2=activity.bbox_area_km2(bbox),
+            bbox_center=activity.bbox_center(bbox),
+            zoom=zoom,
+            width=width,
+            height=height,
+            crs=out_crs,
+            system=system,
+            quality=quality,
+            filename=filename,
+        )
+
         logger.info(f"[Export] Calling export_geotiff()...")
         result_bytes = export_geotiff(bbox, zoom, width, height, base, overlays, out_crs, system)
         logger.info(f"[Export] export_geotiff() completed: output_size={len(result_bytes)} bytes")
+
+        # Activity — output size (only reachable on success)
+        activity.enrich(bytes_produced=len(result_bytes))
+
         if user:
             try:
                 log_export(user["id"], base, overlays)
@@ -270,6 +305,25 @@ def export_headless():
         else:
             logger.info(f"[Export] Export without authentication (public access)")
 
+        # Activity — request params + resolved identity
+        activity.enrich(
+            user=user,
+            export_type="headless",
+            base=base,
+            overlays=overlays,
+            bbox=bbox,
+            bbox_area_km2=activity.bbox_area_km2(bbox),
+            bbox_center=activity.bbox_center(bbox),
+            zoom=zoom,
+            width=width,
+            height=height,
+            crs=out_crs,
+            system=system,
+            quality=quality,
+            filename=filename,
+            show_attribution=show_attribution,
+        )
+
         logger.info(f"[Export] Step 1-3: Rendering + georeferencing via shared headless pipeline")
         out_bytes = _export_headless_geotiff_bytes(
             bbox=bbox,
@@ -286,6 +340,9 @@ def export_headless():
         return (f"Export preparation failed: {str(e)}", 500)
 
     try:
+        # Activity — output size (only reachable on success)
+        activity.enrich(bytes_produced=len(out_bytes))
+
         result = send_file(
             io.BytesIO(out_bytes),
             mimetype="image/tiff",
@@ -832,6 +889,23 @@ def export_hgt():
         zoom = int(data.get("zoom") or 8)
         system = data.get("system")
 
+        # Activity — HGT export params + tile inventory + resolved identity
+        _hgt_bbox = [ctx["west"], ctx["south"], ctx["east"], ctx["north"]]
+        activity.enrich(
+            user=user,
+            export_type="hgt",
+            base=base,
+            zoom=zoom,
+            system=system,
+            bbox=_hgt_bbox,
+            bbox_area_km2=activity.bbox_area_km2(_hgt_bbox),
+            bbox_center=activity.bbox_center(_hgt_bbox),
+            tiles_requested=len(requested_tiles),
+            tiles_present=len(present_paths),
+            tiles_synthetic_water=len(synthetic_water_tiles),
+            hgt_dir_available=hgt_dir_available,
+        )
+
         map_overlay_png_bytes = None
         png_name = None
         try:
@@ -856,7 +930,11 @@ def export_hgt():
                 zf.writestr(f"hgt/{tile_name}", _HGT_WATER_TILE_BYTES)
             if map_overlay_png_bytes is not None and png_name is not None:
                 zf.writestr(png_name, map_overlay_png_bytes)
+        zip_size = zip_buf.tell()
         zip_buf.seek(0)
+
+        # Activity — zip output size (only reachable on success)
+        activity.enrich(bytes_produced=zip_size)
 
         logger.info(
             "[HGT] Exported %s local tiles + %s synthetic water tiles for bbox=%s",
@@ -2146,7 +2224,9 @@ def login():
     password = data.get("password", "")
     user, pwh = get_user_by_email(email)
     if not user or not pwh or not verify_password(password, pwh):
+        activity.enrich(login_email=email, login_ok=False)
         return ({"error": "Invalid credentials"}, 401)
+    activity.enrich(user=user, login_email=email, login_ok=True)
     token = mint_token({"uid": user["id"], "adm": user["is_admin"]}, ttl_seconds=86400)
     return {"token": token, "user": user}
 
@@ -2304,8 +2384,10 @@ def _require_admin(req):
 
 @app.get("/admin/users")
 def admin_list_users():
-    if not _require_admin(request):
+    admin = _require_admin(request)
+    if not admin:
         return ({"error": "Unauthorized"}, 401)
+    activity.enrich(user=admin, admin_action="list_users")
     users = list_users()
     try:
         now = int(__import__("time").time())
@@ -2319,6 +2401,7 @@ def admin_list_users():
             u["count_total"] = count_exports_since(u["id"], 0)
     except Exception:
         pass
+    activity.enrich(users_count=len(users))
     return {"users": users}
 
 
@@ -2327,6 +2410,7 @@ def admin_create_user():
     admin = _require_admin(request)
     if not admin:
         return ({"error": "Unauthorized"}, 401)
+    activity.enrich(user=admin, admin_action="create_user")
     data = request.get_json(force=True)
     email = data.get("email", "").strip().lower()
     name = data.get("name", "")
@@ -2367,6 +2451,11 @@ def admin_create_user():
             limit_week,
             limit_month,
         )
+        activity.enrich(
+            target_email=email,
+            target_is_admin=is_admin,
+            target_new_id=uid,
+        )
         return {"id": uid}
     except sqlite3.IntegrityError:
         return ({"error": "Email already exists"}, 409)
@@ -2377,6 +2466,7 @@ def admin_update_user(user_id: int):
     admin = _require_admin(request)
     if not admin:
         return ({"error": "Unauthorized"}, 401)
+    activity.enrich(user=admin, admin_action="update_user", target_user_id=user_id)
     data = request.get_json(force=True)
     pw = data.get("password")
     # If arrays are provided but empty, treat as explicit empty (no access).
@@ -2407,6 +2497,7 @@ def admin_delete_user(user_id: int):
     admin = _require_admin(request)
     if not admin:
         return ({"error": "Unauthorized"}, 401)
+    activity.enrich(user=admin, admin_action="delete_user", target_user_id=user_id)
     delete_user(user_id)
     return {"ok": True}
 
@@ -2416,6 +2507,7 @@ def admin_reset_user_onboarding(user_id: int):
     admin = _require_admin(request)
     if not admin:
         return ({"error": "Unauthorized"}, 401)
+    activity.enrich(user=admin, admin_action="reset_onboarding", target_user_id=user_id)
 
     target_user = get_user_by_id(user_id)
     if not target_user:
@@ -2432,6 +2524,7 @@ def admin_stats():
     admin = _require_admin(request)
     if not admin:
         return ({"error": "Unauthorized"}, 401)
+    activity.enrich(user=admin, admin_action="get_stats")
 
     try:
         stats = get_all_export_stats()
