@@ -103,6 +103,64 @@ def bbox_center(bbox) -> list | None:
         return None
 
 
+def bbox_corners(bbox) -> dict | None:
+    """Individual W/S/E/N corners for easier downstream indexing."""
+    try:
+        w, s, e, n = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+        return {
+            "bbox_w": round(w, 5),
+            "bbox_s": round(s, 5),
+            "bbox_e": round(e, 5),
+            "bbox_n": round(n, 5),
+        }
+    except Exception:
+        return None
+
+
+def overlay_names(overlays) -> list | None:
+    """Active overlay keys from an overlays dict."""
+    if not overlays or not isinstance(overlays, dict):
+        return None
+    try:
+        names = sorted(k for k, v in overlays.items() if v)
+        return names or None
+    except Exception:
+        return None
+
+
+def ua_family(user_agent: str | None) -> str | None:
+    """Lightweight client family label from User-Agent (no external deps)."""
+    if not user_agent:
+        return None
+    ua = user_agent.lower()
+    if "edg/" in ua or "edge/" in ua:
+        browser = "Edge"
+    elif "chrome/" in ua and "chromium" not in ua:
+        browser = "Chrome"
+    elif "firefox/" in ua:
+        browser = "Firefox"
+    elif "safari/" in ua and "chrome" not in ua:
+        browser = "Safari"
+    elif "curl/" in ua:
+        browser = "curl"
+    else:
+        browser = "Other"
+
+    if "windows" in ua:
+        os_name = "Windows"
+    elif "mac os" in ua or "macintosh" in ua:
+        os_name = "macOS"
+    elif "android" in ua:
+        os_name = "Android"
+    elif "iphone" in ua or "ipad" in ua:
+        os_name = "iOS"
+    elif "linux" in ua:
+        os_name = "Linux"
+    else:
+        os_name = "Unknown"
+    return f"{browser}/{os_name}"
+
+
 # ── Per-request thread-local state ────────────────────────────────────────────
 # Gunicorn sync workers: one request per thread at a time — thread-local is safe.
 # Each worker resets state at the start of every request via on_request_start().
@@ -150,19 +208,23 @@ def on_request_start():
         forwarded_for = request.headers.get("X-Forwarded-For", "")
         client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else request.remote_addr
 
+        ua = request.user_agent.string or None
         _local.envelope = {
-            "v":              1,
-            "req_id":         _local.req_id,
-            "ts":             datetime.now(timezone.utc).isoformat(),
-            "category":       category,
-            "method":         request.method,
-            "path":           path,
-            "query":          request.query_string.decode("utf-8", errors="replace") or None,
-            "ip":             client_ip,
-            "user_agent":     request.user_agent.string or None,
-            "content_type":   request.content_type or None,
-            "content_length": request.content_length,
-            "referer":        request.referrer or None,
+            "v":               1,
+            "req_id":          _local.req_id,
+            "ts":              datetime.now(timezone.utc).isoformat(),
+            "category":        category,
+            "method":          request.method,
+            "path":            path,
+            "query":           request.query_string.decode("utf-8", errors="replace") or None,
+            "ip":              client_ip,
+            "user_agent":      ua,
+            "client_family":   ua_family(ua),
+            "accept_language": request.headers.get("Accept-Language") or None,
+            "origin":          request.headers.get("Origin") or None,
+            "content_type":    request.content_type or None,
+            "content_length":  request.content_length,
+            "referer":         request.referrer or None,
         }
     except Exception:
         _local.skip = True
@@ -191,6 +253,27 @@ def enrich(user=None, **kwargs):
             _local.email   = user.get("email")
             if "user_is_admin" not in _local.detail:
                 _local.detail["user_is_admin"] = bool(user.get("is_admin"))
+
+        # Auto-derive common export/geo fields when handlers pass raw params.
+        if "bbox" in kwargs and kwargs["bbox"]:
+            bbox = kwargs["bbox"]
+            kwargs.setdefault("bbox_area_km2", bbox_area_km2(bbox))
+            kwargs.setdefault("bbox_center", bbox_center(bbox))
+            corners = bbox_corners(bbox)
+            if corners:
+                kwargs.update({k: v for k, v in corners.items() if k not in kwargs})
+        if "overlays" in kwargs and kwargs["overlays"] and "overlay_names" not in kwargs:
+            kwargs["overlay_names"] = overlay_names(kwargs["overlays"])
+        width = kwargs.get("width")
+        height = kwargs.get("height")
+        if width and height and "megapixels" not in kwargs:
+            try:
+                kwargs["megapixels"] = round(int(width) * int(height) / 1_000_000, 2)
+            except Exception:
+                pass
+        if "authenticated" not in kwargs:
+            kwargs["authenticated"] = user is not None
+
         _local.detail.update({k: v for k, v in kwargs.items() if v is not None})
     except Exception:
         pass
@@ -213,16 +296,17 @@ def on_request_end(response):
         event = {
             **_local.envelope,
             # ── Response ──────────────────────────────────────────────────────
-            "status":      response.status_code,
-            "ok":          response.status_code < 400,
-            "duration_ms": round((time.monotonic() - _local.t0) * 1000, 1),
-            "bytes_out":   response.content_length,
-            "mime_out":    response.content_type,
+            "status":        response.status_code,
+            "ok":            response.status_code < 400,
+            "duration_ms":   round((time.monotonic() - _local.t0) * 1000, 1),
+            "bytes_out":     response.content_length,
+            "mime_out":      response.content_type,
             # ── Resolved identity ─────────────────────────────────────────────
-            "user_id":     _local.user_id,
-            "email":       _local.email,
+            "authenticated": _local.user_id is not None,
+            "user_id":       _local.user_id,
+            "email":         _local.email,
             # ── Handler-level context ─────────────────────────────────────────
-            "detail":      _local.detail or None,
+            "detail":        _local.detail or None,
         }
         _emit(event)
     except Exception:

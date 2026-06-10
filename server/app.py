@@ -265,6 +265,7 @@ def export_endpoint():
     except Exception as e:
         logger.error(f"[Export] ========== Tile-based Export Failed ==========")
         logger.error(f"[Export] Error: {e}", exc_info=True)
+        activity.enrich(error_message=str(e)[:300])
         return (f"Export failed: {str(e)}", 500)
 
 
@@ -337,6 +338,7 @@ def export_headless():
         )
     except Exception as e:
         logger.error(f"[Export] Error in export_headless preparation: {e}", exc_info=True)
+        activity.enrich(error_message=str(e)[:300])
         return (f"Export preparation failed: {str(e)}", 500)
 
     try:
@@ -360,6 +362,7 @@ def export_headless():
     except Exception as e:
         logger.error(f"[Export] ========== Headless Export Failed ==========")
         logger.error(f"[Export] Error: {e}", exc_info=True)
+        activity.enrich(error_message=str(e)[:300])
         return (f"Export processing failed: {str(e)}", 500)
 
 
@@ -895,8 +898,12 @@ def export_hgt():
             user=user,
             export_type="hgt",
             base=base,
+            overlays=data.get("overlays") or {},
             zoom=zoom,
             system=system,
+            quality=data.get("quality"),
+            crs=data.get("crs"),
+            filename=data.get("filename"),
             bbox=_hgt_bbox,
             bbox_area_km2=activity.bbox_area_km2(_hgt_bbox),
             bbox_center=activity.bbox_center(_hgt_bbox),
@@ -904,6 +911,7 @@ def export_hgt():
             tiles_present=len(present_paths),
             tiles_synthetic_water=len(synthetic_water_tiles),
             hgt_dir_available=hgt_dir_available,
+            zip_base=zip_base,
         )
 
         map_overlay_png_bytes = None
@@ -956,6 +964,7 @@ def export_hgt():
         )
     except Exception as e:
         logger.exception("[HGT] Export failed")
+        activity.enrich(error_message=str(e)[:300])
         return (f"HGT export failed: {str(e)}", 500)
 
 
@@ -968,8 +977,7 @@ def export_hgt_map_tiff():
 
     try:
         try:
-            # Companion to /export_hgt: same HGT permission, no extra quota hit (zip export already counted).
-            _require_hgt_auth_base(request)
+            user = _require_hgt_auth_base(request)
         except PermissionError as pe:
             message = str(pe) or "Unauthorized"
             status = 401 if message == "Unauthorized" else 403
@@ -988,6 +996,22 @@ def export_hgt_map_tiff():
         base = str(data.get("base") or "esri")
         zoom = int(data.get("zoom") or 8)
         system = data.get("system")
+        _hgt_bbox = [ctx["west"], ctx["south"], ctx["east"], ctx["north"]]
+
+        activity.enrich(
+            user=user,
+            export_type="hgt_map_png",
+            base=base,
+            overlays=data.get("overlays") or {},
+            zoom=zoom,
+            system=system,
+            quality=data.get("quality"),
+            crs=data.get("crs"),
+            filename=data.get("filename"),
+            bbox=_hgt_bbox,
+            tiles_requested=len(requested_tiles),
+            zip_base=zip_base,
+        )
 
         try:
             map_overlay_png_bytes = _build_hgt_map_with_grid_png_bytes(
@@ -1000,11 +1024,13 @@ def export_hgt_map_tiff():
             )
         except Exception as e:
             logger.exception("[HGT] Map PNG build failed")
+            activity.enrich(error_message=str(e)[:300])
             return (f"HGT map PNG failed: {str(e)}", 500)
 
         png_buf = io.BytesIO(map_overlay_png_bytes)
         png_buf.seek(0)
         png_ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+        activity.enrich(bytes_produced=len(map_overlay_png_bytes))
         return send_file(
             png_buf,
             mimetype="image/png",
@@ -1013,6 +1039,7 @@ def export_hgt_map_tiff():
         )
     except Exception as e:
         logger.exception("[HGT] Map PNG export failed")
+        activity.enrich(error_message=str(e)[:300])
         return (f"HGT map PNG export failed: {str(e)}", 500)
 
 
@@ -2242,6 +2269,7 @@ def me():
     user = get_user_by_id(int(payload.get("uid", 0)))
     if not user:
         return ({"error": "Unauthorized"}, 401)
+    activity.enrich(user=user)
     return {"user": user}
 
 
@@ -2367,6 +2395,19 @@ def update_preferences():
 
     # Return updated user
     updated_user = get_user_by_id(user_id)
+    changed_keys = [k for k in (
+        "default_lat", "default_lon", "default_zoom", "default_base", "default_overlays",
+        "default_system", "default_quality", "default_units", "density_opacity",
+        "density_border_color", "density_border_hover_color", "favorite_maps", "favorite_overlays",
+    ) if k in data]
+    activity.enrich(
+        user=updated_user,
+        prefs_changed=changed_keys,
+        default_lat=default_lat,
+        default_lon=default_lon,
+        default_zoom=default_zoom,
+        default_base=default_base,
+    )
     return {"user": updated_user, "message": "Preferences updated successfully"}
 
 
@@ -2590,6 +2631,7 @@ def user_stats():
             },
         }
 
+        activity.enrich(user=user, viewed_own_stats=True)
         return {"stats": stats, "limits": limits_status}
     except Exception as e:
         return ({"error": f"Failed to get stats: {str(e)}"}, 500)
