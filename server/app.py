@@ -36,6 +36,16 @@ from dotenv import load_dotenv
 import activity
 
 # Our modules
+from arcgis_proxy import (
+    arcgis_upstream_headers,
+    decode_upstream,
+    resolve_glyph_url,
+    resolve_sprite_resource,
+    resolve_vector_tile_url,
+    rewrite_arcgis_style,
+    rewrite_tile_url,
+    validate_arcgis_url,
+)
 from exporter import export_geotiff  # server-side tiles → mosaic → GeoTIFF
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
@@ -1666,6 +1676,111 @@ if not ARCGIS_API_KEY:
                 break
 
 
+def _arcgis_upstream_get(url: str, timeout: int = 15):
+    """Fetch an ArcGIS URL with the server-side API key (never exposed to clients)."""
+    clean = validate_arcgis_url(url)
+    params = {"token": ARCGIS_API_KEY} if ARCGIS_API_KEY else {}
+    return requests.get(clean, params=params, headers=arcgis_upstream_headers(), timeout=timeout)
+
+
+@app.get("/tiles/arcgis/vector/<int:z>/<int:x>/<int:y>.<ext>")
+def arcgis_vector_tile(z: int, x: int, y: int, ext: str):
+    """Proxy ArcGIS vector tiles — API key added server-side."""
+    if not ARCGIS_API_KEY:
+        return ("ArcGIS API key not configured", 500)
+    enc = request.args.get("u", "")
+    if not enc:
+        return ("Missing tile upstream parameter", 400)
+    try:
+        template = decode_upstream(enc)
+        upstream = resolve_vector_tile_url(template, z, x, y)
+        resp = _arcgis_upstream_get(upstream)
+        if resp.status_code != 200:
+            return (f"ArcGIS vector tile error: {resp.status_code}", resp.status_code)
+        mimetype = resp.headers.get("Content-Type") or "application/vnd.mapbox-vector-tile"
+        return send_file(io.BytesIO(resp.content), mimetype=mimetype)
+    except ValueError as e:
+        return (str(e), 400)
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).exception("ArcGIS vector tile proxy error")
+        return (f"ArcGIS vector tile proxy error: {e}", 500)
+
+
+@app.get("/api/arcgis/res/<path:spec>")
+def arcgis_sprite_resource(spec: str):
+    """Proxy ArcGIS sprite sheets (MapLibre appends .json / .png to the style sprite URL)."""
+    if not ARCGIS_API_KEY:
+        return ("ArcGIS API key not configured", 500)
+    try:
+        upstream = resolve_sprite_resource(spec)
+        resp = _arcgis_upstream_get(upstream)
+        if resp.status_code != 200:
+            return (f"ArcGIS sprite error: {resp.status_code}", resp.status_code)
+        mimetype = resp.headers.get("Content-Type") or (
+            "application/json" if spec.endswith(".json") else "image/png"
+        )
+        return send_file(io.BytesIO(resp.content), mimetype=mimetype)
+    except ValueError as e:
+        return (str(e), 400)
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).exception("ArcGIS sprite proxy error")
+        return (f"ArcGIS sprite proxy error: {e}", 500)
+
+
+@app.get("/api/arcgis/glyphs/<enc>/<path:fontstack>/<range_id>.pbf")
+def arcgis_glyphs(enc: str, fontstack: str, range_id: str):
+    """Proxy ArcGIS glyph PBFs for vector label rendering."""
+    if not ARCGIS_API_KEY:
+        return ("ArcGIS API key not configured", 500)
+    try:
+        template = decode_upstream(enc)
+        upstream = resolve_glyph_url(template, fontstack, range_id)
+        resp = _arcgis_upstream_get(upstream)
+        if resp.status_code != 200:
+            return (f"ArcGIS glyphs error: {resp.status_code}", resp.status_code)
+        mimetype = resp.headers.get("Content-Type") or "application/x-protobuf"
+        return send_file(io.BytesIO(resp.content), mimetype=mimetype)
+    except ValueError as e:
+        return (str(e), 400)
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).exception("ArcGIS glyphs proxy error")
+        return (f"ArcGIS glyphs proxy error: {e}", 500)
+
+
+@app.get("/api/arcgis/tilejson")
+def arcgis_tilejson():
+    """Fetch ArcGIS TileJSON server-side and rewrite embedded tile URLs to local proxies."""
+    if not ARCGIS_API_KEY:
+        return jsonify({"error": "ArcGIS API key not configured"}), 500
+    enc = request.args.get("u", "")
+    if not enc:
+        return jsonify({"error": "Missing upstream parameter"}), 400
+    try:
+        upstream = validate_arcgis_url(decode_upstream(enc))
+        resp = _arcgis_upstream_get(upstream)
+        if resp.status_code != 200:
+            return jsonify({"error": f"Upstream TileJSON error: {resp.status_code}"}), resp.status_code
+        tilejson = resp.json()
+        if isinstance(tilejson, dict):
+            tiles = tilejson.get("tiles")
+            if isinstance(tiles, list):
+                tilejson["tiles"] = [rewrite_tile_url(u) for u in tiles]
+        return jsonify(tilejson)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).exception("ArcGIS TileJSON proxy error")
+        return jsonify({"error": f"ArcGIS TileJSON proxy error: {e}"}), 500
+
+
 @app.get("/tiles/arcgis/<int:z>/<int:x>/<int:y>.<ext>")
 def arcgis_tile(z: int, x: int, y: int, ext: str):
     """
@@ -1764,11 +1879,9 @@ def arcgis_tile(z: int, x: int, y: int, ext: str):
                 )
 
                 if resp.status_code == 401:
-                    error_msg += " | Possible causes: 1) ARCGIS_API_KEY not set in production environment, 2) API key invalid/expired, 3) API key missing 'premium:user:staticbasemaptiles' privilege"
-                    error_msg += " | Action: Visit https://app.scep.city/api/arcgis/status to verify API key configuration and privileges"
+                    error_msg += " | Possible causes: invalid/expired API key or missing 'premium:user:staticbasemaptiles' privilege"
                 elif resp.status_code == 403:
                     error_msg += " | API key is valid but missing 'premium:user:staticbasemaptiles' privilege"
-                    error_msg += " | Action: Enable 'premium:user:staticbasemaptiles' in your ArcGIS Developer account at https://developers.arcgis.com/"
 
                 logger.error(f"ArcGIS tile request failed: {error_msg}")
 
@@ -1961,13 +2074,9 @@ def arcgis_style_json(style_name: str):
             vector_tile_base = (
                 "https://basemaps.arcgis.com/arcgis/rest/services/World_Ocean_Base/VectorTileServer/tile/{z}/{y}/{x}"
             )
-            if ARCGIS_API_KEY:
-                vector_tile_url = f"{vector_tile_base}?token={ARCGIS_API_KEY}"
-            else:
-                vector_tile_url = vector_tile_base
+            vector_tile_url = vector_tile_base
 
             # Create a MapLibre GL style JSON compatible with ArcGIS VectorTileServer
-            # Note: We use a simple style that will work with the vector tiles
             style_json = {
                 "version": 8,
                 "name": "ArcGIS World Ocean Base",
@@ -1979,46 +2088,18 @@ def arcgis_style_json(style_name: str):
             }
 
             # Try to get the actual style from VectorTileServer if possible
-            # This is a fallback - ideally we'd get the real style JSON
             try:
                 vts_style_url = "https://basemaps.arcgis.com/arcgis/rest/services/World_Ocean_Base/VectorTileServer/resources/styles/root.json"
-                # VectorTileServer style endpoint typically doesn't need token, but include it if we have it
-                vts_params = {"f": "json"}
-                if ARCGIS_API_KEY:
-                    vts_params["token"] = ARCGIS_API_KEY
-                vts_resp = requests.get(vts_style_url, params=vts_params, timeout=10)
+                vts_resp = _arcgis_upstream_get(vts_style_url)
                 if vts_resp.status_code == 200:
                     vts_style = vts_resp.json()
-
-                    # Inject API key into tile URLs
-                    def inject_token_into_sources(obj):
-                        if isinstance(obj, dict):
-                            if "sources" in obj:
-                                for source_name, source_config in obj["sources"].items():
-                                    if "tiles" in source_config:
-                                        source_config["tiles"] = [
-                                            url
-                                            + (
-                                                f"&token={ARCGIS_API_KEY}"
-                                                if ARCGIS_API_KEY and "?" in url
-                                                else f"?token={ARCGIS_API_KEY}" if ARCGIS_API_KEY else ""
-                                            )
-                                            for url in source_config["tiles"]
-                                        ]
-                            for key, value in obj.items():
-                                inject_token_into_sources(value)
-                        elif isinstance(obj, list):
-                            for item in obj:
-                                inject_token_into_sources(item)
-
-                    inject_token_into_sources(vts_style)
                     logger.info("Successfully fetched style from VectorTileServer")
-                    return jsonify(vts_style)
+                    return jsonify(rewrite_arcgis_style(vts_style))
             except Exception as e:
                 logger.warning(f"Failed to fetch VectorTileServer style, using fallback: {e}")
 
             logger.info("Using manually constructed style JSON for oceans")
-            return jsonify(style_json)
+            return jsonify(rewrite_arcgis_style(style_json))
 
         if not resp or resp.status_code != 200:
             error_msg = f"All style URLs failed. Last error: {last_error}"
@@ -2036,94 +2117,72 @@ def arcgis_style_json(style_name: str):
 
         # Return the style JSON
         style_json = resp.json()
-
-        # Ensure all tile URLs in the style JSON include the API key
-        # ArcGIS style JSONs contain tile URLs that need authentication
-        def inject_token_into_sources(obj):
-            """Recursively inject token into source URLs"""
-            if isinstance(obj, dict):
-                if "sources" in obj:
-                    for source_name, source_config in obj["sources"].items():
-                        if "tiles" in source_config:
-                            # Add token to each tile URL
-                            source_config["tiles"] = [
-                                url + (f"&token={ARCGIS_API_KEY}" if "?" in url else f"?token={ARCGIS_API_KEY}")
-                                for url in source_config["tiles"]
-                            ]
-                # Recursively process nested objects
-                for key, value in obj.items():
-                    inject_token_into_sources(value)
-            elif isinstance(obj, list):
-                for item in obj:
-                    inject_token_into_sources(item)
-
-        inject_token_into_sources(style_json)
+        style_json = rewrite_arcgis_style(style_json)
 
         logger.info(f"Successfully fetched and processed style: {style_name}")
         return jsonify(style_json)
 
     except Exception as e:
-        import traceback
+        import logging
 
-        logger.error(f"Style proxy error: {e}\n{traceback.format_exc()}")
-        return jsonify({"error": f"Style proxy error: {e}", "traceback": traceback.format_exc()}), 500
+        logger = logging.getLogger(__name__)
+        logger.error(f"Style proxy error: {e}", exc_info=True)
+        return jsonify({"error": "Style proxy error"}), 500
 
 
 @app.route("/api/arcgis/style/test", methods=["GET"])
 def test_style_route():
-    """Test endpoint to verify style route is working"""
+    """Admin-only route probe."""
+    admin = _require_admin(request)
+    if not admin:
+        return jsonify({"error": "Unauthorized"}), 401
     return jsonify({"message": "Style route is working", "route": "/api/arcgis/style/<path:style_name>"})
 
 
 @app.get("/api/arcgis/status")
 def arcgis_status():
-    """Check if ArcGIS API key is configured"""
-    from flask import jsonify
+    """Admin-only ArcGIS API key health check (no key material returned)."""
+    admin = _require_admin(request)
+    if not admin:
+        return jsonify({"error": "Unauthorized"}), 401
 
     has_key = bool(ARCGIS_API_KEY)
-
-    # Try to verify the API key by making a test request to the static-map-tiles API
     key_valid = False
     key_has_privilege = False
     test_error = None
-    test_url_used = None
 
     if has_key:
         try:
-            # Test with an actual tile request (same as what the frontend does)
             test_url = "https://static-map-tiles-api.arcgis.com/arcgis/rest/services/static-basemap-tiles-service/v1/arcgis/navigation-night/static/tile/10/512/512"
-            test_params = {"token": ARCGIS_API_KEY}
-            test_url_used = test_url + "?" + urlencode(test_params)
-            test_resp = requests.get(test_url, params=test_params, timeout=5)
+            test_resp = requests.get(
+                test_url,
+                params={"token": ARCGIS_API_KEY},
+                headers=arcgis_upstream_headers(),
+                timeout=5,
+            )
 
             if test_resp.status_code == 200:
                 key_valid = True
                 key_has_privilege = True
             elif test_resp.status_code == 401:
                 key_valid = False
-                test_error = f"API key is invalid or expired (got 401). Response: {test_resp.text[:200]}"
+                test_error = "API key is invalid or expired (401)"
             elif test_resp.status_code == 403:
-                key_valid = True  # Key is valid
-                key_has_privilege = False  # But missing privilege
+                key_valid = True
+                key_has_privilege = False
                 test_error = "API key is valid but missing 'premium:user:staticbasemaptiles' privilege"
             else:
-                test_error = f"Unexpected status: {test_resp.status_code} - {test_resp.text[:200]}"
+                test_error = f"Unexpected status: {test_resp.status_code}"
         except Exception as e:
             test_error = f"Test request failed: {str(e)}"
 
     return jsonify(
         {
             "api_key_configured": has_key,
-            "api_key_length": len(ARCGIS_API_KEY) if ARCGIS_API_KEY else 0,
-            "api_key_preview": ARCGIS_API_KEY[:20] + "..." if ARCGIS_API_KEY else None,
-            "api_key_starts_with": ARCGIS_API_KEY[:10] if ARCGIS_API_KEY else None,
             "api_key_valid": key_valid,
             "api_key_has_privilege": key_has_privilege,
             "test_error": test_error,
-            "test_url_used": (
-                test_url_used[:100] + "..." if test_url_used and len(test_url_used) > 100 else test_url_used
-            ),
-            "note": 'API key is appended to tile URLs as ?token=... if configured. Static-map-tiles-api requires "premium:user:staticbasemaptiles" privilege.',
+            "note": "API key is used server-side only via tile/style proxies.",
         }
     )
 
