@@ -15,7 +15,7 @@ import numpy as np
 # Raster IO / reprojection
 import rasterio
 import requests
-from auth import hash_password, mint_token, verify_password, verify_token
+from auth import extract_bearer_token, hash_password, mint_token_for_user, verify_password, verify_token
 from db import (
     count_exports_since,
     create_user,
@@ -214,12 +214,8 @@ def export_endpoint():
             f"[Export] Request Parameters: bbox={bbox}, zoom={zoom}, width={width}, height={height}, base={base}, overlays={overlays}, system={system}, quality={quality}, out_crs={out_crs}, filename={filename}"
         )
 
-        # Optional: enforce auth and quotas if Authorization header present
         user = _require_auth_with_quota(request, base, overlays)
-        if user:
-            logger.info(f"[Export] User authenticated: user_id={user.get('id')}, email={user.get('email')}")
-        else:
-            logger.info(f"[Export] Export without authentication (public access)")
+        logger.info(f"[Export] User authenticated: user_id={user.get('id')}, email={user.get('email')}")
 
         # Activity — request params + resolved identity (before heavy work starts)
         activity.enrich(
@@ -246,12 +242,11 @@ def export_endpoint():
         # Activity — output size (only reachable on success)
         activity.enrich(bytes_produced=len(result_bytes))
 
-        if user:
-            try:
-                log_export(user["id"], base, overlays)
-                logger.info(f"[Export] Export logged for user_id={user['id']}")
-            except Exception as e:
-                logger.warning(f"[Export] Failed to log export: {e}")  # Log but don't fail the export
+        try:
+            log_export(user["id"], base, overlays)
+            logger.info(f"[Export] Export logged for user_id={user['id']}")
+        except Exception as e:
+            logger.warning(f"[Export] Failed to log export: {e}")  # Log but don't fail the export
         buf = io.BytesIO(result_bytes)
         buf.seek(0)
 
@@ -262,6 +257,10 @@ def export_endpoint():
             as_attachment=True,
             download_name=_download_name(out_crs, zoom, filename),
         )
+    except PermissionError as pe:
+        message = str(pe) or "Unauthorized"
+        status = 401 if message == "Unauthorized" else 403
+        return (message, status)
     except Exception as e:
         logger.error(f"[Export] ========== Tile-based Export Failed ==========")
         logger.error(f"[Export] Error: {e}", exc_info=True)
@@ -299,12 +298,8 @@ def export_headless():
             f"[Export] Request Parameters: bbox={bbox}, zoom={zoom}, width={width}, height={height}, base={base}, overlays={overlays}, system={system}, quality={quality}, out_crs={out_crs}, filename={filename}, show_attribution={show_attribution}"
         )
 
-        # Optional: enforce auth and quotas if Authorization header present
         user = _require_auth_with_quota(request, base, overlays)
-        if user:
-            logger.info(f"[Export] User authenticated: user_id={user.get('id')}, email={user.get('email')}")
-        else:
-            logger.info(f"[Export] Export without authentication (public access)")
+        logger.info(f"[Export] User authenticated: user_id={user.get('id')}, email={user.get('email')}")
 
         # Activity — request params + resolved identity
         activity.enrich(
@@ -336,6 +331,10 @@ def export_headless():
             out_crs=out_crs,
             show_attribution=show_attribution,
         )
+    except PermissionError as pe:
+        message = str(pe) or "Unauthorized"
+        status = 401 if message == "Unauthorized" else 403
+        return (message, status)
     except Exception as e:
         logger.error(f"[Export] Error in export_headless preparation: {e}", exc_info=True)
         activity.enrich(error_message=str(e)[:300])
@@ -351,12 +350,11 @@ def export_headless():
             as_attachment=True,
             download_name=_download_name(out_crs, zoom, filename),
         )
-        if user:
-            try:
-                log_export(user["id"], base, overlays)
-                logger.info(f"[Export] Export logged for user_id={user['id']}")
-            except Exception as e:
-                logger.warning(f"[Export] Failed to log export: {e}")
+        try:
+            log_export(user["id"], base, overlays)
+            logger.info(f"[Export] Export logged for user_id={user['id']}")
+        except Exception as e:
+            logger.warning(f"[Export] Failed to log export: {e}")
         logger.info(f"[Export] ========== Headless Export Completed Successfully ==========")
         return result
     except Exception as e:
@@ -2188,17 +2186,15 @@ def gbsouth_tile(z: int, x: int, y: int):
 
 
 def _require_auth_with_quota(req, base: str, overlays):
-    token = req.headers.get("Authorization")
+    token = extract_bearer_token(req)
     if not token:
-        return None  # allow unauth for now; change to enforce if needed
-    if token.startswith("Bearer "):
-        token = token[len("Bearer ") :]
+        raise PermissionError("Unauthorized")
     payload = verify_token(token)
     if not payload:
-        return None
+        raise PermissionError("Unauthorized")
     user = get_user_by_id(int(payload.get("uid", 0)))
     if not user:
-        return None
+        raise PermissionError("Unauthorized")
 
     # Permission logic:
     # - None/null: unrestricted access
@@ -2254,15 +2250,15 @@ def login():
         activity.enrich(login_email=email, login_ok=False)
         return ({"error": "Invalid credentials"}, 401)
     activity.enrich(user=user, login_email=email, login_ok=True)
-    token = mint_token({"uid": user["id"], "adm": user["is_admin"]}, ttl_seconds=86400)
+    token = mint_token_for_user(user)
     return {"token": token, "user": user}
 
 
 @app.get("/auth/me")
 def me():
-    token = request.headers.get("Authorization", "")
-    if token.startswith("Bearer "):
-        token = token[len("Bearer ") :]
+    token = extract_bearer_token(request)
+    if not token:
+        return ({"error": "Unauthorized"}, 401)
     payload = verify_token(token)
     if not payload:
         return ({"error": "Unauthorized"}, 401)
@@ -2270,7 +2266,8 @@ def me():
     if not user:
         return ({"error": "Unauthorized"}, 401)
     activity.enrich(user=user)
-    return {"user": user}
+    refreshed = mint_token_for_user(user)
+    return {"user": user, "token": refreshed}
 
 
 @app.post("/auth/preferences")
@@ -2412,15 +2409,16 @@ def update_preferences():
 
 
 def _require_admin(req):
-    token = req.headers.get("Authorization")
+    token = extract_bearer_token(req)
     if not token:
         return None
-    if token.startswith("Bearer "):
-        token = token[len("Bearer ") :]
     payload = verify_token(token)
-    if not payload or not payload.get("adm"):
+    if not payload:
         return None
-    return get_user_by_id(int(payload.get("uid", 0)))
+    user = get_user_by_id(int(payload.get("uid", 0)))
+    if not user or not user.get("is_admin"):
+        return None
+    return user
 
 
 @app.get("/admin/users")

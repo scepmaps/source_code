@@ -2,7 +2,7 @@ export function initSettingsController(opts) {
   const {
     userRef,
     setUser,
-    token,
+    getToken,
     API_BASE,
     allowedBases,
     allowedOver,
@@ -272,7 +272,7 @@ export function initSettingsController(opts) {
     try {
       const res = await fetch(`${API_BASE}/auth/preferences`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
         body: JSON.stringify(preferences)
       });
       if (!res.ok) {

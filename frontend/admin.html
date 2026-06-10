@@ -901,7 +901,9 @@
           const data = await res.json();
           const user = data.user;
 
-          // Update cached user data
+          if (data.token) {
+            localStorage.setItem('token', data.token);
+          }
           localStorage.setItem('user', JSON.stringify(user));
 
           // Check if user is admin
@@ -914,6 +916,26 @@
           // User is authenticated and is admin, load data
           loadUsers();
           loadSystemAnalytics();
+
+          // Sliding JWT refresh — Bearer token in localStorage only (no cookies)
+          setInterval(async () => {
+            const current = localStorage.getItem('token');
+            if (!current) return;
+            try {
+              const refresh = await fetch('/auth/me', {
+                headers: { 'Authorization': 'Bearer ' + current }
+              });
+              if (refresh.ok) {
+                const payload = await refresh.json();
+                if (payload.token) localStorage.setItem('token', payload.token);
+                if (payload.user) localStorage.setItem('user', JSON.stringify(payload.user));
+              } else if (refresh.status === 401) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                location.href = 'login.html';
+              }
+            } catch (_) {}
+          }, 30 * 60 * 1000);
         } catch(e) {
           // Network error, fall back to cached check
           if (!cachedUser?.is_admin) {

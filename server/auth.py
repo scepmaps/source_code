@@ -9,6 +9,26 @@ from typing import Optional, Tuple
 SECRET = os.getenv("AUTH_SECRET", "dev-secret-change-me")
 
 
+def jwt_ttl_seconds() -> int:
+    try:
+        hours = int(os.getenv("JWT_EXPIRY_HOURS", "24"))
+    except ValueError:
+        hours = 24
+    return max(3600, hours * 3600)
+
+
+def extract_bearer_token(req) -> Optional[str]:
+    token = req.headers.get("Authorization", "")
+    if token.startswith("Bearer "):
+        token = token[len("Bearer ") :]
+    token = token.strip()
+    return token or None
+
+
+def mint_token_for_user(user: dict) -> str:
+    return mint_token({"uid": user["id"], "adm": user["is_admin"]}, ttl_seconds=jwt_ttl_seconds())
+
+
 def hash_password(password: str) -> str:
     salt = os.urandom(16)
     dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100_000)

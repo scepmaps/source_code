@@ -4,8 +4,9 @@ import { initSettingsController } from './settings/settings.js';
 import { initZoomMechanics } from './zoom/zoom.js';
 import { initMapToolControls } from './tools/tools.js';
 import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js';
+import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js';
 
-// Auth gate: require login, attach token to export calls
+// Auth gate: require login, attach token to export calls (Bearer JWT in localStorage — no cookies)
 let token = localStorage.getItem('token');
 let user = JSON.parse(localStorage.getItem('user')||'null');
 if (!token || !user) {
@@ -13,25 +14,20 @@ if (!token || !user) {
   throw new Error('Not authenticated'); // Stop script execution
 }
 
-// Refresh user permissions from server in case admin updated them after login
-try{
-  const res = await fetch('/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
-  if (res.ok){
-    const data = await res.json();
-    user = data.user;
-    localStorage.setItem('user', JSON.stringify(user));
-  } else {
-    // Token is invalid, clear storage and redirect to login
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    location.href = 'login.html';
-    throw new Error('Invalid token');
-  }
-}catch(e){
-  // Network error, fallback to cached user if token validation failed
+const sessionHooks = {
+  onToken: (next) => { token = next; },
+  onUser: (next) => { user = next; },
+};
+
+// Refresh user permissions + sliding JWT from server
+try {
+  user = await validateSession(token, sessionHooks);
+} catch (e) {
   if (e.message === 'Invalid token') throw e;
   console.warn('Network error refreshing user, using cached data');
 }
+
+startSessionKeepalive(() => token, sessionHooks);
 
 // Hide loading screen and show app after auth check passes
 document.getElementById('authLoading').style.display = 'none';
@@ -385,8 +381,7 @@ window.refreshUserPermissions = async () => {
     const res = await fetch('/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
     if (res.ok) {
       const data = await res.json();
-      user = data.user;
-      localStorage.setItem('user', JSON.stringify(user));
+      applySessionResponse(data, sessionHooks);
       console.log('[Refresh] ✅ Updated user data:', { 'allowed_bases': user.allowed_bases });
       console.log('[Refresh] ⚠️  You need to RELOAD the page for layer changes to take effect!');
       return user;
@@ -3352,7 +3347,7 @@ document.getElementById('closeStatsBtn').addEventListener('click', closeStatsMod
 initSettingsController({
   userRef: () => user,
   setUser: (nextUser) => { user = nextUser; },
-  token,
+  getToken: () => token,
   API_BASE,
   allowedBases,
   allowedOver,

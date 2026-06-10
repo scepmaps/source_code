@@ -475,7 +475,9 @@
               headers: { 'Authorization': 'Bearer ' + token }
             });
             if (res.ok) {
-              // Token is valid, redirect to main app
+              const me = await res.json();
+              if (me.token) localStorage.setItem('token', me.token);
+              if (me.user) localStorage.setItem('user', JSON.stringify(me.user));
               location.href = 'index.html';
               return;
             }
@@ -523,7 +525,8 @@
             const me = await fetch('/auth/me', { headers: { 'Authorization': 'Bearer ' + data.token } });
             if (me.ok) {
               const m = await me.json();
-              localStorage.setItem('user', JSON.stringify(m.user));
+              if (m.token) localStorage.setItem('token', m.token);
+              if (m.user) localStorage.setItem('user', JSON.stringify(m.user));
             }
           } catch (_) { }
           location.href = 'index.html';

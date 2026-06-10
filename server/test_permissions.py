@@ -36,6 +36,60 @@ def login_token(user_id, is_admin=False):
     return mint_token({"uid": user_id, "adm": is_admin}, ttl_seconds=3600)
 
 
+def test_export_requires_authentication(monkeypatch):
+    c = client()
+    resp = c.post(
+        "/export",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps(
+            {
+                "bbox": [0, 0, 1, 1],
+                "zoom": 2,
+                "width": 256,
+                "height": 256,
+                "base": "osm",
+                "overlays": {},
+                "crs": "EPSG:4326",
+            }
+        ),
+    )
+    assert resp.status_code == 401
+
+
+def test_export_rejects_invalid_token(monkeypatch):
+    c = client()
+    resp = c.post(
+        "/export",
+        headers={"Authorization": "Bearer not.a.valid.jwt", "Content-Type": "application/json"},
+        data=json.dumps(
+            {
+                "bbox": [0, 0, 1, 1],
+                "zoom": 2,
+                "width": 256,
+                "height": 256,
+                "base": "osm",
+                "overlays": {},
+                "crs": "EPSG:4326",
+            }
+        ),
+    )
+    assert resp.status_code == 401
+
+
+def test_auth_me_returns_refreshed_token(monkeypatch):
+    from db import create_user
+
+    uid = create_user("u@test", "U", hash_password("pw"), False, None, None, None, -1, -1, -1)
+    c = client()
+    token = login_token(uid)
+    resp = c.get("/auth/me", headers={"Authorization": "Bearer " + token})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data.get("token")
+    assert data["token"] != token
+    assert data["user"]["email"] == "u@test"
+
+
 def test_permissions_empty_lists_block_all_bases_and_overlays(monkeypatch):
     # Create user with no access
     from db import create_user
