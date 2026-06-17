@@ -10,6 +10,7 @@ from arcgis_proxy import (
     resolve_sprite_resource,
     resolve_vector_tile_url,
     rewrite_arcgis_style,
+    rewrite_tilejson,
     strip_token_param,
 )
 
@@ -17,6 +18,32 @@ from arcgis_proxy import (
 def test_strip_token_param():
     url = "https://basemaps.arcgis.com/tile/{z}/{y}/{x}?token=SECRET&foo=bar"
     assert strip_token_param(url) == "https://basemaps.arcgis.com/tile/{z}/{y}/{x}?foo=bar"
+
+
+def test_rewrite_style_removes_tilejson_url_when_tiles_present():
+    style = {
+        "version": 8,
+        "sources": {
+            "esri": {
+                "type": "vector",
+                "tiles": [
+                    "https://basemaps-api.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer/tile/{z}/{y}/{x}.pbf?token=LEAKED"
+                ],
+                "url": "https://basemaps-api.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer",
+            }
+        },
+    }
+    out = rewrite_arcgis_style(style)
+    assert "url" not in out["sources"]["esri"]
+    assert out["sources"]["esri"]["tiles"][0].startswith("/tiles/arcgis/vector/")
+
+
+def test_rewrite_tilejson_relative_paths():
+    tilejson = {"tiles": ["tile/{z}/{y}/{x}.pbf"], "maxzoom": 22}
+    base = "https://basemaps-api.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer"
+    out = rewrite_tilejson(tilejson, base)
+    assert out["tiles"][0].startswith("/tiles/arcgis/vector/")
+    assert "token=" not in json.dumps(out)
 
 
 def test_rewrite_style_removes_token_from_tiles_sprite_glyphs():

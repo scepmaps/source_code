@@ -76,13 +76,30 @@ def rewrite_arcgis_style(style_json: dict) -> dict:
     return style
 
 
-def rewrite_tile_url(url: str) -> str:
-    if not isinstance(url, str) or not is_arcgis_host(url):
-        return strip_token_param(url) if isinstance(url, str) else url
+def rewrite_tile_url(url: str, *, upstream_base: str | None = None) -> str:
+    if not isinstance(url, str):
+        return url
     clean = strip_token_param(url)
-    if "{z}" in clean and ("/tile/" in clean or "VectorTileServer" in clean or ".pbf" in clean):
-        return vector_tile_proxy_url(clean)
+    if is_arcgis_host(clean):
+        if "{z}" in clean and ("/tile/" in clean or "VectorTileServer" in clean or ".pbf" in clean):
+            return vector_tile_proxy_url(clean)
+        return clean
+    # ArcGIS TileJSON often uses paths relative to the VectorTileServer root.
+    if upstream_base and "{z}" in clean:
+        base = upstream_base.rstrip("/")
+        rel = clean.lstrip("/")
+        return vector_tile_proxy_url(f"{base}/{rel}")
     return clean
+
+
+def rewrite_tilejson(tilejson: dict, upstream_base: str) -> dict:
+    """Rewrite TileJSON tile templates to local proxy paths."""
+    if not isinstance(tilejson, dict):
+        return tilejson
+    tiles = tilejson.get("tiles")
+    if isinstance(tiles, list):
+        tilejson["tiles"] = [rewrite_tile_url(u, upstream_base=upstream_base) for u in tiles]
+    return tilejson
 
 
 def _rewrite_obj(obj: Any) -> None:
@@ -103,9 +120,14 @@ def _rewrite_obj(obj: Any) -> None:
                 tiles = source.get("tiles")
                 if isinstance(tiles, list):
                     source["tiles"] = [rewrite_tile_url(u) for u in tiles]
-                url = source.get("url")
-                if isinstance(url, str) and is_arcgis_host(url):
-                    source["url"] = tilejson_proxy_url(url)
+                    # MapLibre prefers source.url (TileJSON) over tiles when both are set.
+                    # Drop url once proxied tiles exist — otherwise TileJSON relative paths break loads.
+                    if source["tiles"]:
+                        source.pop("url", None)
+                else:
+                    url = source.get("url")
+                    if isinstance(url, str) and is_arcgis_host(url):
+                        source["url"] = tilejson_proxy_url(url)
 
         for value in obj.values():
             _rewrite_obj(value)

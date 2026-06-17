@@ -44,6 +44,7 @@ from arcgis_proxy import (
     resolve_vector_tile_url,
     rewrite_arcgis_style,
     rewrite_tile_url,
+    rewrite_tilejson,
     validate_arcgis_url,
 )
 from exporter import export_geotiff  # server-side tiles → mosaic → GeoTIFF
@@ -1768,9 +1769,7 @@ def arcgis_tilejson():
             return jsonify({"error": f"Upstream TileJSON error: {resp.status_code}"}), resp.status_code
         tilejson = resp.json()
         if isinstance(tilejson, dict):
-            tiles = tilejson.get("tiles")
-            if isinstance(tiles, list):
-                tilejson["tiles"] = [rewrite_tile_url(u) for u in tiles]
+            tilejson = rewrite_tilejson(tilejson, upstream)
         return jsonify(tilejson)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400

@@ -1467,7 +1467,7 @@ async function createNavigationLayer() {
     });
 
     navigationGlMap.on('error', (e) => {
-      console.error('[Navigation] MapLibre GL error:', e);
+      console.error('[Navigation] MapLibre GL error:', e?.error || e);
     });
 
     return navigationGlLayer;
