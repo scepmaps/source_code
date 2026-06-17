@@ -488,7 +488,7 @@ async function createNamesOverlayLayer() {
   }
 
   try {
-    const styleResponse = await fetch(styleUrl);
+    const styleResponse = await fetch(styleUrl, { headers: { Authorization: `Bearer ${token}` } });
     if (!styleResponse.ok) {
       throw new Error(`Failed to fetch names style: ${styleResponse.status}`);
     }
@@ -504,7 +504,8 @@ async function createNamesOverlayLayer() {
     namesGlLayer = L.maplibreGL({
       style: labelsStyle,
       interactive: false,
-      pane: 'labelPane'
+      pane: 'labelPane',
+      transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
     });
 
     namesGlMap = namesGlLayer.getMaplibreMap();
