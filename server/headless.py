@@ -41,23 +41,14 @@ HEADLESS_OSM_URL = os.getenv("HEADLESS_OSM_URL") or "https://{s}.tile.openstreet
 
 ARCGIS_API_KEY = os.getenv("ARCGIS_API_KEY")
 
-# Build ESRI URL with optional API key
-_esri_url = "https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-if ARCGIS_API_KEY:
-    _esri_url += "?token=" + ARCGIS_API_KEY
-
-# Build Topo URL - using new static-map-tiles-api via backend proxy
-# For headless export, use backend proxy (Playwright runs in browser context)
-_topo_url = "http://127.0.0.1:5001/tiles/arcgis/{z}/{x}/{y}.png?style=arcgis/outdoor"
-
-# Build Navigation URL - using new static-map-tiles-api via backend proxy
+# All ArcGIS tile routes go through the local proxy — same as the frontend.
+# The proxy adds the API key server-side and is reachable on 127.0.0.1:5001
+# from the headless Playwright browser (no JWT needed since no X-Real-IP header).
+_esri_url       = "http://127.0.0.1:5001/tiles/arcgis/{z}/{x}/{y}.png?service=World_Imagery"
+_topo_url       = "http://127.0.0.1:5001/tiles/arcgis/{z}/{x}/{y}.png?style=arcgis/outdoor"
 _navigation_url = "http://127.0.0.1:5001/tiles/arcgis/{z}/{x}/{y}.png?style=arcgis/navigation"
-
-# Build Night URL - using new static-map-tiles-api via backend proxy
-_night_url = "http://127.0.0.1:5001/tiles/arcgis/{z}/{x}/{y}.png?style=arcgis/streets-night"
-
-# Build Ocean (Navigation Dark) URL - using new static-map-tiles-api via backend proxy
-_ocean_url = "http://127.0.0.1:5001/tiles/arcgis/{z}/{x}/{y}.png?style=open/navigation-dark"
+_night_url      = "http://127.0.0.1:5001/tiles/arcgis/{z}/{x}/{y}.png?style=arcgis/streets-night"
+_ocean_url      = "http://127.0.0.1:5001/tiles/arcgis/{z}/{x}/{y}.png?style=open/navigation-dark"
 
 LAYER_URLS = {
     "osm": HEADLESS_OSM_URL,

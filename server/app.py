@@ -2488,10 +2488,17 @@ def update_preferences():
 def _require_user(req):
     """Return the authenticated user dict or None. Used to gate map-tile proxy routes.
 
-    Accepts the JWT either as a Bearer header (vector tiles / fetch calls) or as a
-    '?t=' query parameter (raster tiles loaded via Leaflet <img> tags, which cannot
-    send custom headers).
+    Auth rules:
+    - Requests arriving WITHOUT X-Real-IP are direct hits on port 5001, which is
+      only reachable from inside the container (e.g. the headless Playwright export).
+      These bypass JWT auth — external clients can never reach :5001 directly.
+    - All other requests (forwarded through nginx) must carry a valid JWT as either
+      a Bearer header (fetch/MapLibre transformRequest) or a '?t=' query param
+      (Leaflet <img> raster tiles, which cannot send custom headers).
     """
+    if not req.headers.get("X-Real-IP") and not req.headers.get("X-Forwarded-For"):
+        return {"id": 0, "email": "internal"}
+
     token = extract_bearer_token(req) or req.args.get("t")
     if not token:
         return None
