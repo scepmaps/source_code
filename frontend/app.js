@@ -96,7 +96,12 @@ function createBaseRasterLayer(baseType, url, attribution) {
   if (Number.isFinite(maxNativeZoom)) {
     opts.maxNativeZoom = maxNativeZoom;
   }
-  return L.tileLayer(url, opts);
+  // Raster tiles load via <img> tags and cannot send Authorization headers.
+  // Inject the JWT as ?t= so the server-side proxy can authenticate the request.
+  const tileUrl = url.includes('/tiles/arcgis/')
+    ? url + '&t=' + (localStorage.getItem('token') || '')
+    : url;
+  return L.tileLayer(tileUrl, opts);
 }
 
 function applyZoomLimitsForBase(baseType) {

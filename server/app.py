@@ -2486,8 +2486,13 @@ def update_preferences():
 
 
 def _require_user(req):
-    """Return the authenticated user dict or None. Used to gate map-tile proxy routes."""
-    token = extract_bearer_token(req)
+    """Return the authenticated user dict or None. Used to gate map-tile proxy routes.
+
+    Accepts the JWT either as a Bearer header (vector tiles / fetch calls) or as a
+    '?t=' query parameter (raster tiles loaded via Leaflet <img> tags, which cannot
+    send custom headers).
+    """
+    token = extract_bearer_token(req) or req.args.get("t")
     if not token:
         return None
     payload = verify_token(token)
