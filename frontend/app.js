@@ -1288,7 +1288,7 @@ async function createOceanLayer() {
 
   try {
     // Fetch the style JSON from backend
-    const styleResponse = await fetch(LAYERS.ocean.styleUrl);
+    const styleResponse = await fetch(LAYERS.ocean.styleUrl, { headers: { Authorization: `Bearer ${token}` } });
     if (!styleResponse.ok) {
       throw new Error(`Failed to fetch ocean style: ${styleResponse.status}`);
     }
@@ -1342,7 +1342,7 @@ async function createTopoLayer() {
 
   try {
     // Fetch the style JSON from backend
-    const styleResponse = await fetch(LAYERS.topo.styleUrl);
+    const styleResponse = await fetch(LAYERS.topo.styleUrl, { headers: { Authorization: `Bearer ${token}` } });
     if (!styleResponse.ok) {
       throw new Error(`Failed to fetch topo style: ${styleResponse.status}`);
     }
@@ -1396,7 +1396,7 @@ async function createNightLayer() {
 
   try {
     // Fetch the style JSON from backend
-    const styleResponse = await fetch(LAYERS.night.styleUrl);
+    const styleResponse = await fetch(LAYERS.night.styleUrl, { headers: { Authorization: `Bearer ${token}` } });
     if (!styleResponse.ok) {
       throw new Error(`Failed to fetch night style: ${styleResponse.status}`);
     }
@@ -1450,7 +1450,7 @@ async function createNavigationLayer() {
 
   try {
     // Fetch the style JSON from backend
-    const styleResponse = await fetch(LAYERS.navigation.styleUrl);
+    const styleResponse = await fetch(LAYERS.navigation.styleUrl, { headers: { Authorization: `Bearer ${token}` } });
     if (!styleResponse.ok) {
       throw new Error(`Failed to fetch navigation style: ${styleResponse.status}`);
     }
