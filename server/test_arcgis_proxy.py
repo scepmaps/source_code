@@ -33,9 +33,15 @@ def test_rewrite_style_removes_tilejson_url_when_tiles_present():
             }
         },
     }
+    # root-relative (no base_url)
     out = rewrite_arcgis_style(style)
     assert "url" not in out["sources"]["esri"]
     assert out["sources"]["esri"]["tiles"][0].startswith("/tiles/arcgis/vector/")
+
+    # absolute (with base_url)
+    out2 = rewrite_arcgis_style(style, base_url="https://pamerkuf.scep.city")
+    assert "url" not in out2["sources"]["esri"]
+    assert out2["sources"]["esri"]["tiles"][0].startswith("https://pamerkuf.scep.city/tiles/arcgis/vector/")
 
 
 def test_rewrite_tilejson_relative_paths():
@@ -44,6 +50,9 @@ def test_rewrite_tilejson_relative_paths():
     out = rewrite_tilejson(tilejson, base)
     assert out["tiles"][0].startswith("/tiles/arcgis/vector/")
     assert "token=" not in json.dumps(out)
+
+    out2 = rewrite_tilejson(tilejson, base, base_url="https://pamerkuf.scep.city")
+    assert out2["tiles"][0].startswith("https://pamerkuf.scep.city/tiles/arcgis/vector/")
 
 
 def test_rewrite_style_removes_token_from_tiles_sprite_glyphs():
@@ -67,6 +76,12 @@ def test_rewrite_style_removes_token_from_tiles_sprite_glyphs():
     assert out["sources"]["esri"]["tiles"][0].startswith("/tiles/arcgis/vector/")
     assert out["sprite"].startswith("/api/arcgis/res/")
     assert out["glyphs"].startswith("/api/arcgis/glyphs/")
+
+    # With base_url — all proxy URLs become absolute
+    out2 = rewrite_arcgis_style(style, base_url="https://pamerkuf.scep.city")
+    assert out2["sources"]["esri"]["tiles"][0].startswith("https://pamerkuf.scep.city/tiles/arcgis/vector/")
+    assert out2["sprite"].startswith("https://pamerkuf.scep.city/api/arcgis/res/")
+    assert out2["glyphs"].startswith("https://pamerkuf.scep.city/api/arcgis/glyphs/")
 
 
 def test_encode_decode_roundtrip():

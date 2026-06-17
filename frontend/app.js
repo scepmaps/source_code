@@ -5,7 +5,7 @@ import { initZoomMechanics } from './zoom/zoom.js';
 import { initMapToolControls } from './tools/tools.js';
 import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js';
-import { absolutizeMapStyleUrls } from './map-style.js';
+import { absolutizeMapStyleUrls, makeArcgisTransformRequest } from './map-style.js';
 
 // Auth gate: require login, attach token to export calls (Bearer JWT in localStorage — no cookies)
 let token = localStorage.getItem('token');
@@ -1299,7 +1299,8 @@ async function createOceanLayer() {
     oceanGlLayer = L.maplibreGL({
       style: styleJson,
       interactive: true,
-      pane: 'basePane'
+      pane: 'basePane',
+      transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
     }).addTo(map);
 
     oceanGlMap = oceanGlLayer.getMaplibreMap();
@@ -1352,7 +1353,8 @@ async function createTopoLayer() {
     topoGlLayer = L.maplibreGL({
       style: styleJson,
       interactive: true,
-      pane: 'basePane'
+      pane: 'basePane',
+      transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
     }).addTo(map);
 
     topoGlMap = topoGlLayer.getMaplibreMap();
@@ -1405,7 +1407,8 @@ async function createNightLayer() {
     nightGlLayer = L.maplibreGL({
       style: styleJson,
       interactive: true,
-      pane: 'basePane'
+      pane: 'basePane',
+      transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
     }).addTo(map);
 
     nightGlMap = nightGlLayer.getMaplibreMap();
@@ -1458,7 +1461,8 @@ async function createNavigationLayer() {
     navigationGlLayer = L.maplibreGL({
       style: styleJson,
       interactive: true,
-      pane: 'basePane'
+      pane: 'basePane',
+      transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
     }).addTo(map);
 
     navigationGlMap = navigationGlLayer.getMaplibreMap();

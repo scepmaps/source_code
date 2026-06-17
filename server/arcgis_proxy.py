@@ -49,68 +49,72 @@ def decode_upstream(enc: str) -> str:
     return base64.urlsafe_b64decode((enc + pad).encode()).decode()
 
 
-def vector_tile_proxy_url(template: str) -> str:
+def vector_tile_proxy_url(template: str, base_url: str = "") -> str:
     clean = validate_arcgis_url(template)
-    return f"/tiles/arcgis/vector/{{z}}/{{x}}/{{y}}.pbf?u={encode_upstream(clean)}"
+    return f"{base_url}/tiles/arcgis/vector/{{z}}/{{x}}/{{y}}.pbf?u={encode_upstream(clean)}"
 
 
-def sprite_proxy_url(sprite_base: str) -> str:
+def sprite_proxy_url(sprite_base: str, base_url: str = "") -> str:
     clean = validate_arcgis_url(sprite_base)
-    return f"/api/arcgis/res/{encode_upstream(clean)}"
+    return f"{base_url}/api/arcgis/res/{encode_upstream(clean)}"
 
 
-def glyphs_proxy_url(glyphs_template: str) -> str:
+def glyphs_proxy_url(glyphs_template: str, base_url: str = "") -> str:
     clean = validate_arcgis_url(glyphs_template)
-    return f"/api/arcgis/glyphs/{encode_upstream(clean)}/{{fontstack}}/{{range}}.pbf"
+    return f"{base_url}/api/arcgis/glyphs/{encode_upstream(clean)}/{{fontstack}}/{{range}}.pbf"
 
 
-def tilejson_proxy_url(tilejson_url: str) -> str:
+def tilejson_proxy_url(tilejson_url: str, base_url: str = "") -> str:
     clean = validate_arcgis_url(tilejson_url)
-    return f"/api/arcgis/tilejson?u={encode_upstream(clean)}"
+    return f"{base_url}/api/arcgis/tilejson?u={encode_upstream(clean)}"
 
 
-def rewrite_arcgis_style(style_json: dict) -> dict:
-    """Deep-copy style JSON and replace ArcGIS URLs with local proxy paths."""
+def rewrite_arcgis_style(style_json: dict, base_url: str = "") -> dict:
+    """Deep-copy style JSON and replace ArcGIS URLs with absolute local proxy URLs.
+
+    Pass base_url (e.g. 'https://pamerkuf.scep.city') so MapLibre workers can
+    construct Request objects — they reject root-relative paths.
+    """
     style = copy.deepcopy(style_json)
-    _rewrite_obj(style)
+    _rewrite_obj(style, base_url=base_url)
     return style
 
 
-def rewrite_tile_url(url: str, *, upstream_base: str | None = None) -> str:
+def rewrite_tile_url(url: str, *, upstream_base: str | None = None, base_url: str = "") -> str:
     if not isinstance(url, str):
         return url
     clean = strip_token_param(url)
     if is_arcgis_host(clean):
         if "{z}" in clean and ("/tile/" in clean or "VectorTileServer" in clean or ".pbf" in clean):
-            return vector_tile_proxy_url(clean)
+            return vector_tile_proxy_url(clean, base_url=base_url)
         return clean
     # ArcGIS TileJSON often uses paths relative to the VectorTileServer root.
     if upstream_base and "{z}" in clean:
-        base = upstream_base.rstrip("/")
+        upstream = upstream_base.rstrip("/")
         rel = clean.lstrip("/")
-        return vector_tile_proxy_url(f"{base}/{rel}")
+        return vector_tile_proxy_url(f"{upstream}/{rel}", base_url=base_url)
     return clean
 
 
-def rewrite_tilejson(tilejson: dict, upstream_base: str) -> dict:
+def rewrite_tilejson(tilejson: dict, upstream_base: str, base_url: str = "") -> dict:
     """Rewrite TileJSON tile templates to local proxy paths."""
     if not isinstance(tilejson, dict):
         return tilejson
     tiles = tilejson.get("tiles")
     if isinstance(tiles, list):
-        tilejson["tiles"] = [rewrite_tile_url(u, upstream_base=upstream_base) for u in tiles]
+        tilejson["tiles"] = [rewrite_tile_url(u, upstream_base=upstream_base, base_url=base_url) for u in tiles]
     return tilejson
 
 
-def _rewrite_obj(obj: Any) -> None:
+def _rewrite_obj(obj: Any, base_url: str = "") -> None:
     if isinstance(obj, dict):
         sprite = obj.get("sprite")
         if isinstance(sprite, str) and is_arcgis_host(sprite):
-            obj["sprite"] = sprite_proxy_url(sprite)
+            obj["sprite"] = sprite_proxy_url(sprite, base_url=base_url)
 
         glyphs = obj.get("glyphs")
         if isinstance(glyphs, str) and is_arcgis_host(glyphs):
-            obj["glyphs"] = glyphs_proxy_url(glyphs)
+            obj["glyphs"] = glyphs_proxy_url(glyphs, base_url=base_url)
 
         sources = obj.get("sources")
         if isinstance(sources, dict):
@@ -119,7 +123,7 @@ def _rewrite_obj(obj: Any) -> None:
                     continue
                 tiles = source.get("tiles")
                 if isinstance(tiles, list):
-                    source["tiles"] = [rewrite_tile_url(u) for u in tiles]
+                    source["tiles"] = [rewrite_tile_url(u, base_url=base_url) for u in tiles]
                     # MapLibre prefers source.url (TileJSON) over tiles when both are set.
                     # Drop url once proxied tiles exist — otherwise TileJSON relative paths break loads.
                     if source["tiles"]:
@@ -127,13 +131,13 @@ def _rewrite_obj(obj: Any) -> None:
                 else:
                     url = source.get("url")
                     if isinstance(url, str) and is_arcgis_host(url):
-                        source["url"] = tilejson_proxy_url(url)
+                        source["url"] = tilejson_proxy_url(url, base_url=base_url)
 
         for value in obj.values():
-            _rewrite_obj(value)
+            _rewrite_obj(value, base_url=base_url)
     elif isinstance(obj, list):
         for item in obj:
-            _rewrite_obj(item)
+            _rewrite_obj(item, base_url=base_url)
 
 
 def resolve_vector_tile_url(template: str, z: int, x: int, y: int) -> str:

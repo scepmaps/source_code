@@ -1687,6 +1687,8 @@ def _arcgis_upstream_get(url: str, timeout: int = 15):
 @app.get("/tiles/arcgis/vector/<int:z>/<int:x>/<int:y>.<ext>")
 def arcgis_vector_tile(z: int, x: int, y: int, ext: str):
     """Proxy ArcGIS vector tiles — API key added server-side."""
+    if not _require_user(request):
+        return ("Unauthorized", 401)
     if not ARCGIS_API_KEY:
         return ("ArcGIS API key not configured", 500)
     enc = request.args.get("u", "")
@@ -1712,6 +1714,8 @@ def arcgis_vector_tile(z: int, x: int, y: int, ext: str):
 @app.get("/api/arcgis/res/<path:spec>")
 def arcgis_sprite_resource(spec: str):
     """Proxy ArcGIS sprite sheets (MapLibre appends .json / .png to the style sprite URL)."""
+    if not _require_user(request):
+        return ("Unauthorized", 401)
     if not ARCGIS_API_KEY:
         return ("ArcGIS API key not configured", 500)
     try:
@@ -1735,6 +1739,8 @@ def arcgis_sprite_resource(spec: str):
 @app.get("/api/arcgis/glyphs/<enc>/<path:fontstack>/<range_id>.pbf")
 def arcgis_glyphs(enc: str, fontstack: str, range_id: str):
     """Proxy ArcGIS glyph PBFs for vector label rendering."""
+    if not _require_user(request):
+        return ("Unauthorized", 401)
     if not ARCGIS_API_KEY:
         return ("ArcGIS API key not configured", 500)
     try:
@@ -1757,6 +1763,8 @@ def arcgis_glyphs(enc: str, fontstack: str, range_id: str):
 @app.get("/api/arcgis/tilejson")
 def arcgis_tilejson():
     """Fetch ArcGIS TileJSON server-side and rewrite embedded tile URLs to local proxies."""
+    if not _require_user(request):
+        return jsonify({"error": "Unauthorized"}), 401
     if not ARCGIS_API_KEY:
         return jsonify({"error": "ArcGIS API key not configured"}), 500
     enc = request.args.get("u", "")
@@ -1769,7 +1777,8 @@ def arcgis_tilejson():
             return jsonify({"error": f"Upstream TileJSON error: {resp.status_code}"}), resp.status_code
         tilejson = resp.json()
         if isinstance(tilejson, dict):
-            tilejson = rewrite_tilejson(tilejson, upstream)
+            _base = request.host_url.rstrip("/")
+            tilejson = rewrite_tilejson(tilejson, upstream, base_url=_base)
         return jsonify(tilejson)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -1791,6 +1800,9 @@ def arcgis_tile(z: int, x: int, y: int, ext: str):
 
     composite=... overlays a second service on top (old format only).
     """
+    if not _require_user(request):
+        return ("Unauthorized", 401)
+
     style = request.args.get("style")  # e.g. "arcgis/outdoor"
     service = request.args.get("service", "World_Imagery")
     composite = request.args.get("composite")
@@ -1958,6 +1970,9 @@ def arcgis_style_json(style_name: str):
 
     style_name: e.g., 'oceans', 'streets', 'topographic', 'open/navigation-dark', etc.
     """
+    if not _require_user(request):
+        return jsonify({"error": "Unauthorized"}), 401
+
     import logging
 
     logger = logging.getLogger(__name__)
@@ -2093,12 +2108,14 @@ def arcgis_style_json(style_name: str):
                 if vts_resp.status_code == 200:
                     vts_style = vts_resp.json()
                     logger.info("Successfully fetched style from VectorTileServer")
-                    return jsonify(rewrite_arcgis_style(vts_style))
+                    _base = request.host_url.rstrip("/")
+                    return jsonify(rewrite_arcgis_style(vts_style, base_url=_base))
             except Exception as e:
                 logger.warning(f"Failed to fetch VectorTileServer style, using fallback: {e}")
 
             logger.info("Using manually constructed style JSON for oceans")
-            return jsonify(rewrite_arcgis_style(style_json))
+            _base = request.host_url.rstrip("/")
+            return jsonify(rewrite_arcgis_style(style_json, base_url=_base))
 
         if not resp or resp.status_code != 200:
             error_msg = f"All style URLs failed. Last error: {last_error}"
@@ -2114,9 +2131,11 @@ def arcgis_style_json(style_name: str):
                 404,
             )
 
-        # Return the style JSON
+        # Return the style JSON with absolute proxy URLs so MapLibre workers can
+        # construct Request objects (they reject root-relative paths).
+        _base = request.host_url.rstrip("/")
         style_json = resp.json()
-        style_json = rewrite_arcgis_style(style_json)
+        style_json = rewrite_arcgis_style(style_json, base_url=_base)
 
         logger.info(f"Successfully fetched and processed style: {style_name}")
         return jsonify(style_json)
@@ -2464,6 +2483,17 @@ def update_preferences():
         default_base=default_base,
     )
     return {"user": updated_user, "message": "Preferences updated successfully"}
+
+
+def _require_user(req):
+    """Return the authenticated user dict or None. Used to gate map-tile proxy routes."""
+    token = extract_bearer_token(req)
+    if not token:
+        return None
+    payload = verify_token(token)
+    if not payload:
+        return None
+    return get_user_by_id(int(payload.get("uid", 0)))
 
 
 def _require_admin(req):

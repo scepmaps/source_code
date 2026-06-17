@@ -1,5 +1,24 @@
 /** MapLibre needs absolute URLs when the style is passed as an inline object. */
 
+/**
+ * Returns a MapLibre transformRequest callback that attaches the current Bearer
+ * token to every request routed through our own proxy (same origin).
+ * Without this, MapLibre workers 401 on auth-gated tile/sprite/glyph routes.
+ */
+export function makeArcgisTransformRequest(getToken) {
+  return (url, _resourceType) => {
+    try {
+      const reqOrigin = new URL(url).origin;
+      if (reqOrigin !== window.location.origin) return { url };
+    } catch (_) {
+      return { url };
+    }
+    const token = getToken();
+    if (!token) return { url };
+    return { url, headers: { Authorization: `Bearer ${token}` } };
+  };
+}
+
 export function absolutizeMapStyleUrls(style) {
   const origin = window.location.origin;
   const abs = (url) => {
