@@ -5,6 +5,7 @@ import { initZoomMechanics } from './zoom/zoom.js';
 import { initMapToolControls } from './tools/tools.js';
 import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js';
+import { absolutizeMapStyleUrls } from './map-style.js';
 
 // Auth gate: require login, attach token to export calls (Bearer JWT in localStorage — no cookies)
 let token = localStorage.getItem('token');
@@ -487,7 +488,7 @@ async function createNamesOverlayLayer() {
       throw new Error(`Failed to fetch names style: ${styleResponse.status}`);
     }
 
-    const fullStyle = await styleResponse.json();
+    const fullStyle = absolutizeMapStyleUrls(await styleResponse.json());
     const labelsStyle = buildLabelsOnlyStyle(fullStyle);
 
     if (!labelsStyle.layers.length) {
@@ -506,7 +507,7 @@ async function createNamesOverlayLayer() {
       console.log('[Names] Vector labels overlay loaded');
     });
     namesGlMap?.on('error', (e) => {
-      console.error('[Names] MapLibre GL error:', e);
+      console.error('[Names] MapLibre GL error:', e?.error || e);
     });
 
     return namesGlLayer;
@@ -1292,7 +1293,7 @@ async function createOceanLayer() {
       throw new Error(`Failed to fetch ocean style: ${styleResponse.status}`);
     }
 
-    const styleJson = await styleResponse.json();
+    const styleJson = absolutizeMapStyleUrls(await styleResponse.json());
 
     // Create MapLibre GL layer with the style
     oceanGlLayer = L.maplibreGL({
@@ -1308,7 +1309,7 @@ async function createOceanLayer() {
     });
 
     oceanGlMap.on('error', (e) => {
-      console.error('[Ocean] MapLibre GL error:', e);
+      console.error('[Ocean] MapLibre GL error:', e?.error || e);
     });
 
     return oceanGlLayer;
@@ -1345,7 +1346,7 @@ async function createTopoLayer() {
       throw new Error(`Failed to fetch topo style: ${styleResponse.status}`);
     }
 
-    const styleJson = await styleResponse.json();
+    const styleJson = absolutizeMapStyleUrls(await styleResponse.json());
 
     // Create MapLibre GL layer with the style
     topoGlLayer = L.maplibreGL({
@@ -1361,7 +1362,7 @@ async function createTopoLayer() {
     });
 
     topoGlMap.on('error', (e) => {
-      console.error('[Topo] MapLibre GL error:', e);
+      console.error('[Topo] MapLibre GL error:', e?.error || e);
     });
 
     return topoGlLayer;
@@ -1398,7 +1399,7 @@ async function createNightLayer() {
       throw new Error(`Failed to fetch night style: ${styleResponse.status}`);
     }
 
-    const styleJson = await styleResponse.json();
+    const styleJson = absolutizeMapStyleUrls(await styleResponse.json());
 
     // Create MapLibre GL layer with the style
     nightGlLayer = L.maplibreGL({
@@ -1414,7 +1415,7 @@ async function createNightLayer() {
     });
 
     nightGlMap.on('error', (e) => {
-      console.error('[Night] MapLibre GL error:', e);
+      console.error('[Night] MapLibre GL error:', e?.error || e);
     });
 
     return nightGlLayer;
@@ -1451,7 +1452,7 @@ async function createNavigationLayer() {
       throw new Error(`Failed to fetch navigation style: ${styleResponse.status}`);
     }
 
-    const styleJson = await styleResponse.json();
+    const styleJson = absolutizeMapStyleUrls(await styleResponse.json());
 
     // Create MapLibre GL layer with the style
     navigationGlLayer = L.maplibreGL({
