@@ -273,17 +273,24 @@ class MappingGrid {
   }
 
   animate() {
+    // Schedule next frame first — ensures the loop never stops even if drawing throws.
+    requestAnimationFrame(() => this.animate());
+
+    if (this.canvas.width === 0 || this.canvas.height === 0) return;
+
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.time++;
 
-    this.drawCoordinateGrid();
-    this.drawTopographicLines();
-    this.updateWaypoints();
-    this.drawWireframeMesh();
-    this.drawWaypoints();
-    this.drawRadarScan();
-
-    requestAnimationFrame(() => this.animate());
+    try {
+      this.drawCoordinateGrid();
+      this.drawTopographicLines();
+      this.updateWaypoints();
+      this.drawWireframeMesh();
+      this.drawWaypoints();
+      this.drawRadarScan();
+    } catch (e) {
+      console.warn('[Particles] draw error:', e);
+    }
   }
 }
 
