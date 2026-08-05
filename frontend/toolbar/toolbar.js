@@ -253,7 +253,10 @@ export function createToolbarController(opts) {
       btn.className = 'emoji-btn';
       btn.id = `more_${type}_${item}`;
       btn.innerHTML = iconMap[item] || '?';
-      btn.title = favMapOptions[item] || favOverlayOptions[item] || toolOptions[item] || item;
+      const tip = favMapOptions[item] || favOverlayOptions[item] || toolOptions[item] || item;
+      btn.dataset.tip = tip;
+      btn.setAttribute('aria-label', tip);
+      btn.removeAttribute('title');
       btn.dataset[type] = item;
 
       const originalBtnId = type === 'base'
@@ -277,7 +280,9 @@ export function createToolbarController(opts) {
           if (originalBtn.classList.contains(cls)) btn.classList.add(cls);
         });
         if (originalBtn.innerHTML) btn.innerHTML = originalBtn.innerHTML;
-        btn.title = originalBtn.title || btn.title;
+        const liveTip = originalBtn.dataset.tip || originalBtn.getAttribute('aria-label') || tip;
+        btn.dataset.tip = liveTip;
+        btn.setAttribute('aria-label', liveTip);
       }
 
       btn.addEventListener('click', (e) => {

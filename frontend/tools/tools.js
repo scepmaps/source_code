@@ -23,18 +23,18 @@ function setBoxButtonState(btn, state) {
   if (state === 'delete') {
     btn.classList.add('map-tool-btn--danger');
     btn.innerHTML = iconHtml('trash');
-    btn.title = 'Delete selection box';
+    setButtonTip(btn, 'Delete Box');
     return;
   }
   if (state === 'place') {
     btn.classList.add('map-tool-btn--armed');
     btn.innerHTML = iconHtml('box');
-    btn.title = 'Place selection box';
+    setButtonTip(btn, 'Place Box');
     return;
   }
   btn.classList.add('map-tool-btn--primary');
   btn.innerHTML = iconHtml('box');
-  btn.title = 'Draw selection box';
+  setButtonTip(btn, 'Selection Box');
 }
 
 function createToolButton({ id, className, title, html, text, onClick }) {
@@ -42,7 +42,8 @@ function createToolButton({ id, className, title, html, text, onClick }) {
   btn.type = 'button';
   btn.id = id;
   btn.className = `emoji-btn map-tool-btn ${className}`.trim();
-  btn.title = title;
+  btn.dataset.tip = title;
+  btn.setAttribute('aria-label', title);
   if (html) btn.innerHTML = html;
   else if (text) btn.textContent = text;
   btn.addEventListener('click', (e) => {
@@ -51,6 +52,13 @@ function createToolButton({ id, className, title, html, text, onClick }) {
     if (typeof onClick === 'function') onClick(e);
   });
   return btn;
+}
+
+function setButtonTip(btn, label) {
+  if (!btn) return;
+  btn.dataset.tip = label;
+  btn.setAttribute('aria-label', label);
+  btn.removeAttribute('title');
 }
 
 export function initMapToolControls(opts) {
@@ -88,7 +96,7 @@ export function initMapToolControls(opts) {
   const rulerBtn = createToolButton({
     id: TOOL_BTN_IDS.ruler,
     className: 'map-tool-btn--ruler',
-    title: 'Measure distance: Click to add points, drag to move, click point to delete',
+    title: 'Ruler',
     html: iconHtml('ruler'),
     onClick: () => {
       if (typeof onToggleRuler === 'function') onToggleRuler();
@@ -100,7 +108,7 @@ export function initMapToolControls(opts) {
   boxBtn = createToolButton({
     id: TOOL_BTN_IDS.box,
     className: 'map-tool-btn--box',
-    title: 'Draw selection box',
+    title: 'Selection Box',
     html: iconHtml('box'),
     onClick: () => {
       if (typeof onBoxClick === 'function') onBoxClick();
@@ -116,7 +124,7 @@ export function initMapToolControls(opts) {
     const hgtBtn = createToolButton({
       id: TOOL_BTN_IDS.hgt,
       className: 'map-tool-btn--hgt',
-      title: 'Draw HGT selection box',
+      title: 'HGT',
       text: 'HGT',
       onClick: () => {
         if (typeof onHgtClick === 'function') onHgtClick();

@@ -217,15 +217,17 @@ map.on('moveend zoomend', () => {
 function refreshHgtControlButton(){
   if (!hgtControlBtn) return;
   hgtControlBtn.classList.remove('map-tool-btn--danger', 'map-tool-btn--armed');
+  let tip = 'HGT';
   if (hgtSelectionRect){
     hgtControlBtn.classList.add('map-tool-btn--danger');
-    hgtControlBtn.title = 'Delete HGT selection box';
+    tip = 'Delete HGT';
   } else if (isHgtBoxDrawingActive()){
     hgtControlBtn.classList.add('map-tool-btn--armed');
-    hgtControlBtn.title = 'Place HGT selection box';
-  } else {
-    hgtControlBtn.title = 'Draw HGT selection box';
+    tip = 'Place HGT';
   }
+  hgtControlBtn.dataset.tip = tip;
+  hgtControlBtn.setAttribute('aria-label', tip);
+  hgtControlBtn.removeAttribute('title');
   if (typeof updateMoreButtonsHighlight === 'function') updateMoreButtonsHighlight();
 }
 
