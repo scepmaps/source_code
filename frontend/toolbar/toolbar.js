@@ -1,5 +1,5 @@
-import { iconHtml } from './icons.js';
-import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js';
+import { iconHtml } from './icons.js?v=20260805c';
+import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260805c';
 
 export function createToolbarController(opts) {
   const {
@@ -288,8 +288,11 @@ export function createToolbarController(opts) {
 
       const originalBtn = document.getElementById(idMap[item]);
       row.addEventListener('click', (e) => {
+        e.preventDefault();
         e.stopPropagation();
-        if (originalBtn) originalBtn.click();
+        // Call the hidden button's handlers directly without a bubbling synthetic click
+        // (a normal .click() reaches document and would close the panel).
+        if (originalBtn) originalBtn.dispatchEvent(new MouseEvent('click', { bubbles: false, cancelable: true }));
         // Keep panel open — close only via icon toggle, Escape, or outside click.
         if (type === 'base') updateBaseButtonStates();
         else updateOverlayButtonStates();
@@ -337,8 +340,9 @@ export function createToolbarController(opts) {
       }
 
       btn.addEventListener('click', (e) => {
+        e.preventDefault();
         e.stopPropagation();
-        if (originalBtn) originalBtn.click();
+        if (originalBtn) originalBtn.dispatchEvent(new MouseEvent('click', { bubbles: false, cancelable: true }));
         dropdown.classList.remove('open');
         updateMoreButtonsHighlight();
       });
@@ -430,6 +434,11 @@ export function createToolbarController(opts) {
     sideRail?.addEventListener('dblclick', (e) => e.stopPropagation());
     sideRail?.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
 
+    const isRailUiTarget = (target) => {
+      const el = target instanceof Element ? target : target?.parentElement;
+      return !!el?.closest('#sideRail, #mapPickerPanel, #overlayPickerPanel, #moreToolDropdown');
+    };
+
     document.getElementById('btnMaps')?.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -450,13 +459,16 @@ export function createToolbarController(opts) {
     document.getElementById('overlayPickerPanel')?.addEventListener('click', (e) => e.stopPropagation());
     document.getElementById('moreToolDropdown')?.addEventListener('click', (e) => e.stopPropagation());
 
-    // Click outside closes any open panel.
-    document.addEventListener('click', () => {
+    // Click outside the rail closes any open panel (rail clicks are ignored so
+    // icon toggle / in-panel picks are not immediately undone).
+    document.addEventListener('click', (e) => {
+      if (isRailUiTarget(e.target)) return;
       closeAllPanels();
       updateMoreButtonsHighlight();
     });
 
-    // Escape closes Maps / Overlays / More-tools panels.
+    // Escape closes Maps / Overlays / More-tools panels (capture so it wins over
+    // the map's Escape → delete-selection handler in app.js).
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' && e.key !== 'Esc') return;
       const anyOpen = document.querySelector(
@@ -464,9 +476,10 @@ export function createToolbarController(opts) {
       );
       if (!anyOpen) return;
       e.preventDefault();
+      e.stopImmediatePropagation();
       closeAllPanels();
       updateMoreButtonsHighlight();
-    });
+    }, true);
 
     populateFavoriteSelects();
     loadFavorites();

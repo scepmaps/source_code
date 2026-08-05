@@ -1,11 +1,11 @@
-import { LAYERS } from './config.js';
-import { createToolbarController } from './toolbar/toolbar.js';
-import { initSettingsController } from './settings/settings.js';
-import { initZoomMechanics } from './zoom/zoom.js';
-import { initMapToolControls } from './tools/tools.js';
-import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js';
-import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js';
-import { absolutizeMapStyleUrls, makeArcgisTransformRequest } from './map-style.js';
+import { LAYERS } from './config.js?v=20260805c';
+import { createToolbarController } from './toolbar/toolbar.js?v=20260805c';
+import { initSettingsController } from './settings/settings.js?v=20260805c';
+import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
+import { initMapToolControls } from './tools/tools.js?v=20260805c';
+import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260805c';
+import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
+import { absolutizeMapStyleUrls, makeArcgisTransformRequest } from './map-style.js?v=20260805c';
 
 // Auth gate: require login, attach token to export calls (Bearer JWT in localStorage — no cookies)
 let token = localStorage.getItem('token');
