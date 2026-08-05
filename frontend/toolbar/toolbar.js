@@ -290,10 +290,7 @@ export function createToolbarController(opts) {
       row.addEventListener('click', (e) => {
         e.stopPropagation();
         if (originalBtn) originalBtn.click();
-        if (type === 'base') {
-          // Selecting a basemap closes the panel; overlays stay open for multi-toggle.
-          closeAllPanels();
-        }
+        // Keep panel open — close only via icon toggle, Escape, or outside click.
         if (type === 'base') updateBaseButtonStates();
         else updateOverlayButtonStates();
       });
@@ -416,6 +413,15 @@ export function createToolbarController(opts) {
     updateSectionButtonStates();
   }
 
+  function toggleToolsDropdown() {
+    const dropdown = document.getElementById('moreToolDropdown');
+    if (!dropdown) return;
+    const wasOpen = dropdown.classList.contains('open');
+    closeAllPanels();
+    if (!wasOpen) dropdown.classList.add('open');
+    updateMoreButtonsHighlight();
+  }
+
   function init() {
     setupEmojiButtons();
 
@@ -425,27 +431,39 @@ export function createToolbarController(opts) {
     sideRail?.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
 
     document.getElementById('btnMaps')?.addEventListener('click', (e) => {
+      e.preventDefault();
       e.stopPropagation();
       togglePanel('mapPickerPanel', 'btnMaps');
     });
     document.getElementById('btnOverlays')?.addEventListener('click', (e) => {
+      e.preventDefault();
       e.stopPropagation();
       togglePanel('overlayPickerPanel', 'btnOverlays');
     });
     document.getElementById('btnMoreTools')?.addEventListener('click', (e) => {
+      e.preventDefault();
       e.stopPropagation();
-      const dropdown = document.getElementById('moreToolDropdown');
-      const wasOpen = dropdown?.classList.contains('open');
-      closeAllPanels();
-      if (!wasOpen) dropdown?.classList.add('open');
-      updateMoreButtonsHighlight();
+      toggleToolsDropdown();
     });
 
     document.getElementById('mapPickerPanel')?.addEventListener('click', (e) => e.stopPropagation());
     document.getElementById('overlayPickerPanel')?.addEventListener('click', (e) => e.stopPropagation());
     document.getElementById('moreToolDropdown')?.addEventListener('click', (e) => e.stopPropagation());
 
+    // Click outside closes any open panel.
     document.addEventListener('click', () => {
+      closeAllPanels();
+      updateMoreButtonsHighlight();
+    });
+
+    // Escape closes Maps / Overlays / More-tools panels.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' && e.key !== 'Esc') return;
+      const anyOpen = document.querySelector(
+        '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open'
+      );
+      if (!anyOpen) return;
+      e.preventDefault();
       closeAllPanels();
       updateMoreButtonsHighlight();
     });
