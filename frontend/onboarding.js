@@ -99,14 +99,14 @@ function buildTourStepDefinitions(context = {}) {
       }
     },
     {
-      selector: '#mapBtnGroup',
+      selector: '.side-oval[data-panel="maps"]',
       popover: {
         title: 'Base Map Selector',
         description: 'Pick the base map style here (satellite, topo, navigation, charts, and more).'
       }
     },
     {
-      selector: '#overlayBtnGroup',
+      selector: '.side-oval[data-panel="overlays"]',
       isEnabled: () => allowedOverlays.length > 0,
       popover: {
         title: 'Overlay Selector',

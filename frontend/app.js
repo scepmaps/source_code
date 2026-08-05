@@ -2461,9 +2461,8 @@ function addRulerPoint(latlng) {
 }
 
 const controls = initMapToolControls({
-  L,
-  map,
   allowedTools,
+  mountEl: document.getElementById('toolBtnGroup'),
   onRulerButtonReady: (btn) => {
     rulerControlBtn = btn;
   },

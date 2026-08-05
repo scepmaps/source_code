@@ -256,7 +256,7 @@ export function createToolbarController(opts) {
     });
   }
 
-  function layoutToolbarGroup(groupId, moreBtnId, dropdownId, orderedKeys, favorites, idMap, iconMap, type, compactMode = false) {
+  function layoutToolbarGroup(groupId, moreBtnId, dropdownId, orderedKeys, favorites, idMap, iconMap, type, compactMode = false, heightBudget = 0) {
     const group = document.getElementById(groupId);
     const moreBtn = document.getElementById(moreBtnId);
     const moreWrapper = moreBtn?.closest('.more-btn-wrapper');
@@ -264,11 +264,11 @@ export function createToolbarController(opts) {
     const keys = orderedKeys.filter(k => document.getElementById(idMap[k]));
     const favored = favorites.filter(k => keys.includes(k));
     const nonFav = keys.filter(k => !favored.includes(k));
-    const priority = compactMode ? favored : [...favored, ...nonFav];
-    const forcedOverflow = compactMode ? [...nonFav] : [];
+    // Side rail: show favorites first; without favorites, show all until height limit.
+    const priority = favored.length ? [...favored, ...nonFav] : [...keys];
+    const forcedOverflow = compactMode && favored.length ? [...nonFav] : [];
 
     // Reorder visible button sequence to match favorites-first priority.
-    // This ensures on-screen icon order reflects settings selection.
     priority.forEach((k) => {
       const btn = document.getElementById(idMap[k]);
       if (btn) group.appendChild(btn);
@@ -280,22 +280,27 @@ export function createToolbarController(opts) {
       if (btn) btn.style.display = '';
     });
 
-    const groupWidth = group.clientWidth || 0;
-    const moreWidth = moreWrapper.getBoundingClientRect().width || 44;
-    const gap = parseFloat(getComputedStyle(group).gap || '6') || 6;
+    const fallbackSlots = compactMode ? 3 : 5;
+    const moreHeight = moreWrapper.getBoundingClientRect().height || 38;
+    const gap = parseFloat(getComputedStyle(group).gap || '8') || 8;
+    const groupHeightBudget = heightBudget > 0 ? heightBudget : fallbackSlots * (38 + gap);
 
     const runLayoutPass = (reserveMoreButtonSpace) => {
-      const available = Math.max(0, groupWidth - (reserveMoreButtonSpace ? (moreWidth + gap) : 0));
+      const available = Math.max(0, groupHeightBudget - (reserveMoreButtonSpace ? (moreHeight + gap) : 0));
       let used = 0;
       const overflow = [...forcedOverflow];
 
       priority.forEach(k => {
         const btn = document.getElementById(idMap[k]);
         if (!btn) return;
-        const w = btn.getBoundingClientRect().width || 44;
-        if ((used + w) <= available) {
+        if (forcedOverflow.includes(k)) {
+          btn.style.display = 'none';
+          return;
+        }
+        const h = btn.getBoundingClientRect().height || 38;
+        if ((used + h) <= available) {
           btn.style.display = '';
-          used += w + gap;
+          used += h + gap;
         } else {
           btn.style.display = 'none';
           if (!overflow.includes(k)) overflow.push(k);
@@ -319,8 +324,7 @@ export function createToolbarController(opts) {
       return overflow;
     };
 
-    // First pass: do not reserve width for the more button.
-    // If everything fits, hide "..." completely.
+    // First pass: do not reserve height for the more button.
     let overflow = runLayoutPass(false);
     if (overflow.length === 0) {
       moreWrapper.style.display = 'none';
@@ -340,10 +344,32 @@ export function createToolbarController(opts) {
     const overlayKeys = allowedOver.filter(o => favOverlayBtnIds[o]);
     const favoriteMaps = getSavedFavoriteKeys('maps', allowedBases, favMapBtnIds);
     const favoriteOverlays = getSavedFavoriteKeys('overlays', allowedOver, favOverlayBtnIds);
-    const compactMode = window.matchMedia('(max-width: 640px)').matches;
+    const compactMode = window.matchMedia('(max-height: 700px), (max-width: 640px)').matches;
 
-    layoutToolbarGroup('mapBtnGroup', 'btnMoreMaps', 'moreMapDropdown', mapKeys, favoriteMaps, favMapBtnIds, favMapIcons, 'base', compactMode);
-    layoutToolbarGroup('overlayBtnGroup', 'btnMoreOverlays', 'moreOverlayDropdown', overlayKeys, favoriteOverlays, favOverlayBtnIds, favOverlayIcons, 'overlay', compactMode);
+    // Distribute available rail height across the three ovals (fixed budgets avoid shrink loops).
+    const budgets = { maps: 0, overlays: 0, tools: 0 };
+    const rail = document.getElementById('sideRail');
+    if (rail) {
+      const ovals = [...rail.querySelectorAll('.side-oval')];
+      const gap = parseFloat(getComputedStyle(rail).gap || '12') || 12;
+      const railH = rail.clientHeight || 0;
+      const usable = Math.max(0, railH - gap * Math.max(0, ovals.length - 1));
+      const weights = { maps: 2.2, overlays: 1.6, tools: 1 };
+      const weightSum = ovals.reduce((sum, el) => sum + (weights[el.dataset.panel] || 1), 0) || 1;
+      ovals.forEach((el) => {
+        const panel = el.dataset.panel;
+        const h = Math.floor((usable * (weights[panel] || 1)) / weightSum);
+        const panelH = Math.max(panel === 'tools' ? 110 : 140, h);
+        el.style.maxHeight = `${panelH}px`;
+        const labelEl = el.querySelector('.side-oval-label');
+        const labelH = labelEl ? labelEl.getBoundingClientRect().height + 8 : 18;
+        const pad = 28; // vertical padding inside oval
+        budgets[panel] = Math.max(0, panelH - labelH - pad);
+      });
+    }
+
+    layoutToolbarGroup('mapBtnGroup', 'btnMoreMaps', 'moreMapDropdown', mapKeys, favoriteMaps, favMapBtnIds, favMapIcons, 'base', compactMode, budgets.maps);
+    layoutToolbarGroup('overlayBtnGroup', 'btnMoreOverlays', 'moreOverlayDropdown', overlayKeys, favoriteOverlays, favOverlayBtnIds, favOverlayIcons, 'overlay', compactMode, budgets.overlays);
     updateMoreButtonsHighlight();
   }
 
@@ -354,6 +380,12 @@ export function createToolbarController(opts) {
 
   function init() {
     setupEmojiButtons();
+
+    // Keep map interactions from stealing pointer events on the side rail.
+    const sideRail = document.getElementById('sideRail');
+    sideRail?.addEventListener('mousedown', (e) => e.stopPropagation());
+    sideRail?.addEventListener('dblclick', (e) => e.stopPropagation());
+    sideRail?.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
 
     document.getElementById('btnMoreMaps')?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -390,8 +422,10 @@ export function createToolbarController(opts) {
       });
     };
     window.addEventListener('resize', scheduleToolbarOverflowLayout);
+    const sideRailEl = document.getElementById('sideRail');
     const mapBtnGroupEl = document.getElementById('mapBtnGroup');
     const overlayBtnGroupEl = document.getElementById('overlayBtnGroup');
+    if (sideRailEl) new ResizeObserver(scheduleToolbarOverflowLayout).observe(sideRailEl);
     if (mapBtnGroupEl) new ResizeObserver(scheduleToolbarOverflowLayout).observe(mapBtnGroupEl);
     if (overlayBtnGroupEl) new ResizeObserver(scheduleToolbarOverflowLayout).observe(overlayBtnGroupEl);
 

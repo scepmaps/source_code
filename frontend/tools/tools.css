@@ -1,77 +1,29 @@
-/* Shared Leaflet map-tool control styling (ruler/box/hgt) */
-.map-tool-container {
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-.map-tool-btn {
-  width: 34px !important;
-  height: 34px !important;
-  line-height: 1 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  box-sizing: border-box !important;
-  text-align: center;
-  border: 2px solid #2a3a7a !important;
-  border-radius: 12px !important;
-  color: var(--text) !important;
-  background: linear-gradient(180deg, #0f1b3b, #0b142f) !important;
-  box-shadow: 0 0 0 1px #213069 inset, 0 4px 12px #0008 !important;
-  font-weight: 700 !important;
-  opacity: 0.90;
-  transition: all .2s !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  text-decoration: none !important;
-}
-
-.map-tool-btn svg {
-  width: 16px;
-  height: 16px;
-  display: block;
-  flex-shrink: 0;
-}
-
-.map-tool-btn:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 1px var(--accent) inset, 0 6px 16px #0008 !important;
-  color: var(--accent) !important;
-}
-
-.map-tool-btn--ruler {
-  font-size: 18px !important;
-}
-
-.map-tool-btn--box {
-  font-size: 16px !important;
-}
-
+/* Map tool button state styles (mounted in side-rail Tools oval) */
 .map-tool-btn--hgt {
-  font-size: 11px !important;
-  letter-spacing: 0.02em;
+  font-size: 10px !important;
+  letter-spacing: 0.04em;
+  font-weight: 700 !important;
 }
 
 .map-tool-btn--active {
-  background: linear-gradient(180deg, #0f2b4b, #0b1f3f) !important;
-  color: #fff !important;
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 2px var(--accent) inset, 0 0 20px rgba(77, 226, 255, 0.3) !important;
+  color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent) inset, 0 0 16px rgba(77, 226, 255, 0.28) !important;
 }
 
 .map-tool-btn--primary {
-  background: #1e90ff !important;
-  color: #fff !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
 }
 
 .map-tool-btn--danger {
   background: #ff4d6d !important;
+  border-color: #ff4d6d !important;
   color: #fff !important;
 }
 
 .map-tool-btn--armed {
   background: #28a745 !important;
+  border-color: #28a745 !important;
   color: #fff !important;
 }
