@@ -349,80 +349,33 @@ export function createToolbarController(opts) {
     });
   }
 
-  function layoutToolsGroup(heightBudget = 0) {
+  function layoutToolsGroup() {
     const group = document.getElementById('toolBtnGroup');
     const moreBtn = document.getElementById('btnMoreTools');
     const moreWrapper = moreBtn?.closest('.more-btn-wrapper');
     if (!group || !moreWrapper) return;
 
     const keys = Object.keys(toolBtnIds).filter((k) => document.getElementById(toolBtnIds[k]));
-    if (!keys.length) {
-      moreWrapper.style.display = 'none';
-      populateMoreDropdown('moreToolDropdown', [], toolIcons, 'tool');
-      return;
-    }
-
+    // Content-sized rail: always show every tool on the oval; no overflow menu needed.
     keys.forEach((k) => {
       const btn = document.getElementById(toolBtnIds[k]);
-      if (btn) {
-        btn.style.display = '';
-        group.insertBefore(btn, moreWrapper);
-      }
+      if (!btn) return;
+      btn.style.display = '';
+      group.insertBefore(btn, moreWrapper);
     });
-    if (group.lastElementChild !== moreWrapper) group.appendChild(moreWrapper);
-
-    const gap = parseFloat(getComputedStyle(group).gap || '8') || 8;
-    const moreHeight = moreWrapper.getBoundingClientRect().height || 38;
-    const budget = heightBudget > 0 ? heightBudget : 4 * (38 + gap);
-
-    const runPass = (reserveMore) => {
-      const available = Math.max(0, budget - (reserveMore ? moreHeight + gap : 0));
-      let used = 0;
-      const overflow = [];
-      keys.forEach((k) => {
-        const btn = document.getElementById(toolBtnIds[k]);
-        if (!btn) return;
-        const h = btn.getBoundingClientRect().height || 38;
-        if ((used + h) <= available + 0.5) {
-          btn.style.display = '';
-          used += h + gap;
-        } else {
-          btn.style.display = 'none';
-          overflow.push(k);
-        }
-      });
-      return overflow;
-    };
-
-    let overflow = runPass(false);
-    if (!overflow.length) {
-      moreWrapper.style.display = 'none';
-      document.getElementById('moreToolDropdown')?.classList.remove('open');
-      populateMoreDropdown('moreToolDropdown', [], toolIcons, 'tool');
-      return;
-    }
-    moreWrapper.style.display = '';
-    overflow = runPass(true);
-    populateMoreDropdown('moreToolDropdown', overflow, toolIcons, 'tool');
+    moreWrapper.style.display = 'none';
+    document.getElementById('moreToolDropdown')?.classList.remove('open');
+    populateMoreDropdown('moreToolDropdown', [], toolIcons, 'tool');
   }
 
   function applyToolbarOverflowLayout() {
     const rail = document.getElementById('sideRail');
-    const oval = rail?.querySelector('.side-oval--unified');
     const compactMode = window.matchMedia('(max-height: 780px), (max-width: 640px)').matches;
     const tightMode = window.matchMedia('(max-height: 620px)').matches;
     rail?.classList.toggle('side-rail--compact', compactMode);
     rail?.classList.toggle('side-rail--tight', tightMode);
 
-    let toolsBudget = 0;
-    if (oval) {
-      const ovalH = oval.clientHeight || 0;
-      // Maps btn + bar + overlays btn + bar ≈ fixed chrome above tools
-      const chrome = tightMode ? 110 : 130;
-      toolsBudget = Math.max(80, ovalH - chrome);
-    }
-
-    layoutToolsGroup(toolsBudget);
+    layoutToolsGroup();
     refreshNamedPanels();
     updateMoreButtonsHighlight();
   }
