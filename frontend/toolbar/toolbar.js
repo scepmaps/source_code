@@ -1,3 +1,5 @@
+import { iconHtml } from './icons.js';
+
 export function createToolbarController(opts) {
   const {
     baseSelect,
@@ -15,29 +17,40 @@ export function createToolbarController(opts) {
   } = opts;
 
   const favMapOptions = {
-    osm: '🗺️ OpenStreetMap',
-    esri: '🛰️ Satellite',
-    navigation: '🧭 Navigation',
-    night: '🌙 Night',
-    topo: '⛰️ Topographic',
-    ocean: '🌊 Nav Dark',
-    shom: '⚓ Charts',
-    ukho: '🇬🇧 UKHO Charts',
-    gbsouth: '✈️ GB South'
+    osm: 'OpenStreetMap',
+    esri: 'Satellite',
+    navigation: 'Navigation',
+    night: 'Night',
+    topo: 'Topographic',
+    ocean: 'Nav Dark',
+    shom: 'Charts',
+    ukho: 'UKHO Charts',
+    gbsouth: 'GB South'
   };
-  const favMapEmojis = {
-    osm: '🗺️', esri: '🛰️', navigation: '🧭', night: '🌙',
-    topo: '⛰️', ocean: '🌊', shom: '⚓', ukho: '🇬🇧', gbsouth: '✈️'
+  const favMapIcons = {
+    osm: iconHtml('osm'),
+    esri: iconHtml('esri'),
+    navigation: iconHtml('navigation'),
+    night: iconHtml('night'),
+    topo: iconHtml('topo'),
+    ocean: iconHtml('ocean'),
+    shom: iconHtml('shom'),
+    ukho: iconHtml('ukho'),
+    gbsouth: iconHtml('gbsouth'),
   };
   const favOverlayOptions = {
-    seamarks: '⚓ Seamarks',
-    openaip: '✈️ Airspace',
-    label: '🏷️ Names',
-    density: '🏘️ Density',
-    history: '🕐 History'
+    seamarks: 'Seamarks',
+    openaip: 'Airspace',
+    label: 'Names',
+    density: 'Density',
+    history: 'History'
   };
-  const favOverlayEmojis = {
-    seamarks: '⚓', openaip: '✈️', label: '🏷️', density: '🏘️', history: '🕐'
+  const favOverlayIcons = {
+    seamarks: iconHtml('seamarks'),
+    openaip: iconHtml('openaip'),
+    label: iconHtml('label'),
+    density: iconHtml('density'),
+    history: iconHtml('history'),
   };
   const favMapBtnIds = {
     osm: 'btnOsm', esri: 'btnEsri', navigation: 'btnNavigation',
@@ -203,7 +216,7 @@ export function createToolbarController(opts) {
     return out;
   }
 
-  function populateMoreDropdown(dropdownId, items, emojis, type) {
+  function populateMoreDropdown(dropdownId, items, iconMap, type) {
     const dropdown = document.getElementById(dropdownId);
     if (!dropdown) return;
     dropdown.innerHTML = '';
@@ -211,7 +224,7 @@ export function createToolbarController(opts) {
       const btn = document.createElement('button');
       btn.className = 'emoji-btn';
       btn.id = `more_${type}_${item}`;
-      btn.textContent = emojis[item] || '?';
+      btn.innerHTML = iconMap[item] || '?';
       btn.title = favMapOptions[item] || favOverlayOptions[item] || item;
       btn.dataset[type] = item;
 
@@ -243,7 +256,7 @@ export function createToolbarController(opts) {
     });
   }
 
-  function layoutToolbarGroup(groupId, moreBtnId, dropdownId, orderedKeys, favorites, idMap, emojis, type, compactMode = false) {
+  function layoutToolbarGroup(groupId, moreBtnId, dropdownId, orderedKeys, favorites, idMap, iconMap, type, compactMode = false) {
     const group = document.getElementById(groupId);
     const moreBtn = document.getElementById(moreBtnId);
     const moreWrapper = moreBtn?.closest('.more-btn-wrapper');
@@ -312,14 +325,14 @@ export function createToolbarController(opts) {
     if (overflow.length === 0) {
       moreWrapper.style.display = 'none';
       document.getElementById(dropdownId)?.classList.remove('open');
-      populateMoreDropdown(dropdownId, [], emojis, type);
+      populateMoreDropdown(dropdownId, [], iconMap, type);
       return;
     }
 
     // Second pass: overflow exists, reserve room for "..." and recompute.
     moreWrapper.style.display = '';
     overflow = runLayoutPass(true);
-    populateMoreDropdown(dropdownId, overflow, emojis, type);
+    populateMoreDropdown(dropdownId, overflow, iconMap, type);
   }
 
   function applyToolbarOverflowLayout() {
@@ -329,8 +342,8 @@ export function createToolbarController(opts) {
     const favoriteOverlays = getSavedFavoriteKeys('overlays', allowedOver, favOverlayBtnIds);
     const compactMode = window.matchMedia('(max-width: 640px)').matches;
 
-    layoutToolbarGroup('mapBtnGroup', 'btnMoreMaps', 'moreMapDropdown', mapKeys, favoriteMaps, favMapBtnIds, favMapEmojis, 'base', compactMode);
-    layoutToolbarGroup('overlayBtnGroup', 'btnMoreOverlays', 'moreOverlayDropdown', overlayKeys, favoriteOverlays, favOverlayBtnIds, favOverlayEmojis, 'overlay', compactMode);
+    layoutToolbarGroup('mapBtnGroup', 'btnMoreMaps', 'moreMapDropdown', mapKeys, favoriteMaps, favMapBtnIds, favMapIcons, 'base', compactMode);
+    layoutToolbarGroup('overlayBtnGroup', 'btnMoreOverlays', 'moreOverlayDropdown', overlayKeys, favoriteOverlays, favOverlayBtnIds, favOverlayIcons, 'overlay', compactMode);
     updateMoreButtonsHighlight();
   }
 

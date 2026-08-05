@@ -3331,7 +3331,7 @@ const renderUserStats = (stats, limits) => {
     ` : ''}
 
     ${Object.keys(stats.base_usage || {}).length ? `
-      <h4 style="margin: 20px 0 12px 0; color: var(--text);">🗺️ Favorite Base Maps</h4>
+      <h4 style="margin: 20px 0 12px 0; color: var(--text);">Favorite Base Maps</h4>
       ${Object.entries(stats.base_usage).map(([base, count]) => `
         <div style="display: flex; justify-content: space-between; padding: 4px 0;">
           <span>${base.toUpperCase()}</span>

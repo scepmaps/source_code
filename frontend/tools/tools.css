@@ -27,6 +27,13 @@
   text-decoration: none !important;
 }
 
+.map-tool-btn svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+  flex-shrink: 0;
+}
+
 .map-tool-btn:hover {
   transform: translateY(-2px);
   border-color: var(--accent) !important;

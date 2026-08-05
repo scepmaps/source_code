@@ -1,19 +1,21 @@
+import { iconHtml } from '../toolbar/icons.js';
+
 function setBoxButtonState(btn, state) {
   btn.classList.remove('map-tool-btn--danger', 'map-tool-btn--armed', 'map-tool-btn--primary');
   if (state === 'delete') {
     btn.classList.add('map-tool-btn--danger');
-    btn.innerHTML = '🗑️';
+    btn.innerHTML = iconHtml('trash');
     btn.title = 'Delete selection box';
     return;
   }
   if (state === 'place') {
     btn.classList.add('map-tool-btn--armed');
-    btn.innerHTML = '⬛';
+    btn.innerHTML = iconHtml('box');
     btn.title = 'Place selection box';
     return;
   }
   btn.classList.add('map-tool-btn--primary');
-  btn.innerHTML = '⬛';
+  btn.innerHTML = iconHtml('box');
   btn.title = 'Draw selection box';
 }
 
@@ -40,7 +42,7 @@ export function initMapToolControls(opts) {
       const btn = L.DomUtil.create('a', 'map-tool-btn map-tool-btn--ruler', container);
       btn.href = '#';
       btn.title = 'Measure distance: Click to add points, drag to move, click point to delete';
-      btn.innerHTML = '📏';
+      btn.innerHTML = iconHtml('ruler');
       L.DomEvent.disableClickPropagation(btn);
       L.DomEvent.on(btn, 'click', (e) => {
         L.DomEvent.preventDefault(e);

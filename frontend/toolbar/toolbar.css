@@ -38,15 +38,23 @@
   box-shadow: 0 0 0 1px #213069 inset, 0 4px 12px #0008;
   opacity: 0.90;
 }
+.emoji-btn svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  flex-shrink: 0;
+}
 .emoji-btn:hover {
   transform: translateY(-2px);
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent) inset, 0 6px 16px #0008;
+  color: var(--accent);
 }
 .emoji-btn.active {
   border-color: var(--accent);
   background: linear-gradient(180deg, #0f2b4b, #0b1f3f);
   box-shadow: 0 0 0 2px var(--accent) inset, 0 0 20px rgba(77, 226, 255, 0.3);
+  color: var(--accent);
 }
 .emoji-btn.active::after {
   content: ""; position: absolute; inset: -3px;
@@ -56,6 +64,7 @@
 
 .more-btn-wrapper { position: relative; display: inline-block; }
 .more-btn { font-weight: bold; letter-spacing: 2px; }
+.more-btn svg { width: 18px; height: 18px; }
 .more-btn.more-selected-collapsed {
   border-color: var(--accent);
   background: linear-gradient(180deg, #0f2b4b, #0b1f3f);
@@ -78,6 +87,32 @@
 }
 .more-dropdown.open { display: flex; flex-wrap: wrap; gap: 6px; }
 .more-dropdown .emoji-btn { width: 40px; height: 40px; font-size: 18px; }
+.more-dropdown .emoji-btn svg { width: 18px; height: 18px; }
+
+.btn.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  min-width: 40px;
+}
+.btn.btn-icon svg,
+#exportBtn .spinner svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+#exportBtn .spinner {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+#exportBtn .spinner svg {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 .toolbar-section { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: nowrap; }
 .topbar-map-section { margin-left: 20px; }
@@ -117,6 +152,7 @@
 @media (max-width: 1400px) {
   .topbar { gap: 10px; padding: 8px 10px; }
   .emoji-btn { width: 40px; height: 40px; font-size: 18px; }
+  .emoji-btn svg { width: 18px; height: 18px; }
   .toolbar-section { gap: 8px; }
   #exportFilename { min-width: 120px !important; max-width: 200px !important; }
 }
@@ -134,6 +170,7 @@
   .toolbar-label { display: none; }
   .emoji-btn-group { flex-wrap: nowrap; gap: 5px; }
   .emoji-btn { width: 36px; height: 36px; font-size: 16px; border-radius: 10px; }
+  .emoji-btn svg { width: 16px; height: 16px; }
   .btn { padding: 8px 10px; }
   .topbar > .toolbar-section { min-width: 0; }
   #exportFilename { width: 130px; min-width: 120px !important; max-width: 140px !important; }
