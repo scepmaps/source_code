@@ -8,8 +8,13 @@
 export function makeArcgisTransformRequest(getToken) {
   return (url, _resourceType) => {
     try {
-      const reqOrigin = new URL(url).origin;
-      if (reqOrigin !== window.location.origin) return { url };
+      const req = new URL(url);
+      // Same host is enough: behind Traefik, style rewrite can briefly emit http:// while the
+      // page is https://. Full-origin equality would skip the JWT and 401 every vector tile.
+      if (req.hostname !== window.location.hostname) return { url };
+      if (req.protocol === 'http:' && window.location.protocol === 'https:') {
+        url = `https://${req.host}${req.pathname}${req.search}${req.hash}`;
+      }
     } catch (_) {
       return { url };
     }

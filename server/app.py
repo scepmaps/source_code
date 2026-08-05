@@ -56,6 +56,7 @@ from rasterio.io import MemoryFile
 from rasterio.transform import Affine
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 from utils import bbox_4326_to_3857
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Load source_code/server/.env to keep secrets out of the repo root
 load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
@@ -67,6 +68,9 @@ ensure_default_admin(
 )
 
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
+# Traefik terminates TLS and nginx forwards X-Forwarded-Proto. Without ProxyFix,
+# request.host_url stays http://… and MapLibre drops JWT on rewritten ArcGIS style URLs.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 CORS(app)
 
 
