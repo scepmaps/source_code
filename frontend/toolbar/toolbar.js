@@ -69,7 +69,12 @@ export function createToolbarController(opts) {
   function closeAllPanels(exceptId = null) {
     ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown'].forEach((id) => {
       if (id === exceptId) return;
-      document.getElementById(id)?.classList.remove('open');
+      const el = document.getElementById(id);
+      el?.classList.remove('open');
+      if (el) {
+        el.style.top = '';
+        el.style.transform = '';
+      }
     });
     document.getElementById('btnMaps')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnOverlays')?.setAttribute('aria-expanded', 'false');
@@ -427,6 +432,23 @@ export function createToolbarController(opts) {
     applyToolbarOverflowLayout();
   }
 
+  function positionOpenPanel(panel) {
+    if (!panel || !panel.classList.contains('open')) return;
+    // Reset then clamp vertically so the panel stays inside the viewport.
+    panel.style.top = '50%';
+    panel.style.transform = 'translateY(-50%)';
+    const rect = panel.getBoundingClientRect();
+    const margin = 12;
+    let shift = 0;
+    if (rect.top < margin) shift = margin - rect.top;
+    else if (rect.bottom > window.innerHeight - margin) {
+      shift = (window.innerHeight - margin) - rect.bottom;
+    }
+    if (shift) {
+      panel.style.transform = `translateY(calc(-50% + ${shift}px))`;
+    }
+  }
+
   function togglePanel(panelId, triggerId) {
     const panel = document.getElementById(panelId);
     if (!panel) return;
@@ -436,6 +458,7 @@ export function createToolbarController(opts) {
       panel.classList.add('open');
       document.getElementById(triggerId)?.classList.add('panel-open', 'active');
       document.getElementById(triggerId)?.setAttribute('aria-expanded', 'true');
+      requestAnimationFrame(() => positionOpenPanel(panel));
     }
     updateSectionButtonStates();
   }
