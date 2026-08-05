@@ -1,10 +1,10 @@
 /* Toolbar layout and controls */
 .topbar{
   display:flex; align-items:center; flex-wrap:nowrap; gap:12px; padding:10px 14px;
-  border-bottom:1px solid #1f2b57;
-  backdrop-filter: blur(10px);
-  background: linear-gradient(180deg, #0e1737aa, #0a142faa);
-  box-shadow: var(--shadow);
+  border-bottom: none;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
   position:relative; z-index:100;
   overflow: visible;
 }
