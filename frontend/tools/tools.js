@@ -1,5 +1,23 @@
 import { iconHtml } from '../toolbar/icons.js';
 
+export const TOOL_BTN_IDS = {
+  ruler: 'btnRuler',
+  box: 'btnBox',
+  hgt: 'btnHgt',
+};
+
+export const TOOL_LABELS = {
+  ruler: 'Ruler',
+  box: 'Selection Box',
+  hgt: 'HGT',
+};
+
+export const TOOL_ICONS = {
+  ruler: iconHtml('ruler'),
+  box: iconHtml('box'),
+  hgt: '<span class="tool-hgt-label">HGT</span>',
+};
+
 function setBoxButtonState(btn, state) {
   btn.classList.remove('map-tool-btn--danger', 'map-tool-btn--armed', 'map-tool-btn--primary');
   if (state === 'delete') {
@@ -19,9 +37,10 @@ function setBoxButtonState(btn, state) {
   btn.title = 'Draw selection box';
 }
 
-function createToolButton({ className, title, html, text, onClick }) {
+function createToolButton({ id, className, title, html, text, onClick }) {
   const btn = document.createElement('button');
   btn.type = 'button';
+  btn.id = id;
   btn.className = `emoji-btn map-tool-btn ${className}`.trim();
   btn.title = title;
   if (html) btn.innerHTML = html;
@@ -44,7 +63,8 @@ export function initMapToolControls(opts) {
     onToggleRuler,
     onHgtButtonReady,
     onHgtClick,
-    onHideInlineHgtButton
+    onHideInlineHgtButton,
+    onToolsReady,
   } = opts;
 
   let boxBtn = null;
@@ -53,9 +73,20 @@ export function initMapToolControls(opts) {
     console.warn('[tools] No mount element for map tools');
     return { refreshBoxButton: () => {} };
   }
-  host.innerHTML = '';
+
+  // Preserve the "more" wrapper if present; rebuild tool buttons around it.
+  const moreWrapper = host.querySelector('.more-btn-wrapper');
+  [...host.children].forEach((child) => {
+    if (child !== moreWrapper) child.remove();
+  });
+
+  const insertBeforeMore = (el) => {
+    if (moreWrapper) host.insertBefore(el, moreWrapper);
+    else host.appendChild(el);
+  };
 
   const rulerBtn = createToolButton({
+    id: TOOL_BTN_IDS.ruler,
     className: 'map-tool-btn--ruler',
     title: 'Measure distance: Click to add points, drag to move, click point to delete',
     html: iconHtml('ruler'),
@@ -63,10 +94,11 @@ export function initMapToolControls(opts) {
       if (typeof onToggleRuler === 'function') onToggleRuler();
     },
   });
-  host.appendChild(rulerBtn);
+  insertBeforeMore(rulerBtn);
   if (typeof onRulerButtonReady === 'function') onRulerButtonReady(rulerBtn);
 
   boxBtn = createToolButton({
+    id: TOOL_BTN_IDS.box,
     className: 'map-tool-btn--box',
     title: 'Draw selection box',
     html: iconHtml('box'),
@@ -78,10 +110,11 @@ export function initMapToolControls(opts) {
     },
   });
   setBoxButtonState(boxBtn, 'draw');
-  host.appendChild(boxBtn);
+  insertBeforeMore(boxBtn);
 
   if (allowedTools.includes('hgt')) {
     const hgtBtn = createToolButton({
+      id: TOOL_BTN_IDS.hgt,
       className: 'map-tool-btn--hgt',
       title: 'Draw HGT selection box',
       text: 'HGT',
@@ -89,11 +122,13 @@ export function initMapToolControls(opts) {
         if (typeof onHgtClick === 'function') onHgtClick();
       },
     });
-    host.appendChild(hgtBtn);
+    insertBeforeMore(hgtBtn);
     if (typeof onHgtButtonReady === 'function') onHgtButtonReady(hgtBtn);
   } else if (typeof onHideInlineHgtButton === 'function') {
     onHideInlineHgtButton();
   }
+
+  if (typeof onToolsReady === 'function') onToolsReady();
 
   return {
     refreshBoxButton: () => {

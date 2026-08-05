@@ -226,11 +226,13 @@ function refreshHgtControlButton(){
   } else {
     hgtControlBtn.title = 'Draw HGT selection box';
   }
+  if (typeof updateMoreButtonsHighlight === 'function') updateMoreButtonsHighlight();
 }
 
 function setRulerControlActive(active) {
   if (!rulerControlBtn) return;
   rulerControlBtn.classList.toggle('map-tool-btn--active', !!active);
+  if (typeof updateMoreButtonsHighlight === 'function') updateMoreButtonsHighlight();
 }
 
 // Build layers based on user permissions
@@ -849,7 +851,9 @@ const toolbarController = createToolbarController({
 const {
   updateBaseButtonStates,
   updateOverlayButtonStates,
+  updateMoreButtonsHighlight,
   applyFavorites,
+  applyToolbarOverflowLayout,
   populateFavoriteSelects,
   loadFavorites,
 } = toolbarController;
@@ -2516,9 +2520,16 @@ const controls = initMapToolControls({
   },
   onHideInlineHgtButton: () => {
     if (hgtBoxBtn) hgtBoxBtn.style.display = 'none';
+  },
+  onToolsReady: () => {
+    applyToolbarOverflowLayout();
+    updateMoreButtonsHighlight();
   }
 });
-refreshBoxButton = controls.refreshBoxButton;
+refreshBoxButton = () => {
+  controls.refreshBoxButton();
+  if (typeof updateMoreButtonsHighlight === 'function') updateMoreButtonsHighlight();
+};
 
 // Map events for Ruler
 map.on('click', (e) => {

@@ -139,6 +139,7 @@
   gap: 12px;
   pointer-events: none;
   max-height: calc(100% - var(--topbar-height, 64px) - 72px);
+  overflow: visible;
 }
 
 .side-oval {
@@ -150,7 +151,7 @@
   padding: 14px 10px;
   width: 64px;
   min-height: 0;
-  max-height: 100%;
+  flex: 0 1 auto;
   border-radius: 999px;
   border: 1px solid rgba(77, 226, 255, 0.22);
   background: linear-gradient(180deg, rgba(14, 23, 55, 0.88), rgba(10, 20, 47, 0.82));
@@ -158,6 +159,44 @@
   backdrop-filter: blur(14px) saturate(1.15);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
   overflow: visible;
+}
+
+.side-rail--compact {
+  gap: 8px;
+}
+.side-rail--compact .side-oval {
+  padding: 10px 8px;
+  gap: 6px;
+  width: 56px;
+}
+.side-rail--compact .side-rail .emoji-btn,
+.side-rail--compact .emoji-btn,
+.side-rail--compact .map-tool-btn {
+  width: 34px !important;
+  height: 34px !important;
+}
+
+.side-rail--tight {
+  gap: 6px;
+}
+.side-rail--tight .side-oval {
+  padding: 8px 6px;
+  gap: 5px;
+  width: 52px;
+}
+.side-rail--tight .side-oval-label {
+  font-size: 7px;
+  letter-spacing: 0.08em;
+}
+.side-rail--tight .emoji-btn,
+.side-rail--tight .map-tool-btn {
+  width: 30px !important;
+  height: 30px !important;
+}
+.side-rail--tight .emoji-btn svg,
+.side-rail--tight .map-tool-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .side-oval-label {
@@ -169,6 +208,7 @@
   opacity: 0.9;
   user-select: none;
   line-height: 1;
+  flex: 0 0 auto;
 }
 
 .side-btn-group {
@@ -178,6 +218,7 @@
   gap: 8px;
   min-height: 0;
   overflow: visible;
+  width: 100%;
 }
 
 .side-rail .emoji-btn {
@@ -197,6 +238,7 @@
 .side-rail .more-btn-wrapper {
   display: flex;
   justify-content: center;
+  flex: 0 0 auto;
 }
 
 .side-rail .more-dropdown {
@@ -214,6 +256,9 @@
   background: linear-gradient(180deg, rgba(14, 23, 55, 0.94), rgba(10, 20, 47, 0.9));
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(33, 48, 105, 0.55) inset;
   backdrop-filter: blur(14px);
+  max-height: min(70vh, 420px);
+  overflow-y: auto;
+  overflow-x: visible;
 }
 
 .side-rail .more-dropdown.open {
@@ -235,22 +280,27 @@
   height: 17px;
 }
 .side-rail .map-tool-btn--active,
-.side-rail .map-tool-btn--primary {
+.side-rail .map-tool-btn--primary,
+.side-rail .more-dropdown .map-tool-btn--active,
+.side-rail .more-dropdown .map-tool-btn--primary {
   border-color: var(--accent) !important;
   color: var(--accent) !important;
   box-shadow: 0 0 0 2px var(--accent) inset, 0 0 16px rgba(77, 226, 255, 0.28) !important;
 }
-.side-rail .map-tool-btn--danger {
+.side-rail .map-tool-btn--danger,
+.side-rail .more-dropdown .map-tool-btn--danger {
   background: #ff4d6d !important;
   border-color: #ff4d6d !important;
   color: #fff !important;
 }
-.side-rail .map-tool-btn--armed {
+.side-rail .map-tool-btn--armed,
+.side-rail .more-dropdown .map-tool-btn--armed {
   background: #28a745 !important;
   border-color: #28a745 !important;
   color: #fff !important;
 }
-.side-rail .map-tool-btn--hgt {
+.side-rail .map-tool-btn--hgt,
+.side-rail .tool-hgt-label {
   font-size: 10px !important;
   letter-spacing: 0.04em;
   font-weight: 700 !important;
