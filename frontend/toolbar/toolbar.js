@@ -66,49 +66,53 @@ export function createToolbarController(opts) {
   const toolOptions = { ...TOOL_LABELS };
   const toolIcons = { ...TOOL_ICONS };
 
-  function closeAllMoreDropdowns(exceptId = null) {
-    ['moreMapDropdown', 'moreOverlayDropdown', 'moreToolDropdown'].forEach((id) => {
+  function closeAllPanels(exceptId = null) {
+    ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown'].forEach((id) => {
       if (id === exceptId) return;
       document.getElementById(id)?.classList.remove('open');
     });
+    document.getElementById('btnMaps')?.setAttribute('aria-expanded', 'false');
+    document.getElementById('btnOverlays')?.setAttribute('aria-expanded', 'false');
+    document.getElementById('btnMaps')?.classList.remove('panel-open');
+    document.getElementById('btnOverlays')?.classList.remove('panel-open');
   }
 
   function isToolButtonActive(btn) {
     if (!btn) return false;
-    // primary is the idle draw state for the box tool — not an "in use" signal
     return btn.classList.contains('map-tool-btn--active')
       || btn.classList.contains('map-tool-btn--danger')
       || btn.classList.contains('map-tool-btn--armed');
   }
 
+  function anyOverlayActive() {
+    return !!(seamarksCb?.checked
+      || openaipCb?.checked
+      || densityCb?.checked
+      || historyToggle?.checked
+      || getIsNamesOverlayEnabled());
+  }
+
+  function updateSectionButtonStates() {
+    const mapsBtn = document.getElementById('btnMaps');
+    const overlaysBtn = document.getElementById('btnOverlays');
+    const mapPanelOpen = document.getElementById('mapPickerPanel')?.classList.contains('open');
+    const overlayPanelOpen = document.getElementById('overlayPickerPanel')?.classList.contains('open');
+
+    mapsBtn?.classList.toggle('active', !!mapPanelOpen);
+    mapsBtn?.classList.toggle('panel-open', !!mapPanelOpen);
+    mapsBtn?.setAttribute('aria-expanded', mapPanelOpen ? 'true' : 'false');
+
+    // Overlays icon stays lit when any overlay is on, or when the panel is open.
+    overlaysBtn?.classList.toggle('active', !!overlayPanelOpen || anyOverlayActive());
+    overlaysBtn?.classList.toggle('panel-open', !!overlayPanelOpen);
+    overlaysBtn?.setAttribute('aria-expanded', overlayPanelOpen ? 'true' : 'false');
+    overlaysBtn?.classList.toggle('has-active-items', anyOverlayActive());
+  }
+
   function updateMoreButtonsHighlight() {
-    const moreMapsBtn = document.getElementById('btnMoreMaps');
-    const moreOverlaysBtn = document.getElementById('btnMoreOverlays');
     const moreToolsBtn = document.getElementById('btnMoreTools');
-    const mapDropdown = document.getElementById('moreMapDropdown');
-    const overlayDropdown = document.getElementById('moreOverlayDropdown');
     const toolDropdown = document.getElementById('moreToolDropdown');
     const isHidden = (el) => !!el && getComputedStyle(el).display === 'none';
-
-    const activeBase = baseSelect?.value;
-    const activeBaseBtn = activeBase ? document.getElementById(`btn${activeBase.charAt(0).toUpperCase()}${activeBase.slice(1)}`) : null;
-    const mapInCollapsed = !!activeBaseBtn && isHidden(activeBaseBtn) && !(mapDropdown?.classList.contains('open'));
-    moreMapsBtn?.classList.toggle('more-selected-collapsed', mapInCollapsed);
-
-    const overlayStates = [
-      { id: 'btnSeamarks', active: !!seamarksCb?.checked },
-      { id: 'btnOpenaip', active: !!openaipCb?.checked },
-      { id: 'btnDensity', active: !!densityCb?.checked },
-      { id: 'btnHistory', active: !!historyToggle?.checked },
-      { id: 'btnLabel', active: !!getIsNamesOverlayEnabled() },
-    ];
-    const activeHiddenOverlay = overlayStates.some(({ id, active }) => {
-      if (!active) return false;
-      const btn = document.getElementById(id);
-      return isHidden(btn);
-    });
-    const overlayInCollapsed = activeHiddenOverlay && !(overlayDropdown?.classList.contains('open'));
-    moreOverlaysBtn?.classList.toggle('more-selected-collapsed', overlayInCollapsed);
 
     const activeHiddenTool = Object.values(toolBtnIds).some((id) => {
       const btn = document.getElementById(id);
@@ -116,12 +120,16 @@ export function createToolbarController(opts) {
     });
     const toolsInCollapsed = activeHiddenTool && !(toolDropdown?.classList.contains('open'));
     moreToolsBtn?.classList.toggle('more-selected-collapsed', toolsInCollapsed);
+    updateSectionButtonStates();
   }
 
   function updateBaseButtonStates() {
     const activeBase = baseSelect.value;
     document.querySelectorAll('[data-base]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.base === activeBase);
+    });
+    document.querySelectorAll('#mapPickerPanel .rail-panel-item').forEach((row) => {
+      row.classList.toggle('active', row.dataset.base === activeBase);
     });
     document.getElementById('btnLabel')?.classList.toggle('active', getIsNamesOverlayEnabled());
     updateMoreButtonsHighlight();
@@ -133,6 +141,18 @@ export function createToolbarController(opts) {
     document.getElementById('btnDensity')?.classList.toggle('active', densityCb.checked);
     document.getElementById('btnHistory')?.classList.toggle('active', historyToggle.checked);
     document.getElementById('btnLabel')?.classList.toggle('active', getIsNamesOverlayEnabled());
+
+    const states = {
+      seamarks: !!seamarksCb?.checked,
+      openaip: !!openaipCb?.checked,
+      label: !!getIsNamesOverlayEnabled(),
+      density: !!densityCb?.checked,
+      history: !!historyToggle?.checked,
+    };
+    document.querySelectorAll('#overlayPickerPanel .rail-panel-item').forEach((row) => {
+      const key = row.dataset.overlay;
+      row.classList.toggle('active', !!states[key]);
+    });
     updateMoreButtonsHighlight();
   }
 
@@ -187,6 +207,7 @@ export function createToolbarController(opts) {
   function populateFavoriteSelects() {
     for (let i = 1; i <= 4; i++) {
       const select = document.getElementById(`favMap${i}`);
+      if (!select) continue;
       select.innerHTML = '<option value="">-- None --</option>';
       allowedBases.forEach(base => {
         if (!favMapOptions[base]) return;
@@ -198,6 +219,7 @@ export function createToolbarController(opts) {
     }
     for (let i = 1; i <= 4; i++) {
       const select = document.getElementById(`favOverlay${i}`);
+      if (!select) continue;
       select.innerHTML = '<option value="">-- None --</option>';
       allowedOver.forEach(overlay => {
         if (!favOverlayOptions[overlay]) return;
@@ -213,9 +235,9 @@ export function createToolbarController(opts) {
     const saved = JSON.parse(localStorage.getItem('scepmaps_favorites') || '{}');
     for (let i = 1; i <= 4; i++) {
       const mapSel = document.getElementById(`favMap${i}`);
-      if (saved.maps && saved.maps[i - 1]) mapSel.value = saved.maps[i - 1];
+      if (mapSel && saved.maps && saved.maps[i - 1]) mapSel.value = saved.maps[i - 1];
       const overSel = document.getElementById(`favOverlay${i}`);
-      if (saved.overlays && saved.overlays[i - 1]) overSel.value = saved.overlays[i - 1];
+      if (overSel && saved.overlays && saved.overlays[i - 1]) overSel.value = saved.overlays[i - 1];
     }
   }
 
@@ -223,25 +245,65 @@ export function createToolbarController(opts) {
     const maps = [];
     const overlays = [];
     for (let i = 1; i <= 4; i++) {
-      maps.push(document.getElementById(`favMap${i}`).value);
-      overlays.push(document.getElementById(`favOverlay${i}`).value);
+      const mapSel = document.getElementById(`favMap${i}`);
+      const overSel = document.getElementById(`favOverlay${i}`);
+      maps.push(mapSel ? mapSel.value : '');
+      overlays.push(overSel ? overSel.value : '');
     }
     localStorage.setItem('scepmaps_favorites', JSON.stringify({ maps, overlays }));
   }
 
-  function getSavedFavoriteKeys(kind, allowed, idMap) {
-    const saved = JSON.parse(localStorage.getItem('scepmaps_favorites') || '{}');
-    const values = Array.isArray(saved[kind]) ? saved[kind] : [];
-    const seen = new Set();
-    const out = [];
-    values.forEach((k) => {
-      if (!k || seen.has(k)) return;
-      if (allowed.includes(k) && document.getElementById(idMap[k])) {
-        seen.add(k);
-        out.push(k);
-      }
+  function populateNamedPanel(panelId, items, iconMap, labels, type, idMap) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    panel.innerHTML = '';
+
+    if (!items.length) {
+      panel.innerHTML = '<div class="rail-panel-empty">Nothing available</div>';
+      return;
+    }
+
+    items.forEach((item) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'rail-panel-item';
+      row.dataset[type === 'base' ? 'base' : 'overlay'] = item;
+      row.setAttribute('role', 'menuitem');
+
+      const icon = document.createElement('span');
+      icon.className = 'rail-panel-icon';
+      icon.innerHTML = iconMap[item] || '';
+
+      const name = document.createElement('span');
+      name.className = 'rail-panel-name';
+      name.textContent = labels[item] || item;
+
+      row.appendChild(icon);
+      row.appendChild(name);
+
+      const originalBtn = document.getElementById(idMap[item]);
+      row.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (originalBtn) originalBtn.click();
+        if (type === 'base') {
+          // Selecting a basemap closes the panel; overlays stay open for multi-toggle.
+          closeAllPanels();
+        }
+        if (type === 'base') updateBaseButtonStates();
+        else updateOverlayButtonStates();
+      });
+
+      panel.appendChild(row);
     });
-    return out;
+  }
+
+  function refreshNamedPanels() {
+    const mapKeys = allowedBases.filter((b) => favMapBtnIds[b] && document.getElementById(favMapBtnIds[b]));
+    const overlayKeys = allowedOver.filter((o) => favOverlayBtnIds[o] && document.getElementById(favOverlayBtnIds[o]));
+    populateNamedPanel('mapPickerPanel', mapKeys, favMapIcons, favMapOptions, 'base', favMapBtnIds);
+    populateNamedPanel('overlayPickerPanel', overlayKeys, favOverlayIcons, favOverlayOptions, 'overlay', favOverlayBtnIds);
+    updateBaseButtonStates();
+    updateOverlayButtonStates();
   }
 
   function populateMoreDropdown(dropdownId, items, iconMap, type) {
@@ -259,23 +321,10 @@ export function createToolbarController(opts) {
       btn.removeAttribute('title');
       btn.dataset[type] = item;
 
-      const originalBtnId = type === 'base'
-        ? favMapBtnIds[item]
-        : type === 'overlay'
-          ? favOverlayBtnIds[item]
-          : toolBtnIds[item];
+      const originalBtnId = toolBtnIds[item];
       const originalBtn = document.getElementById(originalBtnId);
 
-      if (type === 'overlay') {
-        const isActive = (item === 'seamarks' && seamarksCb?.checked) ||
-          (item === 'openaip' && openaipCb?.checked) ||
-          (item === 'label' && getIsNamesOverlayEnabled()) ||
-          (item === 'density' && densityCb?.checked) ||
-          (item === 'history' && historyToggle?.checked);
-        if (isActive) btn.classList.add('active');
-      } else if (type === 'base') {
-        if (baseSelect?.value === item) btn.classList.add('active');
-      } else if (type === 'tool' && originalBtn) {
+      if (type === 'tool' && originalBtn) {
         ['map-tool-btn--active', 'map-tool-btn--primary', 'map-tool-btn--danger', 'map-tool-btn--armed'].forEach((cls) => {
           if (originalBtn.classList.contains(cls)) btn.classList.add(cls);
         });
@@ -287,12 +336,6 @@ export function createToolbarController(opts) {
 
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (type === 'overlay') {
-          btn.classList.toggle('active');
-        } else if (type === 'base') {
-          dropdown.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-        }
         if (originalBtn) originalBtn.click();
         dropdown.classList.remove('open');
         updateMoreButtonsHighlight();
@@ -301,158 +344,81 @@ export function createToolbarController(opts) {
     });
   }
 
-  function allocatePanelHeights(railH, gapCount, panels) {
-    const usable = Math.max(0, railH - gapCount);
-    const minSum = panels.reduce((sum, p) => sum + p.minH, 0);
-    if (usable <= 0) {
-      return Object.fromEntries(panels.map((p) => [p.key, p.minH]));
-    }
-    if (minSum >= usable) {
-      // Scale all panels down so they fit the available rail height.
-      const scale = usable / minSum;
-      return Object.fromEntries(panels.map((p) => [p.key, Math.max(64, Math.floor(p.minH * scale))]));
-    }
-    const extra = usable - minSum;
-    const weightSum = panels.reduce((sum, p) => sum + p.weight, 0) || 1;
-    return Object.fromEntries(panels.map((p) => [
-      p.key,
-      p.minH + Math.floor(extra * (p.weight / weightSum)),
-    ]));
-  }
-
-  function layoutToolbarGroup(groupId, moreBtnId, dropdownId, orderedKeys, favorites, idMap, iconMap, type, compactMode = false, heightBudget = 0) {
-    const group = document.getElementById(groupId);
-    const moreBtn = document.getElementById(moreBtnId);
+  function layoutToolsGroup(heightBudget = 0) {
+    const group = document.getElementById('toolBtnGroup');
+    const moreBtn = document.getElementById('btnMoreTools');
     const moreWrapper = moreBtn?.closest('.more-btn-wrapper');
     if (!group || !moreWrapper) return;
-    const keys = orderedKeys.filter(k => document.getElementById(idMap[k]));
+
+    const keys = Object.keys(toolBtnIds).filter((k) => document.getElementById(toolBtnIds[k]));
     if (!keys.length) {
       moreWrapper.style.display = 'none';
-      populateMoreDropdown(dropdownId, [], iconMap, type);
+      populateMoreDropdown('moreToolDropdown', [], toolIcons, 'tool');
       return;
     }
-    const favored = favorites.filter(k => keys.includes(k));
-    const nonFav = keys.filter(k => !favored.includes(k));
-    // Side rail: show favorites first; without favorites, show all until height limit.
-    const priority = favored.length ? [...favored, ...nonFav] : [...keys];
-    const forcedOverflow = compactMode && favored.length ? [...nonFav] : [];
 
-    // Reorder visible button sequence to match favorites-first priority.
-    priority.forEach((k) => {
-      const btn = document.getElementById(idMap[k]);
-      if (btn) group.appendChild(btn);
+    keys.forEach((k) => {
+      const btn = document.getElementById(toolBtnIds[k]);
+      if (btn) {
+        btn.style.display = '';
+        group.insertBefore(btn, moreWrapper);
+      }
     });
     if (group.lastElementChild !== moreWrapper) group.appendChild(moreWrapper);
-    moreWrapper.style.display = '';
-    keys.forEach(k => {
-      const btn = document.getElementById(idMap[k]);
-      if (btn) btn.style.display = '';
-    });
 
-    const fallbackSlots = compactMode ? 2 : 4;
-    const moreHeight = moreWrapper.getBoundingClientRect().height || 38;
     const gap = parseFloat(getComputedStyle(group).gap || '8') || 8;
-    const groupHeightBudget = heightBudget > 0 ? heightBudget : fallbackSlots * (38 + gap);
+    const moreHeight = moreWrapper.getBoundingClientRect().height || 38;
+    const budget = heightBudget > 0 ? heightBudget : 4 * (38 + gap);
 
-    const runLayoutPass = (reserveMoreButtonSpace) => {
-      const available = Math.max(0, groupHeightBudget - (reserveMoreButtonSpace ? (moreHeight + gap) : 0));
+    const runPass = (reserveMore) => {
+      const available = Math.max(0, budget - (reserveMore ? moreHeight + gap : 0));
       let used = 0;
-      const overflow = [...forcedOverflow];
-
-      priority.forEach(k => {
-        const btn = document.getElementById(idMap[k]);
+      const overflow = [];
+      keys.forEach((k) => {
+        const btn = document.getElementById(toolBtnIds[k]);
         if (!btn) return;
-        if (forcedOverflow.includes(k)) {
-          btn.style.display = 'none';
-          return;
-        }
         const h = btn.getBoundingClientRect().height || 38;
         if ((used + h) <= available + 0.5) {
           btn.style.display = '';
           used += h + gap;
         } else {
           btn.style.display = 'none';
-          if (!overflow.includes(k)) overflow.push(k);
+          overflow.push(k);
         }
       });
-
-      keys.forEach((k) => {
-        if (!priority.includes(k)) {
-          const btn = document.getElementById(idMap[k]);
-          if (btn) btn.style.display = 'none';
-          if (!overflow.includes(k)) overflow.push(k);
-        }
-      });
-      keys.forEach((k) => {
-        const btn = document.getElementById(idMap[k]);
-        if (!btn || getComputedStyle(btn).display === 'none') {
-          if (!overflow.includes(k)) overflow.push(k);
-        }
-      });
-
       return overflow;
     };
 
-    // First pass: do not reserve height for the more button.
-    let overflow = runLayoutPass(false);
-    if (overflow.length === 0) {
+    let overflow = runPass(false);
+    if (!overflow.length) {
       moreWrapper.style.display = 'none';
-      document.getElementById(dropdownId)?.classList.remove('open');
-      populateMoreDropdown(dropdownId, [], iconMap, type);
+      document.getElementById('moreToolDropdown')?.classList.remove('open');
+      populateMoreDropdown('moreToolDropdown', [], toolIcons, 'tool');
       return;
     }
-
-    // Second pass: overflow exists, reserve room for "..." and recompute.
     moreWrapper.style.display = '';
-    overflow = runLayoutPass(true);
-    // Always keep at least the more button usable under extreme zoom.
-    if (overflow.length === keys.length) {
-      // Everything overflowed — still show more so options remain reachable.
-      moreWrapper.style.display = '';
-    }
-    populateMoreDropdown(dropdownId, overflow, iconMap, type);
+    overflow = runPass(true);
+    populateMoreDropdown('moreToolDropdown', overflow, toolIcons, 'tool');
   }
 
   function applyToolbarOverflowLayout() {
-    const mapKeys = allowedBases.filter(b => favMapBtnIds[b]);
-    const overlayKeys = allowedOver.filter(o => favOverlayBtnIds[o]);
-    const toolKeys = Object.keys(toolBtnIds).filter((k) => document.getElementById(toolBtnIds[k]));
-    const favoriteMaps = getSavedFavoriteKeys('maps', allowedBases, favMapBtnIds);
-    const favoriteOverlays = getSavedFavoriteKeys('overlays', allowedOver, favOverlayBtnIds);
+    const rail = document.getElementById('sideRail');
+    const oval = rail?.querySelector('.side-oval--unified');
     const compactMode = window.matchMedia('(max-height: 780px), (max-width: 640px)').matches;
     const tightMode = window.matchMedia('(max-height: 620px)').matches;
+    rail?.classList.toggle('side-rail--compact', compactMode);
+    rail?.classList.toggle('side-rail--tight', tightMode);
 
-    const budgets = { maps: 0, overlays: 0, tools: 0 };
-    const rail = document.getElementById('sideRail');
-    if (rail) {
-      const gap = parseFloat(getComputedStyle(rail).gap || '12') || 12;
-      const railH = rail.clientHeight || 0;
-      // Absolute mins: label + one icon slot + more button (+ padding)
-      const floor = tightMode ? 72 : 88;
-      const heights = allocatePanelHeights(railH, gap * 2, [
-        { key: 'maps', weight: 2.2, minH: floor },
-        { key: 'overlays', weight: 1.6, minH: floor },
-        { key: 'tools', weight: 1.1, minH: floor },
-      ]);
-
-      rail.querySelectorAll('.side-oval').forEach((el) => {
-        const panel = el.dataset.panel;
-        const panelH = heights[panel] || floor;
-        el.style.maxHeight = `${panelH}px`;
-        el.style.height = 'auto';
-        const labelEl = el.querySelector('.side-oval-label');
-        const labelH = labelEl ? labelEl.getBoundingClientRect().height + 8 : 18;
-        const pad = tightMode ? 18 : 28;
-        budgets[panel] = Math.max(0, panelH - labelH - pad);
-      });
-
-      rail.classList.toggle('side-rail--compact', compactMode);
-      rail.classList.toggle('side-rail--tight', tightMode);
+    let toolsBudget = 0;
+    if (oval) {
+      const ovalH = oval.clientHeight || 0;
+      // Maps btn + bar + overlays btn + bar ≈ fixed chrome above tools
+      const chrome = tightMode ? 110 : 130;
+      toolsBudget = Math.max(80, ovalH - chrome);
     }
 
-    layoutToolbarGroup('mapBtnGroup', 'btnMoreMaps', 'moreMapDropdown', mapKeys, favoriteMaps, favMapBtnIds, favMapIcons, 'base', compactMode, budgets.maps);
-    layoutToolbarGroup('overlayBtnGroup', 'btnMoreOverlays', 'moreOverlayDropdown', overlayKeys, favoriteOverlays, favOverlayBtnIds, favOverlayIcons, 'overlay', compactMode, budgets.overlays);
-    layoutToolbarGroup('toolBtnGroup', 'btnMoreTools', 'moreToolDropdown', toolKeys, [], toolBtnIds, toolIcons, 'tool', compactMode, budgets.tools);
+    layoutToolsGroup(toolsBudget);
+    refreshNamedPanels();
     updateMoreButtonsHighlight();
   }
 
@@ -461,41 +427,50 @@ export function createToolbarController(opts) {
     applyToolbarOverflowLayout();
   }
 
+  function togglePanel(panelId, triggerId) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    const wasOpen = panel.classList.contains('open');
+    closeAllPanels();
+    if (!wasOpen) {
+      panel.classList.add('open');
+      document.getElementById(triggerId)?.classList.add('panel-open', 'active');
+      document.getElementById(triggerId)?.setAttribute('aria-expanded', 'true');
+    }
+    updateSectionButtonStates();
+  }
+
   function init() {
     setupEmojiButtons();
 
-    // Keep map interactions from stealing pointer events on the side rail.
     const sideRail = document.getElementById('sideRail');
     sideRail?.addEventListener('mousedown', (e) => e.stopPropagation());
     sideRail?.addEventListener('dblclick', (e) => e.stopPropagation());
     sideRail?.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
 
-    document.getElementById('btnMoreMaps')?.addEventListener('click', (e) => {
+    document.getElementById('btnMaps')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      const dropdown = document.getElementById('moreMapDropdown');
-      const wasOpen = dropdown?.classList.contains('open');
-      closeAllMoreDropdowns();
-      if (!wasOpen) dropdown?.classList.add('open');
-      updateMoreButtonsHighlight();
+      togglePanel('mapPickerPanel', 'btnMaps');
     });
-    document.getElementById('btnMoreOverlays')?.addEventListener('click', (e) => {
+    document.getElementById('btnOverlays')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      const dropdown = document.getElementById('moreOverlayDropdown');
-      const wasOpen = dropdown?.classList.contains('open');
-      closeAllMoreDropdowns();
-      if (!wasOpen) dropdown?.classList.add('open');
-      updateMoreButtonsHighlight();
+      togglePanel('overlayPickerPanel', 'btnOverlays');
     });
     document.getElementById('btnMoreTools')?.addEventListener('click', (e) => {
       e.stopPropagation();
       const dropdown = document.getElementById('moreToolDropdown');
       const wasOpen = dropdown?.classList.contains('open');
-      closeAllMoreDropdowns();
+      closeAllPanels();
       if (!wasOpen) dropdown?.classList.add('open');
       updateMoreButtonsHighlight();
     });
+
+    document.getElementById('mapPickerPanel')?.addEventListener('click', (e) => e.stopPropagation());
+    document.getElementById('overlayPickerPanel')?.addEventListener('click', (e) => e.stopPropagation());
+    document.getElementById('moreToolDropdown')?.addEventListener('click', (e) => e.stopPropagation());
+
     document.addEventListener('click', () => {
-      closeAllMoreDropdowns();
+      closeAllPanels();
       updateMoreButtonsHighlight();
     });
 
@@ -513,12 +488,8 @@ export function createToolbarController(opts) {
     };
     window.addEventListener('resize', scheduleToolbarOverflowLayout);
     const sideRailEl = document.getElementById('sideRail');
-    const mapBtnGroupEl = document.getElementById('mapBtnGroup');
-    const overlayBtnGroupEl = document.getElementById('overlayBtnGroup');
     const toolBtnGroupEl = document.getElementById('toolBtnGroup');
     if (sideRailEl) new ResizeObserver(scheduleToolbarOverflowLayout).observe(sideRailEl);
-    if (mapBtnGroupEl) new ResizeObserver(scheduleToolbarOverflowLayout).observe(mapBtnGroupEl);
-    if (overlayBtnGroupEl) new ResizeObserver(scheduleToolbarOverflowLayout).observe(overlayBtnGroupEl);
     if (toolBtnGroupEl) new ResizeObserver(scheduleToolbarOverflowLayout).observe(toolBtnGroupEl);
 
     const clearFavoritesBtn = document.getElementById('clearFavoritesBtn');

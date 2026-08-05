@@ -99,26 +99,26 @@ function buildTourStepDefinitions(context = {}) {
       }
     },
     {
-      selector: '.side-oval[data-panel="maps"]',
+      selector: '#btnMaps',
       popover: {
         title: 'Base Map Selector',
-        description: 'Pick the base map style here (satellite, topo, navigation, charts, and more).'
+        description: 'Open the map list and pick a basemap (satellite, topo, navigation, charts, and more).'
       }
     },
     {
-      selector: '.side-oval[data-panel="overlays"]',
+      selector: '#btnOverlays',
       isEnabled: () => allowedOverlays.length > 0,
       popover: {
         title: 'Overlay Selector',
-        description: 'Toggle overlays like seamarks, airspace, labels, density, and history.'
+        description: 'Open the overlay list and toggle seamarks, airspace, labels, density, and history.'
       }
     },
     {
-      selector: '#btnShom',
+      selector: '#btnMaps',
       isEnabled: () => hasPermission(allowedBases, 'shom'),
       popover: {
         title: 'Nautical Charts (SHOM)',
-        description: 'Switch to SHOM nautical charts when this button is available for your account.'
+        description: 'Open Maps and choose Charts (SHOM) when available for your account.'
       }
     },
     {

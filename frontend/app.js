@@ -3116,6 +3116,7 @@ exportBtn.addEventListener('click', async () => {
   });
   // Progress feedback
   let completed = 0;
+  const partResults = []; // { bbox, finalName } for history overlays
 
   for (let i=0;i<chunks.length;i++){
     const partBbox = chunks[i];
@@ -3191,7 +3192,8 @@ exportBtn.addEventListener('click', async () => {
       const match = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
       const serverName = match ? decodeURIComponent((match[1] || match[2] || '').trim()) : '';
     const ts   = new Date().toISOString().replace(/[:.]/g,'');
-      const inverseZoom = 21 - zoom;
+      // Universal zoom naming (matches server _download_name / zoom badge)
+      const inverseZoom = 21 - usedZoom;
       const prefix = `z${inverseZoom}_`;
       const defaultName = total>1 ? `${prefix}export_${system}_${ts}_${partSuffix}.tif` : `${prefix}export_${system}_${ts}.tif`;
       const finalName   = serverName || `${prefix}${partName}.tif` || defaultName;
@@ -3205,6 +3207,7 @@ exportBtn.addEventListener('click', async () => {
 
     a.href = url; a.download = finalName; a.click(); URL.revokeObjectURL(url);
       completed++;
+      partResults.push({ bbox: partBbox, finalName });
       console.log(`[Export] Part ${i+1}/${total} - Completed (${completed}/${total})`);
     } catch (err) {
       console.error(`[Export] Part ${i+1}/${total} - Error:`, {
@@ -3217,18 +3220,37 @@ exportBtn.addEventListener('click', async () => {
     }
   }
 
-  // Draw the overall requested area once
-    const rectBounds = [[bbox[1], bbox[0]], [bbox[3], bbox[2]]];
-    const rect = L.rectangle(rectBounds, {
-      color: '#ff4d6d', fillColor: '#ff4d6d', fillOpacity: 0.2,
-      weight: 2, pane: 'exportPane', interactive: false
-    }).addTo(exportHistory);
-  const ts   = new Date().toISOString().replace(/[:.]/g,'');
+  // History overlays: overall area + per-part hover names
   const inverseZoom = 21 - usedZoom;
   const prefix = `z${inverseZoom}_`;
+  const ts = new Date().toISOString().replace(/[:.]/g,'');
   const baseName = (customName ? `${prefix}${customName}.tif` : `${prefix}export_${system}_${ts}.tif`);
-  const tooltip = total>1 ? `${baseName} (${total} parts)` : baseName;
-  rect.bindTooltip(tooltip, { permanent: true, direction: 'center', className: 'history-tooltip' });
+
+  if (total > 1) {
+    for (const part of partResults) {
+      const [pw, ps, pe, pn] = part.bbox;
+      const partRect = L.rectangle([[ps, pw], [pn, pe]], {
+        color: '#ff4d6d', fillColor: '#ff4d6d', fillOpacity: 0.12,
+        weight: 1.5, pane: 'exportPane', interactive: true
+      }).addTo(exportHistory);
+      partRect.bindTooltip(part.finalName, {
+        sticky: true, direction: 'top', opacity: 0.95, className: 'history-tooltip'
+      });
+    }
+  }
+
+  const rectBounds = [[bbox[1], bbox[0]], [bbox[3], bbox[2]]];
+  const rect = L.rectangle(rectBounds, {
+    color: '#ff4d6d', fillColor: '#ff4d6d', fillOpacity: total > 1 ? 0.05 : 0.2,
+    weight: 2, pane: 'exportPane', interactive: total === 1
+  }).addTo(exportHistory);
+  const tooltip = total > 1 ? `${baseName} (${total} parts)` : (partResults[0]?.finalName || baseName);
+  rect.bindTooltip(tooltip, {
+    permanent: total === 1,
+    sticky: total > 1,
+    direction: 'center',
+    className: 'history-tooltip'
+  });
 
   console.log('[Export] ========== Export Completed ==========', {
     totalParts: total,

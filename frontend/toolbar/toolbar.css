@@ -154,7 +154,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
+  gap: 0;
   pointer-events: none;
   max-height: calc(100% - var(--topbar-height, 64px) - 72px);
   overflow: visible;
@@ -179,8 +179,30 @@
   overflow: visible;
 }
 
+.side-oval--unified {
+  height: 100%;
+  max-height: 100%;
+  justify-content: flex-start;
+}
+
+.side-rail-bar {
+  width: 22px;
+  height: 1px;
+  flex: 0 0 auto;
+  background: rgba(77, 226, 255, 0.28);
+  margin: 2px 0;
+}
+
+.side-section {
+  flex: 0 0 auto;
+}
+
+.rail-hidden-host {
+  display: none !important;
+}
+
 .side-rail--compact {
-  gap: 8px;
+  gap: 0;
 }
 .side-rail--compact .side-oval {
   padding: 10px 8px;
@@ -195,16 +217,12 @@
 }
 
 .side-rail--tight {
-  gap: 6px;
+  gap: 0;
 }
 .side-rail--tight .side-oval {
   padding: 8px 6px;
   gap: 5px;
   width: 52px;
-}
-.side-rail--tight .side-oval-label {
-  font-size: 7px;
-  letter-spacing: 0.08em;
 }
 .side-rail--tight .emoji-btn,
 .side-rail--tight .map-tool-btn {
@@ -217,18 +235,6 @@
   height: 14px;
 }
 
-.side-oval-label {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-  opacity: 0.9;
-  user-select: none;
-  line-height: 1;
-  flex: 0 0 auto;
-}
-
 .side-btn-group {
   display: flex;
   flex-direction: column;
@@ -237,6 +243,7 @@
   min-height: 0;
   overflow: visible;
   width: 100%;
+  flex: 1 1 auto;
 }
 
 .side-rail .emoji-btn {
@@ -276,7 +283,6 @@
   line-height: 1;
   opacity: 0;
   pointer-events: none;
-  /* Hard dark outline so labels stay readable on light map tiles */
   text-shadow:
     -1px -1px 0 #0a1020,
      1px -1px 0 #0a1020,
@@ -298,6 +304,10 @@
 }
 .side-rail .emoji-btn.active[data-tip]::before {
   color: #7ef0ff;
+}
+/* Hide tip while a named panel is open (panel already shows names) */
+.side-rail .emoji-btn.panel-open[data-tip]::before {
+  opacity: 0 !important;
 }
 
 .side-rail .more-btn-wrapper {
@@ -329,6 +339,95 @@
 
 .side-rail .more-dropdown.open {
   display: flex;
+}
+
+/* Named map / overlay picker panel */
+.rail-panel {
+  display: none;
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 10px);
+  left: auto;
+  transform: translateY(-50%);
+  min-width: 200px;
+  max-width: 260px;
+  max-height: min(70vh, 480px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(77, 226, 255, 0.22);
+  background: linear-gradient(180deg, rgba(14, 23, 55, 0.96), rgba(10, 20, 47, 0.94));
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(33, 48, 105, 0.55) inset;
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  z-index: 1000;
+  flex-direction: column;
+  gap: 2px;
+}
+.rail-panel.open {
+  display: flex;
+}
+
+.rail-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-family: Inter, system-ui, sans-serif;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.rail-panel-item:hover {
+  background: rgba(77, 226, 255, 0.08);
+  border-color: rgba(77, 226, 255, 0.18);
+  color: var(--accent);
+}
+.rail-panel-item.active {
+  background: rgba(77, 226, 255, 0.12);
+  border-color: rgba(77, 226, 255, 0.35);
+  color: var(--accent);
+}
+.rail-panel-icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(42, 58, 122, 0.9);
+  background: linear-gradient(180deg, #0f1b3b, #0b142f);
+}
+.rail-panel-item.active .rail-panel-icon {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(77, 226, 255, 0.25) inset;
+}
+.rail-panel-icon svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+.rail-panel-name {
+  flex: 1 1 auto;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rail-panel-empty {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
 }
 
 .side-rail .map-tool-btn {
@@ -380,7 +479,6 @@
 @media (max-width: 900px) {
   .side-rail {
     right: 8px;
-    gap: 8px;
     top: calc(var(--topbar-height, 64px) + 10px);
   }
   .side-oval {
@@ -398,7 +496,9 @@
     width: 15px;
     height: 15px;
   }
-  .side-oval-label { font-size: 8px; letter-spacing: 0.1em; }
+  .rail-panel {
+    min-width: 180px;
+  }
   .attribution { right: 72px !important; }
 }
 

@@ -16,23 +16,30 @@ function ensureZoomToolLevelBadge(map) {
   return badge;
 }
 
+export function toUniversalZoom(mapZoom, maxZoom = 20) {
+  // Universal / export naming: z1 = most zoomed-in (Leaflet ~20), higher = zoomed out.
+  // Always keyed off Leaflet max 20 so the number matches filenames (z{21-leaflet}_…).
+  const leaflet = Number(mapZoom);
+  if (!Number.isFinite(leaflet)) return null;
+  return (Number.isFinite(maxZoom) ? maxZoom : 20) + 1 - leaflet;
+}
+
 export function updateZoomDisplay(map, elementId = 'zoomLevel') {
   const mapZoom = map.getZoom();
-  const maxZoom = Number.isFinite(map.getMaxZoom()) ? map.getMaxZoom() : 20;
-  // Export mode is the naming/source-of-truth shown to users.
-  const exportZoom = (maxZoom + 1) - mapZoom;
+  // Keep universal zoom stable across basemap maxZoom changes (OSM 19 vs imagery 20, etc.).
+  const universalZoom = toUniversalZoom(mapZoom, 20);
 
   // Keep topbar display for compatibility with existing layout.
   const zoomLevelEl = document.getElementById(elementId);
   if (zoomLevelEl) {
-    zoomLevelEl.textContent = exportZoom.toFixed(1);
+    zoomLevelEl.textContent = universalZoom.toFixed(1);
   }
 
-  // Show current map zoom directly on the zoom control itself.
+  // Show universal zoom on the zoom control itself.
   const badge = ensureZoomToolLevelBadge(map);
   if (badge) {
-    badge.textContent = `${exportZoom.toFixed(1)}`;
-    badge.title = `Export mode zoom z${exportZoom.toFixed(1)} (map zoom ${mapZoom.toFixed(1)}, max ${maxZoom.toFixed(1)})`;
+    badge.textContent = `${universalZoom.toFixed(1)}`;
+    badge.title = `Zoom z${universalZoom.toFixed(1)} (Leaflet ${mapZoom.toFixed(1)})`;
   }
 }
 
