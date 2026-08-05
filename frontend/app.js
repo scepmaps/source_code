@@ -878,6 +878,10 @@ async function applyUserPreferences() {
 
     // Handle SHOM: OSM base + SHOM overlay
     if (selectedBase === 'shom' && shomOverlay) {
+      removeOceanLayer();
+      removeTopoLayer();
+      removeNightLayer();
+      removeNavigationLayer();
       const baseUrl = LAYERS.osm.url;
       const baseAttrib = LAYERS.osm.attribution;
       currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
@@ -887,6 +891,10 @@ async function applyUserPreferences() {
     }
     // Handle gbsouth: OSM base + gbsouth overlay
     else if (selectedBase === 'gbsouth' && gbsouthOverlay) {
+      removeOceanLayer();
+      removeTopoLayer();
+      removeNightLayer();
+      removeNavigationLayer();
       const baseUrl = LAYERS.osm.url;
       const baseAttrib = LAYERS.osm.attribution;
       currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
@@ -896,6 +904,10 @@ async function applyUserPreferences() {
     }
     // Handle UKHO: OSM base + UKHO chart overlay
     else if (selectedBase === 'ukho' && ukhoOverlay) {
+      removeOceanLayer();
+      removeTopoLayer();
+      removeNightLayer();
+      removeNavigationLayer();
       const baseUrl = LAYERS.osm.url;
       const baseAttrib = LAYERS.osm.attribution;
       currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
@@ -1103,6 +1115,11 @@ baseSelect.addEventListener('change', async () => {
 
   // Handle SHOM: OSM base + SHOM overlay
   if (selectedBase === 'shom' && shomOverlay) {
+    // Chart overlays sit on OSM — clear any leftover MapLibre vector basemap first.
+    removeOceanLayer();
+    removeTopoLayer();
+    removeNightLayer();
+    removeNavigationLayer();
     // SHOM uses OSM underlay
     const baseUrl = LAYERS.osm.url;
     const baseAttrib = LAYERS.osm.attribution;
@@ -1113,6 +1130,10 @@ baseSelect.addEventListener('change', async () => {
   }
   // Handle gbsouth: OSM base + gbsouth overlay
   else if (selectedBase === 'gbsouth' && gbsouthOverlay) {
+    removeOceanLayer();
+    removeTopoLayer();
+    removeNightLayer();
+    removeNavigationLayer();
     // GB South uses OSM underlay
     const baseUrl = LAYERS.osm.url;
     const baseAttrib = LAYERS.osm.attribution;
@@ -1123,6 +1144,10 @@ baseSelect.addEventListener('change', async () => {
   }
   // Handle UKHO: OSM base + UKHO chart overlay
   else if (selectedBase === 'ukho' && ukhoOverlay) {
+    removeOceanLayer();
+    removeTopoLayer();
+    removeNightLayer();
+    removeNavigationLayer();
     const baseUrl = LAYERS.osm.url;
     const baseAttrib = LAYERS.osm.attribution;
     currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
