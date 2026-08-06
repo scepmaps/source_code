@@ -1,8 +1,8 @@
-/* Mobile-only chrome: bottom options dock, no export UI */
+/* Mobile-only chrome: floating bottom options, no chrome bars */
 
 :root {
-  --mobile-dock-height: 80px;
-  --mobile-topbar-height: 52px;
+  --mobile-dock-height: 72px;
+  --mobile-topbar-height: 48px;
 }
 
 body.mobile-app {
@@ -12,11 +12,20 @@ body.mobile-app {
   touch-action: manipulation;
 }
 
+/* Kill decorative grid / chrome bars on mobile */
+body.mobile-app::before {
+  display: none !important;
+}
+
 body.mobile-app .topbar {
   padding: 8px 12px;
   padding-top: max(8px, env(safe-area-inset-top));
   gap: 8px;
   min-height: var(--mobile-topbar-height);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
 }
 
 body.mobile-app .topbar .brand {
@@ -28,18 +37,18 @@ body.mobile-app .topbar-actions {
   gap: 6px;
 }
 
-/* Map sits above the dock so Leaflet sizes (and tiles) match the visible area */
+/* Map fills the screen; dock floats over it */
 body.mobile-app #map {
   top: 0;
   left: 0;
   right: 0;
-  bottom: calc(var(--mobile-dock-height) + env(safe-area-inset-bottom, 0px));
-  height: auto;
+  bottom: 0;
+  height: 100%;
   width: 100%;
-  border-bottom: none;
+  border: none;
 }
 
-/* Bottom options bar (repurposed #sideRail) */
+/* Floating bottom options — no bar / oval / dividers */
 body.mobile-app #sideRail.side-rail,
 body.mobile-app .side-rail {
   position: fixed;
@@ -51,15 +60,17 @@ body.mobile-app .side-rail {
   max-height: none !important;
   height: auto;
   margin: 0;
-  padding: 0;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding: 0 12px calc(10px + env(safe-area-inset-bottom, 0px));
   z-index: 1000;
   display: flex;
   flex-direction: row;
-  align-items: stretch;
-  justify-content: stretch;
+  align-items: flex-end;
+  justify-content: center;
   pointer-events: none;
   overflow: visible;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 body.mobile-app .side-oval,
@@ -67,170 +78,153 @@ body.mobile-app .side-oval--unified {
   pointer-events: auto;
   flex-direction: row;
   align-items: center;
-  justify-content: space-evenly;
-  gap: 0;
-  width: 100%;
+  justify-content: center;
+  gap: 18px;
+  width: auto;
   max-width: none;
-  height: var(--mobile-dock-height);
-  min-height: var(--mobile-dock-height);
-  padding: 8px 12px;
-  border-radius: 18px 18px 0 0;
-  border-left: none;
-  border-right: none;
-  border-bottom: none;
-  border-top: 1px solid rgba(77, 226, 255, 0.22);
-  background: linear-gradient(180deg, rgba(14, 23, 55, 0.96), rgba(10, 20, 47, 0.98));
-  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(33, 48, 105, 0.45) inset;
-  backdrop-filter: blur(16px) saturate(1.1);
-  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: none !important;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  overflow: visible;
 }
 
+/* Remove divider bars between dock items */
 body.mobile-app .side-rail-bar {
-  width: 1px;
-  height: 28px;
-  margin: 0 4px;
-  background: rgba(77, 226, 255, 0.28);
+  display: none !important;
 }
 
 body.mobile-app .side-section,
 body.mobile-app .side-btn-group,
 body.mobile-app .side-rail .more-btn-wrapper {
-  flex: 1 1 0;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   min-width: 0;
-  gap: 2px;
+  gap: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 body.mobile-app .side-btn-group {
-  flex-direction: column;
+  flex-direction: row;
+  gap: 0;
 }
 
-/* Dock buttons: icon + label stacked */
+/* Floating circular dock buttons */
 body.mobile-app .side-rail .emoji-btn,
 body.mobile-app .side-rail .map-tool-btn {
-  width: auto !important;
-  min-width: 56px;
-  height: auto !important;
+  width: 52px !important;
+  height: 52px !important;
+  min-width: 52px;
   min-height: 52px;
-  padding: 6px 10px 5px;
-  border-radius: 14px !important;
+  padding: 0;
+  border-radius: 50% !important;
   flex: 0 0 auto;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row;
+  gap: 0;
+  background: rgba(10, 16, 32, 0.55) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 body.mobile-app .side-rail .emoji-btn svg,
 body.mobile-app .side-rail .map-tool-btn svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
 }
 
-/* Disable desktop pulse ring (also uses ::after) so we can show labels */
-body.mobile-app .side-rail .emoji-btn.active::after {
-  content: none;
-  animation: none;
-  inset: auto;
-  border: 0;
-  opacity: 0;
-}
-body.mobile-app .side-rail .emoji-btn.active {
-  box-shadow: 0 0 0 2px var(--accent) inset, 0 0 16px rgba(77, 226, 255, 0.28);
+/* No pulse ring / no text labels under icons */
+body.mobile-app .side-rail .emoji-btn.active::after,
+body.mobile-app .side-rail .emoji-btn[data-tip]::before,
+body.mobile-app .side-rail .emoji-btn[data-tip]::after {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+  opacity: 0 !important;
+  border: 0 !important;
 }
 
-body.mobile-app .side-rail .emoji-btn[data-tip]::before {
+body.mobile-app .side-rail .emoji-btn.active,
+body.mobile-app .side-rail .emoji-btn.panel-open,
+body.mobile-app .side-rail .emoji-btn.has-active-items,
+body.mobile-app .side-rail .map-tool-btn--active,
+body.mobile-app .side-rail .map-tool-btn--primary.map-tool-btn--active {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  box-shadow: 0 0 0 2px rgba(77, 226, 255, 0.35), 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Hide non-ruler tools + more-tools control on mobile dock */
+body.mobile-app #btnMoreTools,
+body.mobile-app #moreToolDropdown,
+body.mobile-app #btnBox,
+body.mobile-app #btnHgt {
   display: none !important;
 }
-body.mobile-app .side-rail .emoji-btn[data-tip]::after {
-  content: attr(data-tip) !important;
-  position: static !important;
-  display: block !important;
-  inset: auto !important;
-  margin: 0;
-  padding: 0;
-  border: 0 !important;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  line-height: 1;
-  pointer-events: none;
-  text-shadow: none;
-  opacity: 1 !important;
-  transform: none !important;
-  animation: none !important;
-}
-body.mobile-app .side-rail .emoji-btn.active[data-tip]::after,
-body.mobile-app .side-rail .emoji-btn.panel-open[data-tip]::after,
-body.mobile-app .side-rail .emoji-btn.has-active-items[data-tip]::after,
-body.mobile-app .side-rail .emoji-btn.more-selected-collapsed[data-tip]::after {
-  color: var(--accent);
-}
 
-/* Panels open upward from the dock */
+/* Map / overlay pickers: fixed to viewport so they aren't clipped and stay above the map */
 body.mobile-app .rail-panel {
-  top: auto !important;
-  bottom: calc(100% + 10px) !important;
+  position: fixed !important;
   left: 50% !important;
   right: auto !important;
+  top: auto !important;
+  bottom: calc(var(--mobile-dock-height) + env(safe-area-inset-bottom, 0px) + 8px) !important;
   transform: translateX(-50%) !important;
-  width: min(420px, calc(100vw - 20px));
-  max-height: min(58vh, calc(100vh - var(--mobile-dock-height) - var(--mobile-topbar-height) - 48px));
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(52vh, calc(100vh - var(--mobile-dock-height) - 80px));
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  z-index: 1100;
+  z-index: 1200;
+  pointer-events: auto;
 }
 
-body.mobile-app .side-rail .more-dropdown {
-  top: auto;
-  bottom: calc(100% + 10px);
-  left: 50%;
-  right: auto;
-  transform: translateX(-50%);
-  margin-top: 0;
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-  max-width: min(360px, calc(100vw - 24px));
-  max-height: min(50vh, 320px);
-  border-radius: 16px;
+body.mobile-app .rail-panel.open {
+  display: grid !important;
 }
 
-/* Attribution + legend clear of the dock */
+/* Attribution + legend clear of floating dock */
 body.mobile-app .attribution {
   right: 10px !important;
-  bottom: calc(var(--mobile-dock-height) + env(safe-area-inset-bottom, 0px) + 10px) !important;
+  bottom: calc(var(--mobile-dock-height) + env(safe-area-inset-bottom, 0px) + 8px) !important;
   left: auto;
   max-width: calc(100vw - 24px);
   font-size: 11px;
   z-index: 80;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 }
 
 body.mobile-app .density-legend {
-  bottom: calc(var(--mobile-dock-height) + env(safe-area-inset-bottom, 0px) + 14px);
+  bottom: calc(var(--mobile-dock-height) + env(safe-area-inset-bottom, 0px) + 12px);
   min-width: min(300px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
   padding: 8px 12px 6px;
 }
 
-/* Leaflet chrome offsets */
 body.mobile-app .leaflet-top.leaflet-left {
   top: calc(var(--mobile-topbar-height) + 4px);
 }
 body.mobile-app .leaflet-bottom.leaflet-right,
 body.mobile-app .leaflet-bottom.leaflet-left {
-  bottom: 8px;
+  bottom: calc(var(--mobile-dock-height) + 4px);
 }
 body.mobile-app .leaflet-control-attribution {
-  display: none; /* custom #attrib used */
+  display: none;
 }
 
-/* Settings: no export on mobile */
 body.mobile-app .mobile-hide-export,
 body.mobile-app #exportFilename,
 body.mobile-app #exportBtn {

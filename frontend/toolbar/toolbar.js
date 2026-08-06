@@ -359,17 +359,22 @@ export function createToolbarController(opts) {
     const keys = Object.keys(toolBtnIds).filter((k) => document.getElementById(toolBtnIds[k]));
 
     if (isMobileApp()) {
-      // Bottom dock: one Tools button → upward menu (keeps the bar to Maps / Overlays / Tools)
+      // Mobile dock: only the Ruler button sits next to Maps / Overlay.
       keys.forEach((k) => {
         const btn = document.getElementById(toolBtnIds[k]);
         if (!btn) return;
-        btn.style.display = 'none';
-        if (btn.parentElement !== group) group.insertBefore(btn, moreWrapper);
+        if (k === 'ruler') {
+          btn.style.display = '';
+          group.appendChild(btn);
+        } else {
+          btn.style.display = 'none';
+          if (btn.parentElement !== group) group.insertBefore(btn, moreWrapper);
+        }
       });
-      moreWrapper.style.display = '';
-      moreBtn.dataset.tip = 'Tools';
-      moreBtn.setAttribute('aria-label', 'Tools');
-      populateMoreDropdown('moreToolDropdown', keys, toolIcons, 'tool');
+      moreWrapper.style.display = 'none';
+      moreWrapper.hidden = true;
+      document.getElementById('moreToolDropdown')?.classList.remove('open');
+      populateMoreDropdown('moreToolDropdown', [], toolIcons, 'tool');
       return;
     }
 
@@ -411,10 +416,12 @@ export function createToolbarController(opts) {
     applyToolbarOverflowLayout();
   }
 
+  let ignoreOutsideClickUntil = 0;
+
   function positionOpenPanel(panel) {
     if (!panel || !panel.classList.contains('open')) return;
 
-    // Mobile bottom dock: panels open upward; CSS owns placement.
+    // Mobile bottom dock: panels are viewport-fixed via CSS.
     if (isMobileApp()) {
       panel.style.top = '';
       panel.style.bottom = '';
@@ -448,6 +455,8 @@ export function createToolbarController(opts) {
       panel.classList.add('open');
       document.getElementById(triggerId)?.classList.add('panel-open', 'active');
       document.getElementById(triggerId)?.setAttribute('aria-expanded', 'true');
+      // Mobile: ignore the leftover click/tap that would immediately close the panel.
+      if (isMobileApp()) ignoreOutsideClickUntil = Date.now() + 450;
       requestAnimationFrame(() => positionOpenPanel(panel));
     }
     updateSectionButtonStates();
@@ -498,6 +507,7 @@ export function createToolbarController(opts) {
     // Click outside the rail closes any open panel (rail clicks are ignored so
     // icon toggle / in-panel picks are not immediately undone).
     document.addEventListener('click', (e) => {
+      if (Date.now() < ignoreOutsideClickUntil) return;
       if (isRailUiTarget(e.target)) return;
       closeAllPanels();
       updateMoreButtonsHighlight();
