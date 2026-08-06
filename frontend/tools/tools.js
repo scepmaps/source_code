@@ -19,7 +19,7 @@ export const TOOL_ICONS = {
 };
 
 function setBoxButtonState(btn, state) {
-  btn.classList.remove('map-tool-btn--danger', 'map-tool-btn--armed', 'map-tool-btn--primary');
+  btn.classList.remove('map-tool-btn--danger', 'map-tool-btn--armed', 'map-tool-btn--primary', 'map-tool-btn--active');
   if (state === 'delete') {
     btn.classList.add('map-tool-btn--danger');
     btn.innerHTML = iconHtml('trash');
@@ -32,7 +32,7 @@ function setBoxButtonState(btn, state) {
     setButtonTip(btn, 'Place Box');
     return;
   }
-  btn.classList.add('map-tool-btn--primary');
+  // Idle: no accent classes — previously --primary kept the icon permanently lit.
   btn.innerHTML = iconHtml('box');
   setButtonTip(btn, 'Selection Box');
 }

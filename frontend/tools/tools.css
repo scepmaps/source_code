@@ -6,13 +6,15 @@
 }
 
 .map-tool-btn--active {
-  border-color: var(--accent) !important;
+  border-color: rgba(77, 226, 255, 0.55) !important;
+  background: rgba(77, 226, 255, 0.14) !important;
   color: var(--accent) !important;
-  box-shadow: 0 0 0 2px var(--accent) inset, 0 0 16px rgba(77, 226, 255, 0.28) !important;
+  box-shadow: none !important;
 }
 
 .map-tool-btn--primary {
-  border-color: var(--accent) !important;
+  border-color: rgba(77, 226, 255, 0.55) !important;
+  background: rgba(77, 226, 255, 0.14) !important;
   color: var(--accent) !important;
 }
 

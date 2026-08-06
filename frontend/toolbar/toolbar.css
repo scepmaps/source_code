@@ -172,9 +172,9 @@
   min-height: 0;
   flex: 0 0 auto;
   border-radius: 999px;
-  border: 1px solid rgba(77, 226, 255, 0.22);
-  background: linear-gradient(180deg, rgba(14, 23, 55, 0.88), rgba(10, 20, 47, 0.82));
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(33, 48, 105, 0.55) inset;
+  border: 1px solid rgba(77, 226, 255, 0.16);
+  background: linear-gradient(180deg, rgba(14, 23, 55, 0.52), rgba(10, 20, 47, 0.42));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(33, 48, 105, 0.28) inset;
   backdrop-filter: blur(14px) saturate(1.15);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
   overflow: visible;
@@ -252,49 +252,64 @@
   height: 38px;
   border-radius: 50%;
   flex: 0 0 auto;
+  /* Blend into the rail; circle appears on hover / active */
+  border: 2px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.92;
+  transform: none;
 }
+.side-rail .emoji-btn:hover,
+.side-rail .emoji-btn:focus-visible {
+  transform: none;
+  border-color: rgba(77, 226, 255, 0.4);
+  background: rgba(77, 226, 255, 0.12);
+  box-shadow: none;
+  color: var(--accent);
+  opacity: 1;
+}
+.side-rail .emoji-btn.active {
+  border-color: rgba(77, 226, 255, 0.55);
+  background: rgba(77, 226, 255, 0.14);
+  box-shadow: none;
+  color: var(--accent);
+  opacity: 1;
+}
+/* Soft active ring — no hard outer pulse circle */
 .side-rail .emoji-btn.active::after {
-  border-radius: 50%;
+  display: none;
 }
 .side-rail .emoji-btn svg {
   width: 17px;
   height: 17px;
 }
 
-/* Hover name label to the left — text only, no white chip */
+/* Hover name label — own bar chip, smaller, more separated from icon */
 .side-rail .emoji-btn[data-tip]::before {
   content: attr(data-tip);
   position: absolute;
-  right: calc(100% + 12px);
+  right: calc(100% + 16px);
   top: 50%;
-  transform: translateY(-50%) translateX(4px);
-  padding: 0;
+  transform: translateY(-50%) translateX(6px);
+  padding: 4px 9px;
   margin: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  color: #fff;
+  border: 1px solid rgba(77, 226, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(8, 14, 30, 0.78);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #e8eefc;
   font-family: Inter, system-ui, sans-serif;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
-  line-height: 1;
+  line-height: 1.2;
   opacity: 0;
   pointer-events: none;
-  text-shadow:
-    -1px -1px 0 #0a1020,
-     1px -1px 0 #0a1020,
-    -1px  1px 0 #0a1020,
-     1px  1px 0 #0a1020,
-    -2px  0 0 #0a1020,
-     2px  0 0 #0a1020,
-     0 -2px 0 #0a1020,
-     0  2px 0 #0a1020,
-     0  0 6px rgba(0, 0, 0, 0.85),
-     0  2px 4px rgba(0, 0, 0, 0.75);
+  text-shadow: none;
   transition: opacity .15s ease, transform .15s ease;
   z-index: 40;
 }
@@ -305,6 +320,7 @@
 }
 .side-rail .emoji-btn.active[data-tip]::before {
   color: #7ef0ff;
+  border-color: rgba(77, 226, 255, 0.35);
 }
 /* Hide tip while a named panel is open (panel already shows names) */
 .side-rail .emoji-btn.panel-open[data-tip]::before {
@@ -446,11 +462,19 @@
   width: 38px !important;
   height: 38px !important;
   border-radius: 50% !important;
-  border: 2px solid #2a3a7a !important;
-  background: linear-gradient(180deg, #0f1b3b, #0b142f) !important;
-  box-shadow: 0 0 0 1px #213069 inset, 0 4px 12px #0008 !important;
+  border: 2px solid transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
   color: var(--text) !important;
-  opacity: 0.9;
+  opacity: 0.92;
+}
+.side-rail .map-tool-btn:hover,
+.side-rail .map-tool-btn:focus-visible {
+  border-color: rgba(77, 226, 255, 0.4) !important;
+  background: rgba(77, 226, 255, 0.12) !important;
+  box-shadow: none !important;
+  color: var(--accent) !important;
+  opacity: 1;
 }
 .side-rail .map-tool-btn svg {
   width: 17px;
@@ -460,21 +484,25 @@
 .side-rail .map-tool-btn--primary,
 .side-rail .more-dropdown .map-tool-btn--active,
 .side-rail .more-dropdown .map-tool-btn--primary {
-  border-color: var(--accent) !important;
+  border-color: rgba(77, 226, 255, 0.55) !important;
+  background: rgba(77, 226, 255, 0.14) !important;
   color: var(--accent) !important;
-  box-shadow: 0 0 0 2px var(--accent) inset, 0 0 16px rgba(77, 226, 255, 0.28) !important;
+  box-shadow: none !important;
+  opacity: 1;
 }
 .side-rail .map-tool-btn--danger,
 .side-rail .more-dropdown .map-tool-btn--danger {
-  background: #ff4d6d !important;
+  background: rgba(255, 77, 109, 0.92) !important;
   border-color: #ff4d6d !important;
   color: #fff !important;
+  opacity: 1;
 }
 .side-rail .map-tool-btn--armed,
 .side-rail .more-dropdown .map-tool-btn--armed {
-  background: #28a745 !important;
+  background: rgba(40, 167, 69, 0.92) !important;
   border-color: #28a745 !important;
   color: #fff !important;
+  opacity: 1;
 }
 .side-rail .map-tool-btn--hgt,
 .side-rail .tool-hgt-label {

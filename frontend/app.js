@@ -1,8 +1,8 @@
 import { LAYERS } from './config.js?v=20260806g';
-import { createToolbarController } from './toolbar/toolbar.js?v=20260806f';
+import { createToolbarController } from './toolbar/toolbar.js?v=20260806h';
 import { initSettingsController } from './settings/settings.js?v=20260805c';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
-import { initMapToolControls } from './tools/tools.js?v=20260805c';
+import { initMapToolControls } from './tools/tools.js?v=20260806h';
 import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260805c';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
 import { absolutizeMapStyleUrls, makeArcgisTransformRequest } from './map-style.js?v=20260805c';
@@ -2794,11 +2794,68 @@ function countHgtTilesForBbox(bbox) {
   return (maxLon - minLon + 1) * (maxLat - minLat + 1);
 }
 
+function cancelActiveToolOrSelection() {
+  // Ruler first — Esc should leave measure mode even with no points yet.
+  if (isRulerActive) {
+    deactivateRuler();
+    return true;
+  }
+
+  // HGT: delete placed box, or cancel armed drawing with nothing placed.
+  if (isHgtActive) {
+    if (hgtSelectionRect) {
+      deleteActiveSquare();
+      return true;
+    }
+    isHgtActive = false;
+    isDrawingBox = false;
+    boxStart = null;
+    pendingCorner = null;
+    map.dragging.enable();
+    map.boxZoom.enable();
+    map.doubleClickZoom.enable();
+    map.touchZoom.enable();
+    map.scrollWheelZoom.enable();
+    map.keyboard.enable();
+    enableMapCursor(false);
+    refreshHgtAvailabilityOverlay();
+    refreshHgtControlButton();
+    refreshSelectionLabels();
+    return true;
+  }
+
+  // Map selection box: delete placed box, or cancel armed drawing.
+  if (selectionRect) {
+    deleteActiveSquare();
+    return true;
+  }
+  if (isDrawingBox) {
+    isDrawingBox = false;
+    boxStart = null;
+    pendingCorner = null;
+    map.dragging.enable();
+    map.boxZoom.enable();
+    map.doubleClickZoom.enable();
+    map.touchZoom.enable();
+    map.scrollWheelZoom.enable();
+    map.keyboard.enable();
+    enableMapCursor(false);
+    refreshBoxButton();
+    refreshSelectionLabels();
+    return true;
+  }
+
+  return false;
+}
+
 document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape') return;
+  if (e.key !== 'Escape' && e.key !== 'Esc') return;
   const settingsOpen = document.getElementById('userSettingsModal')?.style.display === 'flex';
   if (settingsOpen) return;
-  deleteActiveSquare();
+  // Panels are closed in toolbar.js (capture). Here cancel the active map tool.
+  if (cancelActiveToolOrSelection()) {
+    e.preventDefault();
+  }
 });
 
 // Draw rectangle by click-drag; allow dragging the rectangle itself
