@@ -357,7 +357,23 @@ export function createToolbarController(opts) {
     if (!group || !moreWrapper) return;
 
     const keys = Object.keys(toolBtnIds).filter((k) => document.getElementById(toolBtnIds[k]));
-    // Content-sized rail: always show every tool on the oval; no overflow menu needed.
+
+    if (isMobileApp()) {
+      // Bottom dock: one Tools button → upward menu (keeps the bar to Maps / Overlays / Tools)
+      keys.forEach((k) => {
+        const btn = document.getElementById(toolBtnIds[k]);
+        if (!btn) return;
+        btn.style.display = 'none';
+        if (btn.parentElement !== group) group.insertBefore(btn, moreWrapper);
+      });
+      moreWrapper.style.display = '';
+      moreBtn.dataset.tip = 'Tools';
+      moreBtn.setAttribute('aria-label', 'Tools');
+      populateMoreDropdown('moreToolDropdown', keys, toolIcons, 'tool');
+      return;
+    }
+
+    // Desktop rail: show every tool on the oval; no overflow menu needed.
     keys.forEach((k) => {
       const btn = document.getElementById(toolBtnIds[k]);
       if (!btn) return;
@@ -369,12 +385,21 @@ export function createToolbarController(opts) {
     populateMoreDropdown('moreToolDropdown', [], toolIcons, 'tool');
   }
 
+  function isMobileApp() {
+    return document.body.classList.contains('mobile-app');
+  }
+
   function applyToolbarOverflowLayout() {
     const rail = document.getElementById('sideRail');
-    const compactMode = window.matchMedia('(max-height: 780px), (max-width: 640px)').matches;
-    const tightMode = window.matchMedia('(max-height: 620px)').matches;
-    rail?.classList.toggle('side-rail--compact', compactMode);
-    rail?.classList.toggle('side-rail--tight', tightMode);
+    if (isMobileApp()) {
+      // Bottom dock uses fixed touch targets; skip desktop compact/tight shrink.
+      rail?.classList.remove('side-rail--compact', 'side-rail--tight');
+    } else {
+      const compactMode = window.matchMedia('(max-height: 780px), (max-width: 640px)').matches;
+      const tightMode = window.matchMedia('(max-height: 620px)').matches;
+      rail?.classList.toggle('side-rail--compact', compactMode);
+      rail?.classList.toggle('side-rail--tight', tightMode);
+    }
 
     layoutToolsGroup();
     refreshNamedPanels();
@@ -388,6 +413,17 @@ export function createToolbarController(opts) {
 
   function positionOpenPanel(panel) {
     if (!panel || !panel.classList.contains('open')) return;
+
+    // Mobile bottom dock: panels open upward; CSS owns placement.
+    if (isMobileApp()) {
+      panel.style.top = '';
+      panel.style.bottom = '';
+      panel.style.left = '';
+      panel.style.right = '';
+      panel.style.transform = '';
+      return;
+    }
+
     // Reset then clamp vertically so the panel stays inside the viewport.
     panel.style.top = '50%';
     panel.style.transform = 'translateY(-50%)';

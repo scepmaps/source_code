@@ -463,7 +463,9 @@
       });
     </script>
 
-    <script>
+    <script type="module">
+      import { appEntryHref } from './mobile/device.js?v=20260806a';
+
       // Check if already logged in - redirect to app
       (async () => {
         const token = localStorage.getItem('token');
@@ -478,7 +480,7 @@
               const me = await res.json();
               if (me.token) localStorage.setItem('token', me.token);
               if (me.user) localStorage.setItem('user', JSON.stringify(me.user));
-              location.href = 'index.html';
+              location.href = appEntryHref();
               return;
             }
           } catch(e) {
@@ -529,7 +531,7 @@
               if (m.user) localStorage.setItem('user', JSON.stringify(m.user));
             }
           } catch (_) { }
-          location.href = 'index.html';
+          location.href = appEntryHref();
         } catch (e) {
           document.getElementById('err').textContent = 'Network error';
         }

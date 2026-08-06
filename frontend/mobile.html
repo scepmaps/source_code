@@ -1,16 +1,18 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title> → Scepmaps </title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#0b1020" />
+    <title>Scepmaps</title>
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
       crossorigin=""
     />
-    <!-- MapLibre GL for vector tile density layer -->
     <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,20 +22,21 @@
     <link rel="stylesheet" href="tools/tools.css">
     <link rel="stylesheet" href="zoom/zoom.css">
     <link rel="stylesheet" href="settings/settings.css">
+    <link rel="stylesheet" href="mobile/mobile.css">
     <script type="module">
+      // Escape hatch: force desktop with ?desktop / stay with ?mobile
       import { isMobileClient } from './mobile/device.js?v=20260806a';
       try {
         const params = new URLSearchParams(location.search);
         const forceDesktop = params.has('desktop') || params.get('view') === 'desktop';
         const forceMobile = params.has('mobile') || params.get('view') === 'mobile';
-        if (!forceDesktop && (forceMobile || isMobileClient())) {
-          location.replace('mobile.html' + location.search + location.hash);
+        if (forceDesktop || (!forceMobile && !isMobileClient())) {
+          location.replace('index.html' + location.search + location.hash);
         }
       } catch (_) { /* ignore */ }
     </script>
   </head>
-  <body>
-    <!-- Loading screen shown until auth check completes -->
+  <body class="mobile-app">
     <div id="authLoading">
       <canvas id="particleCanvas"></canvas>
       <div class="loading-content">
@@ -45,18 +48,15 @@
     <div id="app" style="display: none;">
       <div class="topbar">
         <div class="brand topbar-tool topbar-tool--fixed"><span class="glow-dot"></span>SCEPMAPS</div>
-
         <div class="topbar-actions topbar-tool topbar-tool--fixed">
-          <input id="exportFilename" type="text" placeholder="optional filename"/>
-          <button class="btn" id="exportBtn"><span class="spinner" style="display:none;margin-right:6px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span><span class="label">Export View</span></button>
           <button class="btn btn-icon" id="settingsBtn" title="Settings" aria-label="Settings"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
           <button class="btn" id="adminBtn">Admin</button>
         </div>
       </div>
 
-      <aside class="side-rail" id="sideRail" aria-label="Map controls">
+      <!-- Bottom options dock (same IDs as desktop rail for shared app.js wiring) -->
+      <aside class="side-rail" id="sideRail" aria-label="Map options">
         <section class="side-oval side-oval--unified">
-          <!-- Maps: one icon → named picker -->
           <div class="more-btn-wrapper side-section" data-section="maps">
             <button class="emoji-btn" id="btnMaps" data-tip="Maps" aria-label="Maps" aria-haspopup="true" aria-expanded="false">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" x2="9" y1="3" y2="18"/><line x1="15" x2="15" y1="6" y2="21"/></svg>
@@ -66,7 +66,6 @@
 
           <div class="side-rail-bar" aria-hidden="true"></div>
 
-          <!-- Overlays: one icon → named picker -->
           <div class="more-btn-wrapper side-section" data-section="overlays">
             <button class="emoji-btn" id="btnOverlays" data-tip="Overlays" aria-label="Overlays" aria-haspopup="true" aria-expanded="false">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></svg>
@@ -76,7 +75,6 @@
 
           <div class="side-rail-bar" aria-hidden="true"></div>
 
-          <!-- Tools stay as individual icons -->
           <div class="side-btn-group" id="toolBtnGroup">
             <div class="more-btn-wrapper">
               <button class="emoji-btn more-btn" id="btnMoreTools" data-tip="More tools" aria-label="More tools"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
@@ -85,7 +83,6 @@
           </div>
         </section>
 
-        <!-- Hidden hosts: keep individual map/overlay buttons for existing JS wiring -->
         <div id="mapBtnGroup" class="rail-hidden-host" hidden aria-hidden="true">
           <button class="emoji-btn" id="btnOsm" data-base="osm" aria-label="OpenStreetMap"></button>
           <button class="emoji-btn" id="btnEsri" data-base="esri" aria-label="Satellite"></button>
@@ -106,7 +103,7 @@
         </div>
       </aside>
 
-      <!-- Hidden elements to maintain compatibility with existing code -->
+      <!-- Compatibility hosts for shared app.js (export UI intentionally omitted) -->
       <select id="baseLayer" style="display: none;">
         <option value="osm">OpenStreetMap</option>
         <option value="esri">Satellite</option>
@@ -136,7 +133,6 @@
 
     <div class="attribution" id="attrib"></div>
 
-    <!-- Population Density Legend -->
     <div class="density-legend" id="densityLegend">
       <div class="info-row">
         <div class="default-title" id="densityDefaultTitle">Population Density (p/km²)</div>
@@ -164,11 +160,10 @@
       </div>
     </div>
 
-    <!-- User Stats Modal -->
     <div id="userStatsModal" class="stats-modal" style="z-index: 1100;">
       <div class="stats-modal-content">
         <div class="stats-modal-header">
-          <h3>📊 My Export Statistics</h3>
+          <h3>My Export Statistics</h3>
           <button class="btn" id="closeStatsBtn">&times;</button>
         </div>
         <div class="stats-modal-body" id="statsModalContent">
@@ -177,27 +172,20 @@
       </div>
     </div>
 
-    <!-- User Settings Modal -->
     <div id="userSettingsModal" class="stats-modal">
       <div class="stats-modal-content">
         <div class="stats-modal-header">
           <h3>User Preferences</h3>
           <div class="settings-header-actions">
-            <button class="btn settings-save-btn" id="savePreferencesBtn" style="display:none;">💾 Save Changes</button>
+            <button class="btn settings-save-btn" id="savePreferencesBtn" style="display:none;">Save Changes</button>
             <button class="btn" id="closeSettingsBtn">&times;</button>
           </div>
         </div>
         <div class="stats-modal-body">
-          <div style="margin-bottom: 20px; display: flex; gap: 8px;">
-            <button class="btn" id="statsBtn" style="flex: 1;">
-              📊 My Stats
-            </button>
-            <button class="btn" id="helpTourBtn" style="flex: 1;">
-              ❓ Help / Tutorial
-            </button>
-            <button class="btn" id="logoutBtn" style="flex: 1;">
-              🚪 Logout
-            </button>
+          <div style="margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn" id="statsBtn" style="flex: 1;">My Stats</button>
+            <button class="btn" id="helpTourBtn" style="flex: 1;">Help</button>
+            <button class="btn" id="logoutBtn" style="flex: 1;">Logout</button>
           </div>
 
           <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
@@ -206,7 +194,7 @@
               Set your preferred base map and overlays
             </p>
 
-            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px;">
+            <div style="display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px;">
               <div>
                 <label style="display: block; margin-bottom: 4px;">Base Map</label>
                 <select id="settingsBase" style="width: 100%;">
@@ -230,13 +218,12 @@
             <button class="btn" id="useCurrentLayersBtn">
               Use Current as Default Layer Settings
             </button>
-
           </div>
 
           <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
             <h4>Favorite Buttons</h4>
             <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
-              Choose up to 4 map and 4 overlay buttons to prioritize in the side panels
+              Choose up to 4 map and 4 overlay buttons to prioritize
             </p>
 
             <div style="margin-bottom: 16px;">
@@ -289,7 +276,7 @@
               </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div style="display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px;">
               <div>
                 <label style="display: block; margin-bottom: 4px;">Border Color</label>
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -313,37 +300,11 @@
             </div>
           </div>
 
-          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
-            <h4>Export settings</h4>
-            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
-              Set your preferred export system and quality
-            </p>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
-              <div>
-                <label style="display: block; margin-bottom: 4px;">System</label>
-                <select id="settingsSystem" style="width: 100%;">
-                  <option value="UAS">UAS</option>
-                </select>
-              </div>
-              <div>
-                <label style="display: block; margin-bottom: 4px;">Quality</label>
-                <select id="settingsQuality" style="width: 100%;">
-                  <option value="SD">SD</option>
-                  <option value="HD">HD</option>
-                </select>
-              </div>
-            </div>
-
-            <div style="margin-top: 12px;">
-              <label class="settings-switch-row">
-                <span class="settings-overlay-label">Show attribution in exports</span>
-                <span class="settings-switch">
-                  <input type="checkbox" id="exportAttribution" checked />
-                  <span class="settings-switch-slider" aria-hidden="true"></span>
-                </span>
-              </label>
-            </div>
+          <!-- Export settings omitted on mobile -->
+          <div class="mobile-hide-export" hidden aria-hidden="true">
+            <select id="settingsSystem"><option value="UAS">UAS</option></select>
+            <select id="settingsQuality"><option value="SD">SD</option><option value="HD">HD</option></select>
+            <input type="checkbox" id="exportAttribution" checked />
           </div>
 
           <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
@@ -352,7 +313,7 @@
               Set your preferred starting position when you open the map
             </p>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div style="display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px;">
               <div>
                 <label style="display: block; margin-bottom: 4px;">Latitude</label>
                 <input type="number" id="settingsLat" step="0.000001" min="-90" max="90"
@@ -370,14 +331,14 @@
               </div>
             </div>
 
-            <button class="btn" id="setCurrentPositionBtn" style="margin-right: 8px;">
-              📍 Use Current Map Position
+            <button class="btn" id="setCurrentPositionBtn">
+              Use Current Map Position
             </button>
           </div>
 
           <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
             <span id="preferencesMessage" style="color: var(--accent); display: none;">
-              ✓ Preferences saved!
+              Preferences saved!
             </span>
           </div>
         </div>
@@ -385,13 +346,9 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <!-- MapLibre GL for vector tile density layer -->
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
-
-    <!-- Interactive Mapping Grid System -->
     <script src="particles.js"></script>
-
     <script type="module" src="app.js?v=20260806a"></script>
   </body>
 </html>

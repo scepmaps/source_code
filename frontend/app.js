@@ -1,5 +1,5 @@
 import { LAYERS } from './config.js?v=20260805c';
-import { createToolbarController } from './toolbar/toolbar.js?v=20260805c';
+import { createToolbarController } from './toolbar/toolbar.js?v=20260806a';
 import { initSettingsController } from './settings/settings.js?v=20260805c';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
 import { initMapToolControls } from './tools/tools.js?v=20260805c';
@@ -48,9 +48,12 @@ if (user?.fun) {
 }
 
 const adminBtn = document.getElementById('adminBtn');
-if (!user?.is_admin) { adminBtn.style.display = 'none'; }
-document.getElementById('logoutBtn').addEventListener('click', ()=>{ localStorage.removeItem('token'); localStorage.removeItem('user'); location.href='login.html'; });
-adminBtn.addEventListener('click', ()=>{ if(user?.is_admin){ location.href='admin.html'; } });
+const isMobileApp = document.body.classList.contains('mobile-app');
+if (adminBtn) {
+  if (!user?.is_admin) adminBtn.style.display = 'none';
+  adminBtn.addEventListener('click', ()=>{ if(user?.is_admin){ location.href='admin.html'; } });
+}
+document.getElementById('logoutBtn')?.addEventListener('click', ()=>{ localStorage.removeItem('token'); localStorage.removeItem('user'); location.href='login.html'; });
 
 // Use user's default position if set, otherwise use default
 const defaultLat = (user.default_lat !== null && user.default_lat !== undefined) ? user.default_lat : 50.9585;
@@ -59,6 +62,24 @@ const defaultZoom = (user.default_zoom !== null && user.default_zoom !== undefin
 
 const map = L.map('map', { zoomControl: true }).setView([defaultLat, defaultLon], defaultZoom);
 map.invalidateSize(); // Ensure map renders correctly after display change
+
+// Mobile: keep dock height CSS var in sync and remeasure the map so tiles fill the visible area.
+function syncMobileMapChrome() {
+  if (!isMobileApp) return;
+  const dock = document.getElementById('sideRail');
+  if (dock) {
+    const h = Math.ceil(dock.getBoundingClientRect().height);
+    if (h > 0) document.documentElement.style.setProperty('--mobile-dock-height', `${h}px`);
+  }
+  map.invalidateSize({ animate: false });
+}
+if (isMobileApp) {
+  window.addEventListener('resize', syncMobileMapChrome);
+  window.addEventListener('orientationchange', () => setTimeout(syncMobileMapChrome, 150));
+  requestAnimationFrame(syncMobileMapChrome);
+  setTimeout(syncMobileMapChrome, 100);
+  setTimeout(syncMobileMapChrome, 400);
+}
 const DEFAULT_MAP_ZOOM_LIMITS = { min: 1, max: 19 };
 const BASE_NATIVE_MAX_ZOOM = {
   // OSM standard slippy tiles are typically served up to z19.
@@ -1874,6 +1895,7 @@ setAttrib();
 refreshSelectionLabels();
 
 function setExportButtonLabel(){
+  if (!exportBtn) return;
   const label = exportBtn.querySelector('.label');
   if (!label) return;
   if (isHgtActive && hgtSelectionRect) {
@@ -2952,7 +2974,7 @@ map.on('touchend', (e)=>{
 
 const API_BASE = '';
 
-exportBtn.addEventListener('click', async () => {
+exportBtn?.addEventListener('click', async () => {
   console.log('[Export] ========== Export Started ==========');
   const btn = exportBtn;
   const spinner = btn.querySelector('.spinner');
@@ -2963,7 +2985,7 @@ exportBtn.addEventListener('click', async () => {
   const latMid = (bbox[1]+bbox[3])/2;
   const lonMid = (bbox[0]+bbox[2])/2;
   const zoom = map.getZoom();
-  const system = exportSystem.value;
+  const system = exportSystem?.value || 'UAS';
   const viewW = Math.round(document.getElementById('map').clientWidth);
   const viewH = Math.round(document.getElementById('map').clientHeight);
   const width  = viewW;
@@ -2980,7 +3002,7 @@ exportBtn.addEventListener('click', async () => {
     label: canShowNames
   };
   const crs = undefined; // deprecated in favor of system
-  const customName = filenameInput.value.trim();
+  const customName = filenameInput?.value?.trim() || '';
   if (isHgtActive && hgtSelectionRect) {
     try {
       await exportHgtTiles(customName);
@@ -3489,9 +3511,11 @@ helpTourBtn?.addEventListener('click', () => {
 });
 
 // Start the tour once for first-time users after controls finish rendering.
+// Mobile has a different chrome; skip auto tour there (Help still works).
 setupTourControlIds();
 map.whenReady(() => {
   setTimeout(() => {
+    if (isMobileApp) return;
     if (!shouldAutoStartOnboardingTour(user?.id ?? null, Number(user?.onboarding_reset_version || 0))) return;
     runOnboardingTour();
   }, 350);
