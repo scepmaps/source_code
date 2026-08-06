@@ -132,7 +132,7 @@ def init_db():
     except Exception:
         pass
 
-    // Sanitize any legacy rows where permissions were stored as '[]' JSON instead of unrestricted
+    # Sanitize any legacy rows where permissions were stored as '[]' JSON instead of unrestricted
     try:
         cur.execute("UPDATE users SET allowed_bases = '' WHERE allowed_bases = '[]'")
         cur.execute("UPDATE users SET allowed_overlays = '' WHERE allowed_overlays = '[]'")

@@ -1,4 +1,4 @@
-import { LAYERS } from './config.js?v=20260806g';
+import { LAYERS } from './config.js?v=20260806k';
 import { createToolbarController } from './toolbar/toolbar.js?v=20260806h';
 import { initSettingsController } from './settings/settings.js?v=20260805c';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
@@ -142,6 +142,9 @@ function getZoomLimitsForBase(baseType) {
 }
 
 function createBaseRasterLayer(baseType, url, attribution) {
+  // OSM Dark is a dual-layer basemap (map body + brightened labels).
+  if (baseType === 'dark') return createDarkBasemap();
+
   const opts = {
     attribution,
     maxZoom: DEFAULT_MAP_ZOOM_LIMITS.max,
@@ -173,6 +176,8 @@ function applyZoomLimitsForBase(baseType) {
 }
 
 map.createPane('basePane'); map.getPane('basePane').style.zIndex = 200;
+// Labels-only tiles for OSM Dark — sit above the dark basemap, below chart overlays.
+map.createPane('darkLabelsPane'); map.getPane('darkLabelsPane').style.zIndex = 250;
 map.createPane('chartsPane'); map.getPane('chartsPane').style.zIndex = 300; // SHOM/GBSouth charts
 map.createPane('densityPane'); map.getPane('densityPane').style.zIndex = 350; // Population density
 map.createPane('overlayPane'); map.getPane('overlayPane').style.zIndex = 400; // Seamarks/OpenAIP
@@ -181,6 +186,35 @@ map.createPane('labelPane'); map.getPane('labelPane').style.zIndex = 450; // Lab
 map.createPane('exportPane'); map.getPane('exportPane').style.zIndex = 600;
 map.createPane('selectionPane'); map.getPane('selectionPane').style.zIndex = 800;
 map.createPane('rulerLabelsPane'); map.getPane('rulerLabelsPane').style.zIndex = 900; // Labels on top
+
+function createDarkBasemap() {
+  // Split CARTO Dark Matter into basemap + labels so we can brighten place names
+  // without changing the look of roads/land/water.
+  const maxNativeZoom = BASE_NATIVE_MAX_ZOOM.dark;
+  const baseOpts = {
+    attribution: LAYERS.dark.attribution,
+    maxZoom: DEFAULT_MAP_ZOOM_LIMITS.max,
+    pane: 'basePane',
+  };
+  const labelOpts = {
+    attribution: '',
+    maxZoom: DEFAULT_MAP_ZOOM_LIMITS.max,
+    pane: 'darkLabelsPane',
+    className: 'dark-osm-labels',
+  };
+  if (Number.isFinite(maxNativeZoom)) {
+    baseOpts.maxNativeZoom = maxNativeZoom;
+    labelOpts.maxNativeZoom = maxNativeZoom;
+  }
+  const baseUrl = LAYERS.dark.baseUrl
+    || 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png';
+  const labelsUrl = LAYERS.dark.labelsUrl
+    || 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png';
+  return L.layerGroup([
+    L.tileLayer(baseUrl, baseOpts),
+    L.tileLayer(labelsUrl, labelOpts),
+  ]);
+}
 const exportHistory = L.layerGroup().addTo(map);
 let selectionRect = null;
 let hgtSelectionRect = null;
@@ -940,10 +974,8 @@ async function refreshBaseLayer() {
   if (openaipCb.checked && openaipLayer) openaipLayer.addTo(map).bringToFront();
   applyNamesOverlayForBase(baseType);
 
-  // Apply label enhancement for ArcGIS raster map
-  if (baseType === 'esri') {
-    applyLabelEnhancement();
-  }
+  // Apply / clear label enhancement for raster basemaps
+  applyLabelEnhancement();
 
   setAttrib();
 }

@@ -12,7 +12,10 @@ export const LAYERS = {
   },
   dark: {
     // OSM data rendered in a dark palette (CARTO Dark Matter) — distinct from the ArcGIS "night" style.
+    // Split into base + labels so we can brighten names without washing out the map.
     url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+    baseUrl: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+    labelsUrl: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png',
     attribution: SHOW_ATTRIBUTION ? 'Tiles &copy; <a href="https://carto.com/attributions">CARTO</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' : '',
     names: true
   },
