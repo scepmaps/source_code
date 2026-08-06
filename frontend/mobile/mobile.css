@@ -1,8 +1,12 @@
-/* Mobile-only chrome: floating bottom options, no chrome bars */
+/* Mobile UI: floating dock + bounded bottom sheet pickers
+   Does NOT reuse desktop rail absolute positioning. */
 
 :root {
   --mobile-dock-height: 72px;
   --mobile-topbar-height: 48px;
+  --mobile-sheet-bg: rgba(10, 16, 36, 0.96);
+  --mobile-sheet-border: rgba(77, 226, 255, 0.22);
+  --mobile-tile-bg: rgba(15, 27, 59, 0.95);
 }
 
 body.mobile-app {
@@ -10,13 +14,15 @@ body.mobile-app {
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
-/* Kill decorative grid / chrome bars on mobile */
 body.mobile-app::before {
   display: none !important;
 }
 
+/* ---- Top bar (no chrome bar) ---- */
 body.mobile-app .topbar {
   padding: 8px 12px;
   padding-top: max(8px, env(safe-area-inset-top));
@@ -33,41 +39,34 @@ body.mobile-app .topbar .brand {
   letter-spacing: 0.06em;
 }
 
-body.mobile-app .topbar-actions {
-  gap: 6px;
-}
-
-/* Map fills the screen; dock floats over it */
+/* ---- Full-bleed map ---- */
 body.mobile-app #map {
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 100%;
+  inset: 0;
   width: 100%;
+  height: 100%;
   border: none;
 }
 
-/* Floating bottom options — no bar / oval / dividers */
+/* ---- Floating dock: Maps · Overlay · Ruler in a ROW ---- */
 body.mobile-app #sideRail.side-rail,
 body.mobile-app .side-rail {
-  position: fixed;
+  position: fixed !important;
   top: auto !important;
   right: 0 !important;
   left: 0 !important;
   bottom: 0 !important;
-  width: 100%;
+  width: 100% !important;
   max-height: none !important;
-  height: auto;
-  margin: 0;
-  padding: 0 12px calc(10px + env(safe-area-inset-bottom, 0px));
-  z-index: 1000;
-  display: flex;
-  flex-direction: row;
-  align-items: flex-end;
-  justify-content: center;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 16px calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+  z-index: 1300;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-end !important;
+  justify-content: center !important;
   pointer-events: none;
-  overflow: visible;
+  overflow: visible !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
@@ -76,123 +75,250 @@ body.mobile-app .side-rail {
 body.mobile-app .side-oval,
 body.mobile-app .side-oval--unified {
   pointer-events: auto;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  width: auto;
-  max-width: none;
-  height: auto;
-  min-height: 0;
-  padding: 0;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 20px !important;
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
   border: none !important;
-  border-radius: 0;
+  border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  overflow: visible;
+  overflow: visible !important;
 }
 
-/* Remove divider bars between dock items */
 body.mobile-app .side-rail-bar {
   display: none !important;
 }
 
-body.mobile-app .side-section,
-body.mobile-app .side-btn-group,
-body.mobile-app .side-rail .more-btn-wrapper {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  min-width: 0;
-  gap: 0;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-}
-
+body.mobile-app .mobile-dock-btn,
 body.mobile-app .side-btn-group {
-  flex-direction: row;
-  gap: 0;
+  flex: 0 0 auto !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  position: relative;
 }
 
-/* Floating circular dock buttons */
 body.mobile-app .side-rail .emoji-btn,
 body.mobile-app .side-rail .map-tool-btn {
   width: 52px !important;
   height: 52px !important;
-  min-width: 52px;
-  min-height: 52px;
-  padding: 0;
+  min-width: 52px !important;
+  min-height: 52px !important;
+  max-width: 52px !important;
+  max-height: 52px !important;
+  padding: 0 !important;
+  margin: 0 !important;
   border-radius: 50% !important;
-  flex: 0 0 auto;
-  flex-direction: row;
-  gap: 0;
-  background: rgba(10, 16, 32, 0.55) !important;
-  border: 1px solid rgba(255, 255, 255, 0.18) !important;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  flex: 0 0 52px !important;
+  flex-direction: row !important;
+  gap: 0 !important;
+  background: rgba(10, 16, 32, 0.72) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--text) !important;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 body.mobile-app .side-rail .emoji-btn svg,
 body.mobile-app .side-rail .map-tool-btn svg {
-  width: 22px;
-  height: 22px;
+  width: 22px !important;
+  height: 22px !important;
 }
 
-/* No pulse ring / no text labels under icons */
+body.mobile-app .side-rail .emoji-btn::before,
+body.mobile-app .side-rail .emoji-btn::after,
 body.mobile-app .side-rail .emoji-btn.active::after,
 body.mobile-app .side-rail .emoji-btn[data-tip]::before,
 body.mobile-app .side-rail .emoji-btn[data-tip]::after {
   content: none !important;
   display: none !important;
   animation: none !important;
-  opacity: 0 !important;
-  border: 0 !important;
 }
 
 body.mobile-app .side-rail .emoji-btn.active,
 body.mobile-app .side-rail .emoji-btn.panel-open,
 body.mobile-app .side-rail .emoji-btn.has-active-items,
-body.mobile-app .side-rail .map-tool-btn--active,
-body.mobile-app .side-rail .map-tool-btn--primary.map-tool-btn--active {
+body.mobile-app .side-rail .map-tool-btn.map-tool-btn--active {
   border-color: var(--accent) !important;
   color: var(--accent) !important;
-  box-shadow: 0 0 0 2px rgba(77, 226, 255, 0.35), 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+  box-shadow: 0 0 0 2px rgba(77, 226, 255, 0.35), 0 4px 14px rgba(0, 0, 0, 0.4) !important;
 }
 
-/* Hide non-ruler tools + more-tools control on mobile dock */
 body.mobile-app #btnMoreTools,
 body.mobile-app #moreToolDropdown,
 body.mobile-app #btnBox,
-body.mobile-app #btnHgt {
+body.mobile-app #btnHgt,
+body.mobile-app .mobile-dock-more-host {
   display: none !important;
 }
 
-/* Map / overlay pickers: fixed to viewport so they aren't clipped and stay above the map */
-body.mobile-app .rail-panel {
-  position: fixed !important;
-  left: 50% !important;
-  right: auto !important;
-  top: auto !important;
-  bottom: calc(var(--mobile-dock-height) + env(safe-area-inset-bottom, 0px) + 8px) !important;
-  transform: translateX(-50%) !important;
-  width: min(360px, calc(100vw - 24px));
-  max-height: min(52vh, calc(100vh - var(--mobile-dock-height) - 80px));
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  z-index: 1200;
-  pointer-events: auto;
+/* ---- Dim backdrop while a sheet is open ---- */
+body.mobile-app #mobileSheetBackdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.45);
+  border: none;
+  padding: 0;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+body.mobile-app.mobile-sheet-open #mobileSheetBackdrop {
+  display: block;
 }
 
+body.mobile-app #mobileSheetHost {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1200;
+  pointer-events: none;
+}
+
+/* ---- Bounded bottom sheet (one panel at a time) ---- */
+body.mobile-app #mobileSheetHost .rail-panel,
+body.mobile-app .rail-panel {
+  display: none !important;
+  position: fixed !important;
+  left: 12px !important;
+  right: 12px !important;
+  top: auto !important;
+  bottom: calc(var(--mobile-dock-height) + env(safe-area-inset-bottom, 0px) + 10px) !important;
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: min(52vh, 380px) !important;
+  margin: 0 !important;
+  transform: none !important;
+  padding: 12px !important;
+  box-sizing: border-box !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  border-radius: 16px !important;
+  border: 1px solid var(--mobile-sheet-border) !important;
+  background: var(--mobile-sheet-bg) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55) !important;
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  z-index: 1201 !important;
+  pointer-events: auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  grid-auto-rows: minmax(76px, auto) !important;
+  gap: 8px !important;
+  align-content: start !important;
+}
+
+body.mobile-app #mobileSheetHost .rail-panel.open,
 body.mobile-app .rail-panel.open {
   display: grid !important;
+  visibility: visible !important;
 }
 
-/* Attribution + legend clear of floating dock */
+body.mobile-app #mobileSheetHost .rail-panel:not(.open),
+body.mobile-app .rail-panel:not(.open) {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Uniform sheet tiles — kill native Android button chrome */
+body.mobile-app .rail-panel-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 76px !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 10px 6px !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(77, 226, 255, 0.16) !important;
+  background: var(--mobile-tile-bg) !important;
+  color: #d7e3ff !important;
+  box-shadow: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  font-family: Inter, system-ui, sans-serif !important;
+  text-align: center !important;
+}
+
+body.mobile-app .rail-panel-item.active {
+  border-color: rgba(77, 226, 255, 0.55) !important;
+  background: rgba(20, 40, 80, 0.98) !important;
+  color: var(--accent) !important;
+}
+
+body.mobile-app .rail-panel-icon {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  flex: 0 0 30px !important;
+  border-radius: 50% !important;
+  border: 1px solid rgba(42, 58, 122, 0.9) !important;
+  background: linear-gradient(180deg, #0f1b3b, #0b142f) !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+body.mobile-app .rail-panel-icon svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+body.mobile-app .rail-panel-name {
+  width: 100% !important;
+  max-width: 100% !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  color: inherit !important;
+  white-space: normal !important;
+  overflow: hidden !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  word-break: break-word !important;
+}
+
+body.mobile-app .rail-panel-empty {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  text-align: center;
+  padding: 20px 12px;
+  font-size: 13px;
+}
+
+/* ---- Map chrome offsets ---- */
 body.mobile-app .attribution {
   right: 10px !important;
   bottom: calc(var(--mobile-dock-height) + env(safe-area-inset-bottom, 0px) + 8px) !important;
@@ -211,7 +337,6 @@ body.mobile-app .density-legend {
   bottom: calc(var(--mobile-dock-height) + env(safe-area-inset-bottom, 0px) + 12px);
   min-width: min(300px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
-  padding: 8px 12px 6px;
 }
 
 body.mobile-app .leaflet-top.leaflet-left {

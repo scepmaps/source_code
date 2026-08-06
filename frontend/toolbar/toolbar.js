@@ -66,6 +66,17 @@ export function createToolbarController(opts) {
   const toolOptions = { ...TOOL_LABELS };
   const toolIcons = { ...TOOL_ICONS };
 
+  function isMobileApp() {
+    return document.body.classList.contains('mobile-app');
+  }
+
+  function setMobileSheetOpen(open) {
+    if (!isMobileApp()) return;
+    document.body.classList.toggle('mobile-sheet-open', !!open);
+    const backdrop = document.getElementById('mobileSheetBackdrop');
+    if (backdrop) backdrop.hidden = !open;
+  }
+
   function closeAllPanels(exceptId = null) {
     ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown'].forEach((id) => {
       if (id === exceptId) return;
@@ -73,6 +84,9 @@ export function createToolbarController(opts) {
       el?.classList.remove('open');
       if (el) {
         el.style.top = '';
+        el.style.bottom = '';
+        el.style.left = '';
+        el.style.right = '';
         el.style.transform = '';
       }
     });
@@ -80,6 +94,10 @@ export function createToolbarController(opts) {
     document.getElementById('btnOverlays')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnMaps')?.classList.remove('panel-open');
     document.getElementById('btnOverlays')?.classList.remove('panel-open');
+    const anyOpen = !!document.querySelector(
+      '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open'
+    );
+    setMobileSheetOpen(anyOpen);
   }
 
   function isToolButtonActive(btn) {
@@ -390,10 +408,6 @@ export function createToolbarController(opts) {
     populateMoreDropdown('moreToolDropdown', [], toolIcons, 'tool');
   }
 
-  function isMobileApp() {
-    return document.body.classList.contains('mobile-app');
-  }
-
   function applyToolbarOverflowLayout() {
     const rail = document.getElementById('sideRail');
     if (isMobileApp()) {
@@ -455,6 +469,7 @@ export function createToolbarController(opts) {
       panel.classList.add('open');
       document.getElementById(triggerId)?.classList.add('panel-open', 'active');
       document.getElementById(triggerId)?.setAttribute('aria-expanded', 'true');
+      setMobileSheetOpen(true);
       // Mobile: ignore the leftover click/tap that would immediately close the panel.
       if (isMobileApp()) ignoreOutsideClickUntil = Date.now() + 450;
       requestAnimationFrame(() => positionOpenPanel(panel));
@@ -481,7 +496,9 @@ export function createToolbarController(opts) {
 
     const isRailUiTarget = (target) => {
       const el = target instanceof Element ? target : target?.parentElement;
-      return !!el?.closest('#sideRail, #mapPickerPanel, #overlayPickerPanel, #moreToolDropdown');
+      return !!el?.closest(
+        '#sideRail, #mobileSheetHost, #mapPickerPanel, #overlayPickerPanel, #moreToolDropdown, #mobileSheetBackdrop'
+      );
     };
 
     document.getElementById('btnMaps')?.addEventListener('click', (e) => {
@@ -503,6 +520,13 @@ export function createToolbarController(opts) {
     document.getElementById('mapPickerPanel')?.addEventListener('click', (e) => e.stopPropagation());
     document.getElementById('overlayPickerPanel')?.addEventListener('click', (e) => e.stopPropagation());
     document.getElementById('moreToolDropdown')?.addEventListener('click', (e) => e.stopPropagation());
+    document.getElementById('mobileSheetBackdrop')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeAllPanels();
+      updateMoreButtonsHighlight();
+      updateSectionButtonStates();
+    });
 
     // Click outside the rail closes any open panel (rail clicks are ignored so
     // icon toggle / in-panel picks are not immediately undone).
@@ -511,6 +535,7 @@ export function createToolbarController(opts) {
       if (isRailUiTarget(e.target)) return;
       closeAllPanels();
       updateMoreButtonsHighlight();
+      updateSectionButtonStates();
     });
 
     // Escape closes Maps / Overlays / More-tools panels (capture so it wins over

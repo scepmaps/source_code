@@ -1,5 +1,5 @@
 import { LAYERS } from './config.js?v=20260805c';
-import { createToolbarController } from './toolbar/toolbar.js?v=20260806b';
+import { createToolbarController } from './toolbar/toolbar.js?v=20260806c';
 import { initSettingsController } from './settings/settings.js?v=20260805c';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
 import { initMapToolControls } from './tools/tools.js?v=20260805c';

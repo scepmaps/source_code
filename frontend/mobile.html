@@ -22,10 +22,10 @@
     <link rel="stylesheet" href="tools/tools.css">
     <link rel="stylesheet" href="zoom/zoom.css">
     <link rel="stylesheet" href="settings/settings.css">
-    <link rel="stylesheet" href="mobile/mobile.css?v=20260806b">
+    <link rel="stylesheet" href="mobile/mobile.css?v=20260806c">
     <script type="module">
       // Escape hatch: force desktop with ?desktop / stay with ?mobile
-      import { isMobileClient } from './mobile/device.js?v=20260806b';
+      import { isMobileClient } from './mobile/device.js?v=20260806c';
       try {
         const params = new URLSearchParams(location.search);
         const forceDesktop = params.has('desktop') || params.get('view') === 'desktop';
@@ -54,25 +54,23 @@
         </div>
       </div>
 
-      <!-- Bottom options: Maps · Overlay · Ruler (no chrome bar) -->
+      <!-- Floating dock: Maps · Overlay · Ruler -->
       <aside class="side-rail" id="sideRail" aria-label="Map options">
         <section class="side-oval side-oval--unified">
-          <div class="more-btn-wrapper side-section" data-section="maps">
+          <div class="mobile-dock-btn" data-section="maps">
             <button class="emoji-btn" id="btnMaps" data-tip="Maps" aria-label="Maps" aria-haspopup="true" aria-expanded="false">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" x2="9" y1="3" y2="18"/><line x1="15" x2="15" y1="6" y2="21"/></svg>
             </button>
-            <div class="rail-panel" id="mapPickerPanel" role="menu" aria-label="Basemaps"></div>
           </div>
 
-          <div class="more-btn-wrapper side-section" data-section="overlays">
+          <div class="mobile-dock-btn" data-section="overlays">
             <button class="emoji-btn" id="btnOverlays" data-tip="Overlay" aria-label="Overlay" aria-haspopup="true" aria-expanded="false">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></svg>
             </button>
-            <div class="rail-panel" id="overlayPickerPanel" role="menu" aria-label="Overlays"></div>
           </div>
 
           <div class="side-btn-group" id="toolBtnGroup">
-            <div class="more-btn-wrapper" hidden aria-hidden="true">
+            <div class="more-btn-wrapper mobile-dock-more-host" hidden aria-hidden="true">
               <button class="emoji-btn more-btn" id="btnMoreTools" data-tip="More tools" aria-label="More tools" tabindex="-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
               <div class="more-dropdown" id="moreToolDropdown"></div>
             </div>
@@ -98,6 +96,13 @@
           <button class="emoji-btn" id="btnHistory" data-overlay="history" aria-label="History"></button>
         </div>
       </aside>
+
+      <!-- Dedicated sheet host: pickers live here, not inside the dock -->
+      <button type="button" id="mobileSheetBackdrop" aria-label="Close panel" hidden></button>
+      <div id="mobileSheetHost">
+        <div class="rail-panel" id="mapPickerPanel" role="menu" aria-label="Basemaps"></div>
+        <div class="rail-panel" id="overlayPickerPanel" role="menu" aria-label="Overlays"></div>
+      </div>
 
       <!-- Compatibility hosts for shared app.js (export UI intentionally omitted) -->
       <select id="baseLayer" style="display: none;">
@@ -345,6 +350,6 @@
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
     <script src="particles.js"></script>
-    <script type="module" src="app.js?v=20260806b"></script>
+    <script type="module" src="app.js?v=20260806c"></script>
   </body>
 </html>
