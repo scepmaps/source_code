@@ -1,5 +1,5 @@
 import { LAYERS } from './config.js?v=20260805c';
-import { createToolbarController } from './toolbar/toolbar.js?v=20260806e';
+import { createToolbarController } from './toolbar/toolbar.js?v=20260806f';
 import { initSettingsController } from './settings/settings.js?v=20260805c';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
 import { initMapToolControls } from './tools/tools.js?v=20260805c';
@@ -466,6 +466,10 @@ function getNamesVectorStyleUrl() {
   return LAYERS.names_overlay?.styleUrl || LAYERS.navigation?.styleUrl || null;
 }
 
+function getNamesRasterUrl() {
+  return LAYERS.names_overlay?.url || null;
+}
+
 function buildLabelsOnlyStyle(styleJson) {
   const allLayers = Array.isArray(styleJson?.layers) ? styleJson.layers : [];
   const isRoadLabelLayer = (layer) => {
@@ -503,48 +507,71 @@ function buildLabelsOnlyStyle(styleJson) {
   };
 }
 
-async function createNamesOverlayLayer() {
-  if (namesGlLayer) return namesGlLayer;
+function createNamesRasterOverlayLayer() {
+  const rasterUrl = getNamesRasterUrl();
+  if (!rasterUrl) return null;
+  // ArcGIS tile templates use {z}/{y}/{x}; Leaflet substitutes tokens in any order.
+  return L.tileLayer(rasterUrl, {
+    attribution: LAYERS.names_overlay?.attribution || '',
+    maxZoom: 20,
+    opacity: 0.95,
+    pane: 'labelPane',
+  });
+}
 
+async function createNamesVectorOverlayLayer() {
   const styleUrl = getNamesVectorStyleUrl();
-  if (!styleUrl) {
-    console.warn('[Names] No vector style URL available for labels overlay');
+  if (!styleUrl) return null;
+
+  const styleResponse = await fetch(styleUrl, { headers: { Authorization: `Bearer ${token}` } });
+  if (!styleResponse.ok) {
+    throw new Error(`Failed to fetch names style: ${styleResponse.status}`);
+  }
+
+  const fullStyle = absolutizeMapStyleUrls(await styleResponse.json());
+  const labelsStyle = buildLabelsOnlyStyle(fullStyle);
+
+  if (!labelsStyle.layers.length) {
+    console.warn('[Names] No text symbol layers found in style');
     return null;
   }
 
+  const layer = L.maplibreGL({
+    style: labelsStyle,
+    interactive: false,
+    pane: 'labelPane',
+    transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
+  });
+
+  namesGlMap = layer.getMaplibreMap();
+  namesGlMap?.on('load', () => {
+    console.log('[Names] Vector labels overlay loaded');
+  });
+  namesGlMap?.on('error', (e) => {
+    console.error('[Names] MapLibre GL error:', e?.error || e);
+  });
+
+  return layer;
+}
+
+async function createNamesOverlayLayer() {
+  if (namesGlLayer) return namesGlLayer;
+
+  // Prefer the configured raster reference labels — reliable on Satellite without
+  // depending on a vector style fetch. Fall back to filtered navigation labels.
   try {
-    const styleResponse = await fetch(styleUrl, { headers: { Authorization: `Bearer ${token}` } });
-    if (!styleResponse.ok) {
-      throw new Error(`Failed to fetch names style: ${styleResponse.status}`);
-    }
+    namesGlLayer = createNamesRasterOverlayLayer();
+    if (namesGlLayer) return namesGlLayer;
 
-    const fullStyle = absolutizeMapStyleUrls(await styleResponse.json());
-    const labelsStyle = buildLabelsOnlyStyle(fullStyle);
+    namesGlLayer = await createNamesVectorOverlayLayer();
+    if (namesGlLayer) return namesGlLayer;
 
-    if (!labelsStyle.layers.length) {
-      console.warn('[Names] No text symbol layers found in style');
-      return null;
-    }
-
-    namesGlLayer = L.maplibreGL({
-      style: labelsStyle,
-      interactive: false,
-      pane: 'labelPane',
-      transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
-    });
-
-    namesGlMap = namesGlLayer.getMaplibreMap();
-    namesGlMap?.on('load', () => {
-      console.log('[Names] Vector labels overlay loaded');
-    });
-    namesGlMap?.on('error', (e) => {
-      console.error('[Names] MapLibre GL error:', e?.error || e);
-    });
-
-    return namesGlLayer;
-  } catch (error) {
-    console.error('[Names] Failed to create vector labels overlay:', error);
+    console.warn('[Names] No raster URL or vector style available for labels overlay');
     return null;
+  } catch (error) {
+    console.error('[Names] Failed to create labels overlay:', error);
+    namesGlLayer = createNamesRasterOverlayLayer();
+    return namesGlLayer;
   }
 }
 
@@ -554,7 +581,7 @@ function baseHasNames(baseType) {
 
 function supportsNamesOverlay(baseType) {
   // Labels-only overlay is currently supported for ArcGIS satellite only.
-  return baseType === 'esri' && !!getNamesVectorStyleUrl();
+  return baseType === 'esri' && !!(getNamesRasterUrl() || getNamesVectorStyleUrl());
 }
 
 // Population Density Layer (MapLibre GL)
@@ -877,6 +904,7 @@ const {
   updateMoreButtonsHighlight,
   applyFavorites,
   applyToolbarOverflowLayout,
+  refreshOverlayPicker,
   populateFavoriteSelects,
   loadFavorites,
 } = toolbarController;
@@ -1026,8 +1054,6 @@ async function applyUserPreferences() {
     }
     if (isStaleRequest()) return;
     applyZoomLimitsForBase(activeBaseType);
-    await applyNamesOverlayForBase(selectedBase);
-    if (isStaleRequest()) return;
   }
 
   // Apply overlay preferences if set
@@ -1048,6 +1074,7 @@ async function applyUserPreferences() {
     if (user.default_overlays.includes('density') && LAYERS.density && allowedOver.includes('density')) {
       densityCb.checked = true;
     }
+    // Set Names flag BEFORE applying the overlay (was previously set too late).
     if (user.default_overlays.includes('label') && allowedOver.includes('label')) {
       isNamesOverlayEnabled = true;
     }
@@ -1059,6 +1086,9 @@ async function applyUserPreferences() {
       map.removeLayer(exportHistory);
     }
   }
+
+  // Apply names after overlay prefs so a saved "label" default actually shows.
+  await applyNamesOverlayForBase(baseSelect.value);
 
   // Apply ruler unit preference
   if (user.default_units) {
@@ -1079,6 +1109,7 @@ async function applyUserPreferences() {
   updateBaseButtonStates();
   updateOverlayButtonStates();
   updateLabelButtonVisibility(); // Show/hide label button based on selected map
+  if (typeof refreshOverlayPicker === 'function') refreshOverlayPicker();
   applyLabelEnhancement(); // Apply label enhancement for ArcGIS maps
 
   // Update attributions after applying preferences
@@ -1298,6 +1329,7 @@ baseSelect.addEventListener('change', async () => {
   // Update button states
   updateBaseButtonStates();
   updateLabelButtonVisibility(); // Show/hide label button based on selected map
+  if (typeof refreshOverlayPicker === 'function') refreshOverlayPicker();
   applyLabelEnhancement(); // Apply label enhancement for ArcGIS maps
   setAttrib();
 });

@@ -316,6 +316,7 @@
   justify-content: center;
   flex: 0 0 auto;
   position: relative;
+  pointer-events: auto;
 }
 
 .side-rail .more-dropdown {
@@ -365,6 +366,8 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: clamp(4px, 0.8vh, 8px);
   box-sizing: border-box;
+  /* Panels extend outside the oval; keep them clickable despite .side-rail { pointer-events: none }. */
+  pointer-events: auto;
 }
 .rail-panel.open {
   display: grid;

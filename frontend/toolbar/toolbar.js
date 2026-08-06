@@ -42,7 +42,7 @@ export function createToolbarController(opts) {
   const favOverlayOptions = {
     seamarks: 'Seamarks',
     openaip: 'Airspace',
-    label: 'Names',
+    label: 'Name Tags',
     density: 'Density',
     history: 'History'
   };
@@ -159,11 +159,11 @@ export function createToolbarController(opts) {
   }
 
   function updateOverlayButtonStates() {
-    document.getElementById('btnSeamarks')?.classList.toggle('active', seamarksCb.checked);
-    document.getElementById('btnOpenaip')?.classList.toggle('active', openaipCb.checked);
-    document.getElementById('btnDensity')?.classList.toggle('active', densityCb.checked);
-    document.getElementById('btnHistory')?.classList.toggle('active', historyToggle.checked);
-    document.getElementById('btnLabel')?.classList.toggle('active', getIsNamesOverlayEnabled());
+    document.getElementById('btnSeamarks')?.classList.toggle('active', !!seamarksCb?.checked);
+    document.getElementById('btnOpenaip')?.classList.toggle('active', !!openaipCb?.checked);
+    document.getElementById('btnDensity')?.classList.toggle('active', !!densityCb?.checked);
+    document.getElementById('btnHistory')?.classList.toggle('active', !!historyToggle?.checked);
+    document.getElementById('btnLabel')?.classList.toggle('active', !!getIsNamesOverlayEnabled());
 
     const states = {
       seamarks: !!seamarksCb?.checked,
@@ -179,6 +179,37 @@ export function createToolbarController(opts) {
     updateMoreButtonsHighlight();
   }
 
+  function toggleOverlayByKey(key) {
+    if (key === 'seamarks' && seamarksCb) {
+      seamarksCb.checked = !seamarksCb.checked;
+      seamarksCb.dispatchEvent(new Event('change'));
+    } else if (key === 'openaip' && openaipCb) {
+      openaipCb.checked = !openaipCb.checked;
+      openaipCb.dispatchEvent(new Event('change'));
+    } else if (key === 'history' && historyToggle) {
+      historyToggle.checked = !historyToggle.checked;
+      historyToggle.dispatchEvent(new Event('change'));
+    } else if (key === 'density' && densityCb) {
+      densityCb.checked = !densityCb.checked;
+      densityCb.dispatchEvent(new Event('change'));
+    } else if (key === 'label') {
+      setIsNamesOverlayEnabled(!getIsNamesOverlayEnabled());
+      applyNamesOverlayForBase(baseSelect.value);
+      setAttrib();
+    }
+    updateOverlayButtonStates();
+  }
+
+  function isOverlayButtonAvailable(key) {
+    const btnId = favOverlayBtnIds[key];
+    if (!btnId) return false;
+    const btn = document.getElementById(btnId);
+    if (!btn) return false;
+    // Name Tags only apply on Satellite (and similar); keep the picker in sync.
+    if (key === 'label' && btn.style.display === 'none') return false;
+    return true;
+  }
+
   function setupEmojiButtons() {
     const baseButtons = {
       btnOsm: 'osm', btnEsri: 'esri', btnNavigation: 'navigation', btnNight: 'night',
@@ -192,35 +223,15 @@ export function createToolbarController(opts) {
         baseSelect.dispatchEvent(new Event('change'));
         updateBaseButtonStates();
         updateLabelButtonVisibility();
+        refreshOverlayPicker();
       });
     });
 
-    document.getElementById('btnSeamarks')?.addEventListener('click', () => {
-      seamarksCb.checked = !seamarksCb.checked;
-      seamarksCb.dispatchEvent(new Event('change'));
-      updateOverlayButtonStates();
-    });
-    document.getElementById('btnOpenaip')?.addEventListener('click', () => {
-      openaipCb.checked = !openaipCb.checked;
-      openaipCb.dispatchEvent(new Event('change'));
-      updateOverlayButtonStates();
-    });
-    document.getElementById('btnHistory')?.addEventListener('click', () => {
-      historyToggle.checked = !historyToggle.checked;
-      historyToggle.dispatchEvent(new Event('change'));
-      updateOverlayButtonStates();
-    });
-    document.getElementById('btnDensity')?.addEventListener('click', () => {
-      densityCb.checked = !densityCb.checked;
-      densityCb.dispatchEvent(new Event('change'));
-      updateOverlayButtonStates();
-    });
-    document.getElementById('btnLabel')?.addEventListener('click', () => {
-      setIsNamesOverlayEnabled(!getIsNamesOverlayEnabled());
-      applyNamesOverlayForBase(baseSelect.value);
-      setAttrib();
-      updateOverlayButtonStates();
-    });
+    document.getElementById('btnSeamarks')?.addEventListener('click', () => toggleOverlayByKey('seamarks'));
+    document.getElementById('btnOpenaip')?.addEventListener('click', () => toggleOverlayByKey('openaip'));
+    document.getElementById('btnHistory')?.addEventListener('click', () => toggleOverlayByKey('history'));
+    document.getElementById('btnDensity')?.addEventListener('click', () => toggleOverlayByKey('density'));
+    document.getElementById('btnLabel')?.addEventListener('click', () => toggleOverlayByKey('label'));
 
     updateBaseButtonStates();
     updateOverlayButtonStates();
@@ -304,29 +315,46 @@ export function createToolbarController(opts) {
       row.appendChild(icon);
       row.appendChild(name);
 
-      const originalBtn = document.getElementById(idMap[item]);
       row.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        // Call the hidden button's handlers directly without a bubbling synthetic click
-        // (a normal .click() reaches document and would close the panel).
-        if (originalBtn) originalBtn.dispatchEvent(new MouseEvent('click', { bubbles: false, cancelable: true }));
-        // Keep panel open — close only via icon toggle, Escape, or outside click.
-        if (type === 'base') updateBaseButtonStates();
-        else updateOverlayButtonStates();
+        if (type === 'base') {
+          // Drive the shared base <select> directly — avoids relying on hidden
+          // buttons that live under display:none / pointer-events:none hosts.
+          if (baseSelect && baseSelect.value !== item) {
+            baseSelect.value = item;
+            baseSelect.dispatchEvent(new Event('change'));
+          }
+          updateBaseButtonStates();
+          updateLabelButtonVisibility();
+          refreshOverlayPicker();
+        } else {
+          toggleOverlayByKey(item);
+        }
       });
 
       panel.appendChild(row);
     });
   }
 
+  function refreshOverlayPicker() {
+    const overlayKeys = allowedOver.filter((o) => isOverlayButtonAvailable(o));
+    populateNamedPanel(
+      'overlayPickerPanel',
+      overlayKeys,
+      favOverlayIcons,
+      favOverlayOptions,
+      'overlay',
+      favOverlayBtnIds
+    );
+    updateOverlayButtonStates();
+  }
+
   function refreshNamedPanels() {
     const mapKeys = allowedBases.filter((b) => favMapBtnIds[b] && document.getElementById(favMapBtnIds[b]));
-    const overlayKeys = allowedOver.filter((o) => favOverlayBtnIds[o] && document.getElementById(favOverlayBtnIds[o]));
     populateNamedPanel('mapPickerPanel', mapKeys, favMapIcons, favMapOptions, 'base', favMapBtnIds);
-    populateNamedPanel('overlayPickerPanel', overlayKeys, favOverlayIcons, favOverlayOptions, 'overlay', favOverlayBtnIds);
+    refreshOverlayPicker();
     updateBaseButtonStates();
-    updateOverlayButtonStates();
   }
 
   function populateMoreDropdown(dropdownId, items, iconMap, type) {
@@ -598,6 +626,7 @@ export function createToolbarController(opts) {
     updateMoreButtonsHighlight,
     applyFavorites,
     applyToolbarOverflowLayout,
+    refreshOverlayPicker,
     populateFavoriteSelects,
     loadFavorites,
   };
