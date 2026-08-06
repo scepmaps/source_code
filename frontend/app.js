@@ -80,6 +80,37 @@ if (isMobileApp) {
   setTimeout(syncMobileMapChrome, 100);
   setTimeout(syncMobileMapChrome, 400);
 }
+
+// Desktop: live cursor lat/lon at bottom center
+(function initCursorCoords() {
+  if (isMobileApp) return;
+  const el = document.getElementById('cursorCoords');
+  if (!el) return;
+  el.hidden = false;
+
+  const formatCoord = (latlng) => {
+    const lat = Number(latlng.lat);
+    const lng = Number(latlng.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '— —';
+    const latHem = lat >= 0 ? 'N' : 'S';
+    const lngHem = lng >= 0 ? 'E' : 'W';
+    return `${Math.abs(lat).toFixed(5)}° ${latHem}   ${Math.abs(lng).toFixed(5)}° ${lngHem}`;
+  };
+
+  const showAt = (clientX, clientY) => {
+    const rect = map.getContainer().getBoundingClientRect();
+    const point = L.point(clientX - rect.left, clientY - rect.top);
+    el.textContent = formatCoord(map.containerPointToLatLng(point));
+    el.classList.add('is-live');
+  };
+
+  // Container listener keeps updating even when the drawing overlay captures pointer events.
+  map.getContainer().addEventListener('mousemove', (e) => showAt(e.clientX, e.clientY));
+  map.getContainer().addEventListener('mouseleave', () => {
+    el.classList.remove('is-live');
+  });
+})();
+
 const DEFAULT_MAP_ZOOM_LIMITS = { min: 1, max: 19 };
 const BASE_NATIVE_MAX_ZOOM = {
   // OSM standard slippy tiles are typically served up to z19.

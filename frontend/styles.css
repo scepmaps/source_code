@@ -152,6 +152,38 @@ input[type="checkbox"]{
   box-shadow: var(--shadow);
 }
 
+/* Live cursor coordinates — desktop map only, bottom center */
+.cursor-coords {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 85;
+  pointer-events: none;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(77, 226, 255, 0.18);
+  background: rgba(8, 14, 30, 0.72);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: 'JetBrains Mono', 'Courier New', ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(215, 227, 255, 0.88);
+  white-space: nowrap;
+  opacity: 0.55;
+  transition: opacity .15s ease;
+}
+.cursor-coords.is-live {
+  opacity: 1;
+  color: #e8eefc;
+}
+body.mobile-app .cursor-coords {
+  display: none !important;
+}
+
 /* Export history tooltip: white text, no background/border */
 .history-tooltip{
   color:#fff; background:transparent; border:none; box-shadow:none;
