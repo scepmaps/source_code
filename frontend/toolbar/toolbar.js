@@ -19,6 +19,7 @@ export function createToolbarController(opts) {
 
   const favMapOptions = {
     osm: 'OpenStreetMap',
+    dark: 'OSM Dark',
     esri: 'Satellite',
     navigation: 'Navigation',
     night: 'Night',
@@ -30,6 +31,7 @@ export function createToolbarController(opts) {
   };
   const favMapIcons = {
     osm: iconHtml('osm'),
+    dark: iconHtml('dark'),
     esri: iconHtml('esri'),
     navigation: iconHtml('navigation'),
     night: iconHtml('night'),
@@ -54,7 +56,7 @@ export function createToolbarController(opts) {
     history: iconHtml('history'),
   };
   const favMapBtnIds = {
-    osm: 'btnOsm', esri: 'btnEsri', navigation: 'btnNavigation',
+    osm: 'btnOsm', dark: 'btnDark', esri: 'btnEsri', navigation: 'btnNavigation',
     night: 'btnNight', topo: 'btnTopo', ocean: 'btnOcean',
     shom: 'btnShom', ukho: 'btnUkho', gbsouth: 'btnGbsouth'
   };
@@ -212,7 +214,7 @@ export function createToolbarController(opts) {
 
   function setupEmojiButtons() {
     const baseButtons = {
-      btnOsm: 'osm', btnEsri: 'esri', btnNavigation: 'navigation', btnNight: 'night',
+      btnOsm: 'osm', btnDark: 'dark', btnEsri: 'esri', btnNavigation: 'navigation', btnNight: 'night',
       btnTopo: 'topo', btnOcean: 'ocean', btnShom: 'shom', btnUkho: 'ukho', btnGbsouth: 'gbsouth'
     };
     Object.keys(baseButtons).forEach(btnId => {

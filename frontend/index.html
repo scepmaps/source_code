@@ -88,6 +88,7 @@
         <!-- Hidden hosts: keep individual map/overlay buttons for existing JS wiring -->
         <div id="mapBtnGroup" class="rail-hidden-host" hidden aria-hidden="true">
           <button class="emoji-btn" id="btnOsm" data-base="osm" aria-label="OpenStreetMap"></button>
+          <button class="emoji-btn" id="btnDark" data-base="dark" aria-label="OSM Dark"></button>
           <button class="emoji-btn" id="btnEsri" data-base="esri" aria-label="Satellite"></button>
           <button class="emoji-btn" id="btnNavigation" data-base="navigation" aria-label="Navigation"></button>
           <button class="emoji-btn" id="btnNight" data-base="night" aria-label="Night"></button>
@@ -109,6 +110,7 @@
       <!-- Hidden elements to maintain compatibility with existing code -->
       <select id="baseLayer" style="display: none;">
         <option value="osm">OpenStreetMap</option>
+        <option value="dark">OSM Dark</option>
         <option value="esri">Satellite</option>
         <option value="topo">Topographic</option>
         <option value="navigation">Navigation</option>
@@ -213,6 +215,7 @@
                 <select id="settingsBase" style="width: 100%;">
                   <option value="">-- None --</option>
                   <option value="osm">OpenStreetMap</option>
+                  <option value="dark">OSM Dark</option>
                   <option value="esri">Satellite</option>
                   <option value="topo">Topographic</option>
                   <option value="navigation">Navigation</option>
@@ -393,6 +396,6 @@
     <!-- Interactive Mapping Grid System -->
     <script src="particles.js"></script>
 
-    <script type="module" src="app.js?v=20260806i"></script>
+    <script type="module" src="app.js?v=20260806j"></script>
   </body>
 </html>

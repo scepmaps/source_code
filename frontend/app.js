@@ -115,6 +115,8 @@ const DEFAULT_MAP_ZOOM_LIMITS = { min: 1, max: 19 };
 const BASE_NATIVE_MAX_ZOOM = {
   // OSM standard slippy tiles are typically served up to z19.
   osm: 19,
+  // Same OSM data, dark palette (CARTO Dark Matter).
+  dark: 19,
   // ArcGIS World Imagery currently stops serving tiles beyond z19 in this setup.
   esri: 19,
   shom: 18,
@@ -123,6 +125,7 @@ const BASE_NATIVE_MAX_ZOOM = {
 };
 const BASE_ZOOM_LIMITS = {
   osm: { min: 1, max: 19 },
+  dark: { min: 1, max: 19 },
   esri: { min: 1, max: 19 },
   // Vector basemaps: cap at 19 to avoid over-zoom beyond typical source detail.
   topo: { min: 1, max: 19 },
@@ -290,7 +293,7 @@ function setRulerControlActive(active) {
 }
 
 // Build layers based on user permissions
-const defaultBases = ['osm','esri','topo','navigation','night','ocean','shom','ukho','gbsouth'];
+const defaultBases = ['osm','dark','esri','topo','navigation','night','ocean','shom','ukho','gbsouth'];
 const defaultOver  = ['seamarks','openaip','density','label','history'];
 const defaultTools = ['hgt'];
 // Permission interpretation:
@@ -310,6 +313,12 @@ if (rawBases === null || rawBases === undefined) {
   if (!allowedBases.includes('osm')) {
     allowedBases.push('osm');
     console.log('[Permissions] OSM added as free fallback option');
+  }
+  // OSM Dark is the dark companion to OSM — include it whenever OSM is allowed.
+  if (allowedBases.includes('osm') && !allowedBases.includes('dark')) {
+    const osmIdx = allowedBases.indexOf('osm');
+    allowedBases.splice(osmIdx + 1, 0, 'dark');
+    console.log('[Permissions] OSM Dark added alongside OSM');
   }
 } else {
   allowedBases = defaultBases; // fallback
@@ -341,6 +350,7 @@ if (rawTools === null || rawTools === undefined) {
 const layerDefs = {};
 // OSM and ArcGIS maps are true base layers
 if (allowedBases.includes('osm'))  layerDefs.osm  = createBaseRasterLayer('osm', LAYERS.osm.url, LAYERS.osm.attribution);
+if (allowedBases.includes('dark')) layerDefs.dark = createBaseRasterLayer('dark', LAYERS.dark.url, LAYERS.dark.attribution);
 if (allowedBases.includes('esri')) layerDefs.esri = createBaseRasterLayer('esri', LAYERS.esri.url, LAYERS.esri.attribution);
 // Topo is now a vector layer, so we don't create it here - it will be created via createTopoLayer() when selected
 // if (allowedBases.includes('topo')) layerDefs.topo = ... // Topo is now vector, handled separately
@@ -727,6 +737,7 @@ function setupUIByPermissions(){
   // Map all base button IDs to their permission keys
   const baseButtonMap = {
     'btnOsm': 'osm',
+    'btnDark': 'dark',
     'btnEsri': 'esri',
     'btnTopo': 'topo',
     'btnNavigation': 'navigation',

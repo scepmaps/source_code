@@ -132,10 +132,33 @@ def init_db():
     except Exception:
         pass
 
-    # Sanitize any legacy rows where permissions were stored as '[]' JSON instead of unrestricted
+    // Sanitize any legacy rows where permissions were stored as '[]' JSON instead of unrestricted
     try:
         cur.execute("UPDATE users SET allowed_bases = '' WHERE allowed_bases = '[]'")
         cur.execute("UPDATE users SET allowed_overlays = '' WHERE allowed_overlays = '[]'")
+        conn.commit()
+    except Exception:
+        pass
+
+    # Migration: ensure OSM Dark is present for users who already have OSM in an explicit whitelist
+    try:
+        cur.execute("SELECT id, allowed_bases FROM users WHERE allowed_bases IS NOT NULL AND allowed_bases != ''")
+        rows = cur.fetchall()
+        for row in rows:
+            raw = row["allowed_bases"]
+            try:
+                bases = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not isinstance(bases, list):
+                continue
+            if "osm" in bases and "dark" not in bases:
+                osm_idx = bases.index("osm")
+                bases.insert(osm_idx + 1, "dark")
+                cur.execute(
+                    "UPDATE users SET allowed_bases = ? WHERE id = ?",
+                    (json.dumps(bases), row["id"]),
+                )
         conn.commit()
     except Exception:
         pass
@@ -170,7 +193,7 @@ def ensure_default_admin(email: str, password_hash: str):
                 email,
                 "Administrator",
                 password_hash,
-                json.dumps(["osm", "esri", "shom", "ukho", "gbsouth"]),
+                json.dumps(["osm", "dark", "esri", "shom", "ukho", "gbsouth"]),
                 json.dumps(["seamarks", "openaip", "density"]),
                 json.dumps(["hgt"]),
             ),

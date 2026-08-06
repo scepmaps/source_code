@@ -291,6 +291,9 @@
                   <input type="checkbox" value="osm" /> OpenStreetMap
                 </label>
                 <label class="checkbox-item">
+                  <input type="checkbox" value="dark" /> OSM Dark
+                </label>
+                <label class="checkbox-item">
                   <input type="checkbox" value="esri" /> Satellite
                 </label>
                 <label class="checkbox-item">
@@ -474,7 +477,7 @@
         document.querySelectorAll('#baseMaps input, #overlays input').forEach(cb => cb.checked = false);
 
         // Set base maps
-        const bases = user.allowed_bases || ['osm', 'esri', 'topo', 'navigation', 'night', 'ocean', 'shom', 'ukho', 'gbsouth'];
+        const bases = user.allowed_bases || ['osm', 'dark', 'esri', 'topo', 'navigation', 'night', 'ocean', 'shom', 'ukho', 'gbsouth'];
         bases.forEach(base => {
           const cb = document.querySelector(`#baseMaps input[value="${base}"]`);
           if (cb) cb.checked = true;
@@ -630,7 +633,7 @@
             </td>
             <td>
               <div class="permission-tags">
-                ${(user.allowed_bases || ['osm', 'esri', 'topo', 'navigation', 'night', 'ocean', 'shom', 'ukho', 'gbsouth']).map(base =>
+                ${(user.allowed_bases || ['osm', 'dark', 'esri', 'topo', 'navigation', 'night', 'ocean', 'shom', 'ukho', 'gbsouth']).map(base =>
                   `<span class="permission-tag">${base.toUpperCase()}</span>`
                 ).join('')}
               </div>

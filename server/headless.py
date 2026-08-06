@@ -50,8 +50,12 @@ _navigation_url = "http://127.0.0.1:5001/tiles/arcgis/{z}/{x}/{y}.png?style=arcg
 _night_url      = "http://127.0.0.1:5001/tiles/arcgis/{z}/{x}/{y}.png?style=arcgis/streets-night"
 _ocean_url      = "http://127.0.0.1:5001/tiles/arcgis/{z}/{x}/{y}.png?style=open/navigation-dark"
 
+HEADLESS_DARK_URL = os.getenv("HEADLESS_DARK_URL") or "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
+
 LAYER_URLS = {
     "osm": HEADLESS_OSM_URL,
+    # OSM data, dark palette (CARTO Dark Matter) — distinct from the ArcGIS "night" style.
+    "dark": HEADLESS_DARK_URL,
     "esri": _esri_url,
     "topo": _topo_url,
     "navigation": _navigation_url,
@@ -140,6 +144,7 @@ HTML = """<!doctype html>
   // Attributions matching frontend config.js
   const ATTRIBUTIONS = {
     osm: '&copy; OpenStreetMap contributors',
+    dark: 'Tiles &copy; CARTO, &copy; OpenStreetMap contributors',
     esri: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics',
     topo: 'Tiles &copy; Esri — Sources: Esri, HERE, Garmin, USGS, NPS',
     navigation: 'Tiles &copy; Esri — Source: Esri, HERE, Garmin, FAO, NOAA',
@@ -153,6 +158,7 @@ HTML = """<!doctype html>
   };
 
   const osm  = mk(LAYER_URLS.osm,  { maxZoom: 20, attribution: ATTRIBUTIONS.osm });
+  const dark = mk(LAYER_URLS.dark, { maxZoom: 20, attribution: ATTRIBUTIONS.dark });
   const esri = mk(LAYER_URLS.esri, { maxZoom: 20, attribution: ATTRIBUTIONS.esri });
   const topo = mk(LAYER_URLS.topo, { maxZoom: 20, attribution: ATTRIBUTIONS.topo });
   const navigation = mk(LAYER_URLS.navigation, { maxZoom: 20, attribution: ATTRIBUTIONS.navigation });
@@ -291,7 +297,7 @@ HTML = """<!doctype html>
           } else {
             console.warn('Failed to load vector style, falling back to raster');
             // Fallback to raster
-            const bases = { osm, esri, topo, navigation, night, ocean };
+            const bases = { osm, dark, esri, topo, navigation, night, ocean };
             baseLayer = bases[base] || osm;
             if (baseLayer) { hook(baseLayer); baseLayer.addTo(map); }
             pending = Math.max(0, pending - 1);
@@ -300,7 +306,7 @@ HTML = """<!doctype html>
         } catch (err) {
           console.error('Error loading vector style:', err);
           // Fallback to raster
-          const bases = { osm, esri, topo, navigation, night, ocean };
+          const bases = { osm, dark, esri, topo, navigation, night, ocean };
           baseLayer = bases[base] || osm;
           if (baseLayer) { hook(baseLayer); baseLayer.addTo(map); }
           pending = Math.max(0, pending - 1);
@@ -309,13 +315,13 @@ HTML = """<!doctype html>
       })();
     } else {
       // No style URL, fallback to raster
-      const bases = { osm, esri, topo, navigation, night, ocean };
+      const bases = { osm, dark, esri, topo, navigation, night, ocean };
       baseLayer = bases[base] || osm;
       if (baseLayer) { hook(baseLayer); baseLayer.addTo(map); }
     }
   } else {
     // Raster tile layers (OSM, ESRI) - use Leaflet tile layers
-    const bases = { osm, esri };
+    const bases = { osm, dark, esri };
     baseLayer = bases[base] || osm;
     if (baseLayer) { hook(baseLayer); baseLayer.addTo(map); }
   }

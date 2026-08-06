@@ -510,7 +510,7 @@ def _build_hgt_map_with_grid_png_bytes(
     height = max(256, tiles_h * _HGT_TIFF_PIXELS_PER_TILE)
     # Avoid OSM fallback here: OSM can return policy-warning tiles for automated bulk export usage.
     # Keep exports on configured providers only.
-    allowed_bases = {"esri", "topo", "navigation", "night", "ocean", "shom", "ukho", "gbsouth"}
+    allowed_bases = {"dark", "esri", "topo", "navigation", "night", "ocean", "shom", "ukho", "gbsouth"}
     requested_base = str(base or "esri")
     if requested_base not in allowed_bases:
         requested_base = "esri"
@@ -2398,7 +2398,7 @@ def update_preferences():
             return ({"error": "Invalid zoom level"}, 400)
 
     if default_base is not None:
-        if default_base not in ["osm", "esri", "topo", "navigation", "night", "ocean", "shom", "ukho", "gbsouth"]:
+        if default_base not in ["osm", "dark", "esri", "topo", "navigation", "night", "ocean", "shom", "ukho", "gbsouth"]:
             return ({"error": "Invalid base layer"}, 400)
 
     if default_overlays is not None:
@@ -2435,7 +2435,7 @@ def update_preferences():
             return ({"error": "Invalid hover border color format"}, 400)
 
     # Validate favorite maps/overlays (must be lists of strings, max 4 each)
-    valid_bases = ["osm", "esri", "topo", "navigation", "night", "ocean", "shom", "ukho", "gbsouth"]
+    valid_bases = ["osm", "dark", "esri", "topo", "navigation", "night", "ocean", "shom", "ukho", "gbsouth"]
     valid_overlays = ["seamarks", "openaip", "density", "history", "label"]
 
     if favorite_maps is not None:

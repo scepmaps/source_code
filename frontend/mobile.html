@@ -86,6 +86,7 @@
 
         <div id="mapBtnGroup" class="rail-hidden-host" hidden aria-hidden="true">
           <button class="emoji-btn" id="btnOsm" data-base="osm" aria-label="OpenStreetMap"></button>
+          <button class="emoji-btn" id="btnDark" data-base="dark" aria-label="OSM Dark"></button>
           <button class="emoji-btn" id="btnEsri" data-base="esri" aria-label="Satellite"></button>
           <button class="emoji-btn" id="btnNavigation" data-base="navigation" aria-label="Navigation"></button>
           <button class="emoji-btn" id="btnNight" data-base="night" aria-label="Night"></button>
@@ -114,6 +115,7 @@
       <!-- Compatibility hosts for shared app.js (export UI intentionally omitted) -->
       <select id="baseLayer" style="display: none;">
         <option value="osm">OpenStreetMap</option>
+        <option value="dark">OSM Dark</option>
         <option value="esri">Satellite</option>
         <option value="topo">Topographic</option>
         <option value="navigation">Navigation</option>
@@ -208,6 +210,7 @@
                 <select id="settingsBase" style="width: 100%;">
                   <option value="">-- None --</option>
                   <option value="osm">OpenStreetMap</option>
+                  <option value="dark">OSM Dark</option>
                   <option value="esri">Satellite</option>
                   <option value="topo">Topographic</option>
                   <option value="navigation">Navigation</option>
@@ -366,6 +369,6 @@
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
     <script src="particles.js"></script>
-    <script type="module" src="app.js?v=20260806h"></script>
+    <script type="module" src="app.js?v=20260806j"></script>
   </body>
 </html>

@@ -31,7 +31,9 @@ def build_mosaic_rgba(bbox4326, zoom: int, base: str, overlays: Dict[str, bool])
 
     # Validate and normalize base layer
     base_key = (
-        base if base in ("osm", "esri", "topo", "navigation", "night", "ocean", "shom", "ukho", "gbsouth") else "esri"
+        base
+        if base in ("osm", "dark", "esri", "topo", "navigation", "night", "ocean", "shom", "ukho", "gbsouth")
+        else "esri"
     )
     base_url = choose_url(base_key)
 

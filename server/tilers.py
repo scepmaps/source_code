@@ -59,6 +59,8 @@ else:
 
 LAYER_URLS = {
     "osm": "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    # OSM data, dark palette (CARTO Dark Matter) — distinct from the ArcGIS "night" style.
+    "dark": "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
     "esri": _esri_url,
     "topo": _topo_url,
     "navigation": _navigation_url,
@@ -80,6 +82,11 @@ LAYER_CANDIDATES = {
         "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
         "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
         "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    ],
+    "dark": [
+        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
     ],
     "esri": [
         # Use API key if available for better rate limits and premium services
