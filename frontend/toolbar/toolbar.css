@@ -131,7 +131,22 @@
   to { transform: rotate(360deg); }
 }
 
-#exportFilename { min-width: 150px; max-width: 250px; width: clamp(140px, 22vw, 260px); text-align: center; }
+#exportFilename {
+  min-width: 150px;
+  max-width: 250px;
+  width: clamp(140px, 22vw, 260px);
+  text-align: center;
+  border: 1px solid rgba(77, 226, 255, 0.16);
+  background: linear-gradient(180deg, rgba(14, 23, 55, 0.52), rgba(10, 20, 47, 0.42));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(33, 48, 105, 0.28) inset;
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  opacity: 1;
+}
+#exportFilename:focus {
+  border-color: rgba(77, 226, 255, 0.35);
+  outline: none;
+}
 .topbar-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; }
 
 /* Match side-rail glass — Export / Settings / Admin */
