@@ -22,10 +22,10 @@
     <link rel="stylesheet" href="tools/tools.css">
     <link rel="stylesheet" href="zoom/zoom.css">
     <link rel="stylesheet" href="settings/settings.css">
-    <link rel="stylesheet" href="mobile/mobile.css?v=20260806c">
+    <link rel="stylesheet" href="mobile/mobile.css?v=20260806d">
     <script type="module">
       // Escape hatch: force desktop with ?desktop / stay with ?mobile
-      import { isMobileClient } from './mobile/device.js?v=20260806c';
+      import { isMobileClient } from './mobile/device.js?v=20260806d';
       try {
         const params = new URLSearchParams(location.search);
         const forceDesktop = params.has('desktop') || params.get('view') === 'desktop';
@@ -49,8 +49,15 @@
       <div class="topbar">
         <div class="brand topbar-tool topbar-tool--fixed"><span class="glow-dot"></span>SCEPMAPS</div>
         <div class="topbar-actions topbar-tool topbar-tool--fixed">
-          <button class="btn btn-icon" id="settingsBtn" title="Settings" aria-label="Settings"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
-          <button class="btn" id="adminBtn">Admin</button>
+          <button type="button" class="emoji-btn mobile-top-btn" id="mobileHgtBtn" title="Export HGT" aria-label="Export HGT">
+            <span class="mobile-top-btn-label">HGT</span>
+          </button>
+          <button type="button" class="emoji-btn mobile-top-btn" id="mobileTifBtn" title="Export GeoTIFF" aria-label="Export GeoTIFF">
+            <span class="mobile-top-btn-label">TIF</span>
+          </button>
+          <button type="button" class="emoji-btn mobile-top-btn mobile-top-btn--settings" id="settingsBtn" title="Settings" aria-label="Settings">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
         </div>
       </div>
 
@@ -350,6 +357,6 @@
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
     <script src="particles.js"></script>
-    <script type="module" src="app.js?v=20260806c"></script>
+    <script type="module" src="app.js?v=20260806d"></script>
   </body>
 </html>

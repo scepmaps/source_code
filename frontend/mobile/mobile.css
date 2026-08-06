@@ -3,7 +3,7 @@
 
 :root {
   --mobile-dock-height: 72px;
-  --mobile-topbar-height: 48px;
+  --mobile-topbar-height: 64px;
   --mobile-sheet-bg: rgba(10, 16, 36, 0.96);
   --mobile-sheet-border: rgba(77, 226, 255, 0.22);
   --mobile-tile-bg: rgba(15, 27, 59, 0.95);
@@ -37,6 +37,62 @@ body.mobile-app .topbar {
 body.mobile-app .topbar .brand {
   font-size: 13px;
   letter-spacing: 0.06em;
+}
+
+body.mobile-app .topbar-actions {
+  gap: 10px;
+  margin-left: auto;
+  align-items: center;
+}
+
+/* Top-right circular actions (match dock map-icon style) */
+body.mobile-app .mobile-top-btn {
+  width: 48px !important;
+  height: 48px !important;
+  min-width: 48px !important;
+  min-height: 48px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: rgba(10, 16, 32, 0.72) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--text) !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+body.mobile-app .mobile-top-btn::before,
+body.mobile-app .mobile-top-btn::after {
+  content: none !important;
+  display: none !important;
+}
+body.mobile-app .mobile-top-btn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+body.mobile-app .mobile-top-btn-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+body.mobile-app .mobile-top-btn--settings {
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px !important;
+  min-height: 56px !important;
+}
+body.mobile-app .mobile-top-btn--settings svg {
+  width: 24px !important;
+  height: 24px !important;
+}
+body.mobile-app .mobile-top-btn.busy {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
 }
 
 /* ---- Full-bleed map ---- */

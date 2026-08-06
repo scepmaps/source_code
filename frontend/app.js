@@ -1,5 +1,5 @@
 import { LAYERS } from './config.js?v=20260805c';
-import { createToolbarController } from './toolbar/toolbar.js?v=20260806c';
+import { createToolbarController } from './toolbar/toolbar.js?v=20260806d';
 import { initSettingsController } from './settings/settings.js?v=20260805c';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
 import { initMapToolControls } from './tools/tools.js?v=20260805c';
@@ -2606,12 +2606,16 @@ map.on('mousemove', (e) => {
    }
 });
 
-async function exportHgtTiles(customName) {
-  if (!hgtSelectionRect) {
+async function exportHgtTiles(customName, bboxOverride = null) {
+  let bbox;
+  if (Array.isArray(bboxOverride) && bboxOverride.length === 4) {
+    bbox = normalizeWrappedHgtBbox(bboxOverride);
+  } else if (hgtSelectionRect) {
+    const b = hgtSelectionRect.getBounds();
+    bbox = normalizeWrappedHgtBbox([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+  } else {
     throw new Error('Draw a selection box first, then export HGT.');
   }
-  const b = hgtSelectionRect.getBounds();
-  const bbox = normalizeWrappedHgtBbox([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
   const requestedTileCount = countHgtTilesForBbox(bbox);
   if (requestedTileCount > HGT_EXPORT_MAX_TILES) {
     throw new Error(
@@ -2975,12 +2979,20 @@ map.on('touchend', (e)=>{
 const API_BASE = '';
 
 exportBtn?.addEventListener('click', async () => {
+  await performGeotiffExport({});
+});
+
+async function performGeotiffExport({ forceView = false, button = exportBtn } = {}) {
+  if (!button) return;
   console.log('[Export] ========== Export Started ==========');
-  const btn = exportBtn;
-  const spinner = btn.querySelector('.spinner');
-  const label = btn.querySelector('.label');
-  btn.disabled = true; if (spinner) spinner.style.display = 'inline-block'; if (label) label.textContent = 'Exporting…';
-  const b = selectionRect ? selectionRect.getBounds() : map.getBounds();
+  const btn = button;
+  const spinner = btn.querySelector?.('.spinner');
+  const label = btn.querySelector?.('.label');
+  btn.disabled = true;
+  btn.classList.add('busy');
+  if (spinner) spinner.style.display = 'inline-block';
+  if (label) label.textContent = 'Exporting…';
+  const b = (!forceView && selectionRect) ? selectionRect.getBounds() : map.getBounds();
   const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
   const latMid = (bbox[1]+bbox[3])/2;
   const lonMid = (bbox[0]+bbox[2])/2;
@@ -3003,7 +3015,7 @@ exportBtn?.addEventListener('click', async () => {
   };
   const crs = undefined; // deprecated in favor of system
   const customName = filenameInput?.value?.trim() || '';
-  if (isHgtActive && hgtSelectionRect) {
+  if (!forceView && isHgtActive && hgtSelectionRect) {
     try {
       await exportHgtTiles(customName);
       // Reset HGT export state back to default export view after completion.
@@ -3017,6 +3029,7 @@ exportBtn?.addEventListener('click', async () => {
       alert('HGT export failed: ' + (err?.message || err));
     } finally {
       btn.disabled = false;
+      btn.classList.remove('busy');
       if (spinner) spinner.style.display = 'none';
       refreshSelectionLabels();
     }
@@ -3030,12 +3043,12 @@ exportBtn?.addEventListener('click', async () => {
   const endpointBase = 'export_headless';
 
   console.log('[Export] Export Parameters:', {
-    exportType: selectionRect ? 'Selection Box' : 'Full View',
+    exportType: (!forceView && selectionRect) ? 'Selection Box' : 'Full View',
     bbox: bbox,
     center: { lat: latMid, lon: lonMid },
     zoom: zoom,
     system: system,
-    quality: exportQuality.value,
+    quality: exportQuality?.value,
     baseLayer: base,
     overlays: overlays,
     customFilename: customName || '(none)',
@@ -3049,13 +3062,13 @@ exportBtn?.addEventListener('click', async () => {
 
   // Selection box sizing: SD = pixel size of box; HD = 2x box pixels
   let targetWidth = width, targetHeight = height;
-  if (selectionRect){
+  if (!forceView && selectionRect){
     const bnds = selectionRect.getBounds();
     const tl = map.latLngToContainerPoint(bnds.getNorthWest());
     const br = map.latLngToContainerPoint(bnds.getSouthEast());
     const boxPxW = Math.max(1, Math.round(Math.abs(br.x - tl.x)));
     const boxPxH = Math.max(1, Math.round(Math.abs(br.y - tl.y)));
-    const factor = (exportQuality.value === 'HD') ? 2 : 1;
+    const factor = (exportQuality?.value === 'HD') ? 2 : 1;
     targetWidth = boxPxW * factor;
     targetHeight = boxPxH * factor;
     console.log('[Export] Selection Box Sizing:', {
@@ -3075,8 +3088,8 @@ exportBtn?.addEventListener('click', async () => {
     return Math.max(0, Math.min(20, Math.round(z)));
   }
   const radarPixel = system === 'RADAR_overview' ? 25 : (system === 'RADAR_detailed' ? 5 : null);
-  const oversample = radarPixel ? (exportQuality.value === 'HD' ? 3 : 2) : 1;
-  const detailBoost = (selectionRect && exportQuality.value === 'HD') ? 1 : 0; // fetch higher-res tiles for HD box
+  const oversample = radarPixel ? (exportQuality?.value === 'HD' ? 3 : 2) : 1;
+  const detailBoost = (!forceView && selectionRect && exportQuality?.value === 'HD') ? 1 : 0; // fetch higher-res tiles for HD box
   const usedZoom = radarPixel ? zoomForMetersPerPixel(radarPixel / oversample, latMid) : Math.min(20, zoom + detailBoost);
 
   console.log('[Export] Zoom & Resolution Settings:', {
@@ -3178,8 +3191,8 @@ exportBtn?.addEventListener('click', async () => {
       partWidth = Math.max(512, Math.ceil(wMeters / (radarPixel / oversample)));
       partHeight = Math.max(512, Math.ceil(hMeters / (radarPixel / oversample)));
     } else {
-      const baseW = selectionRect ? targetWidth : width;
-      const baseH = selectionRect ? targetHeight : height;
+      const baseW = (!forceView && selectionRect) ? targetWidth : width;
+      const baseH = (!forceView && selectionRect) ? targetHeight : height;
       partWidth = Math.max(256, Math.round(baseW * (1/cols)));
       partHeight = Math.max(256, Math.round(baseH * (1/rows)));
     }
@@ -3187,7 +3200,7 @@ exportBtn?.addEventListener('click', async () => {
     const partName = customName ? (total>1 ? `${customName}_${partSuffix}` : customName) : (total>1 ? `export_${partSuffix}` : 'export');
     const endpoint = endpointBase;
     const showAttribution = document.getElementById('exportAttribution')?.checked ?? true;
-    const payload = { bbox: partBbox, zoom: usedZoom, width: partWidth, height: partHeight, base, overlays, system, crs: outCrs, quality: exportQuality.value, filename: partName, showAttribution };
+    const payload = { bbox: partBbox, zoom: usedZoom, width: partWidth, height: partHeight, base, overlays, system, crs: outCrs, quality: exportQuality?.value || 'SD', filename: partName, showAttribution };
 
     console.log(`[Export] Part ${i+1}/${total} Starting:`, {
       partNumber: i + 1,
@@ -3308,14 +3321,76 @@ exportBtn?.addEventListener('click', async () => {
     timestamp: new Date().toISOString()
   });
 
-  btn.disabled = false; if (spinner) spinner.style.display = 'none'; refreshSelectionLabels();
-});
+  btn.disabled = false;
+  btn.classList.remove('busy');
+  if (spinner) spinner.style.display = 'none';
+  refreshSelectionLabels();
+}
 
 hgtBoxBtn?.addEventListener('click', () => {
   createOrRemoveHgtBox();
   refreshSelectionLabels();
   refreshHgtControlButton();
 });
+
+// Mobile top-right: HGT / TIF export current view (no selection box)
+if (isMobileApp) {
+  const mobileHgtBtn = document.getElementById('mobileHgtBtn');
+  const mobileTifBtn = document.getElementById('mobileTifBtn');
+
+  if (mobileHgtBtn && !allowedTools.includes('hgt')) {
+    mobileHgtBtn.style.display = 'none';
+  }
+
+  mobileHgtBtn?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (mobileHgtBtn.disabled) return;
+
+    const bounds = map.getBounds();
+    const south = Math.max(HGT_MIN_LAT, bounds.getSouth());
+    const north = Math.min(HGT_MAX_LAT, bounds.getNorth());
+    if (!(north > south)) {
+      alert('Current view is outside the HGT coverage area.');
+      return;
+    }
+
+    const bbox = normalizeWrappedHgtBbox([
+      bounds.getWest(),
+      south,
+      bounds.getEast(),
+      north
+    ]);
+    const tileCount = countHgtTilesForBbox(bbox);
+    if (tileCount > HGT_EXPORT_MAX_TILES) {
+      alert('This area is too large for HGT export. Zoom in and try again.');
+      return;
+    }
+
+    const ok = window.confirm(
+      'HGT export is a heavy download and may take a while.\n\nDo you want to continue?'
+    );
+    if (!ok) return;
+
+    mobileHgtBtn.disabled = true;
+    mobileHgtBtn.classList.add('busy');
+    try {
+      await exportHgtTiles('', bbox);
+    } catch (err) {
+      alert('HGT export failed: ' + (err?.message || err));
+    } finally {
+      mobileHgtBtn.disabled = false;
+      mobileHgtBtn.classList.remove('busy');
+    }
+  });
+
+  mobileTifBtn?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (mobileTifBtn.disabled) return;
+    await performGeotiffExport({ forceView: true, button: mobileTifBtn });
+  });
+}
 
 // User stats functionality
 const showUserStats = async () => {
