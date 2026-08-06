@@ -88,9 +88,13 @@ export const LAYERS = {
     names: true
   },
   names_overlay: {
-    // Labels-only overlay to place names over imagery basemaps
-    // Use ArcGIS Online alternate reference labels for cleaner, higher-contrast text
-    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places_Alternate/MapServer/tile/{z}/{y}/{x}',
+    // Place names over satellite imagery.
+    // Prefer ArcGIS Imagery Labels (vector) — designed for World Imagery contrast.
+    // Raster fallback uses the standard (non-Alternate) boundaries/places tiles.
+    styleUrl: (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+      ? 'http://127.0.0.1:5001/api/arcgis/style/arcgis/imagery/labels'
+      : '/api/arcgis/style/arcgis/imagery/labels',
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
     attribution: SHOW_ATTRIBUTION ? 'Labels &copy; Esri' : ''
   },
   openseamap: {

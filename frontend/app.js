@@ -1,4 +1,4 @@
-import { LAYERS } from './config.js?v=20260805c';
+import { LAYERS } from './config.js?v=20260806g';
 import { createToolbarController } from './toolbar/toolbar.js?v=20260806f';
 import { initSettingsController } from './settings/settings.js?v=20260805c';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
@@ -470,6 +470,14 @@ function getNamesRasterUrl() {
   return LAYERS.names_overlay?.url || null;
 }
 
+function bumpLabelTextSize(size) {
+  if (typeof size === 'number' && Number.isFinite(size)) {
+    return Math.min(28, Math.round(size * 1.2));
+  }
+  // Keep MapLibre expressions intact; halo/color carry most of the readability gain.
+  return size;
+}
+
 function buildLabelsOnlyStyle(styleJson) {
   const allLayers = Array.isArray(styleJson?.layers) ? styleJson.layers : [];
   const isRoadLabelLayer = (layer) => {
@@ -486,16 +494,30 @@ function buildLabelsOnlyStyle(styleJson) {
   const labelLayers = allLayers
     .filter(layer => layer?.type === 'symbol' && layer?.layout && layer.layout['text-field'])
     .filter(layer => !isRoadLabelLayer(layer))
-    .map(layer => ({
-      ...layer,
-      // Force consistent black labels over satellite imagery.
-      paint: {
-        ...(layer.paint || {}),
-        'text-color': '#000000',
-        'text-halo-color': '#ffffff',
-        'text-halo-width': 1.4
+    .map(layer => {
+      const layout = { ...(layer.layout || {}) };
+      if (layout['text-size'] != null) {
+        layout['text-size'] = bumpLabelTextSize(layout['text-size']);
       }
-    }));
+      // Prefer a bold face when the style lists multiple fonts.
+      if (Array.isArray(layout['text-font']) && layout['text-font'].length) {
+        const bold = layout['text-font'].find((f) => /Bold|Black|Heavy|Semibold|Medium/i.test(String(f)));
+        if (bold) layout['text-font'] = [bold];
+      }
+      // White type + thick dark halo reads clearly on mixed satellite tones.
+      return {
+        ...layer,
+        layout,
+        paint: {
+          ...(layer.paint || {}),
+          'text-color': '#ffffff',
+          'text-halo-color': 'rgba(0, 0, 0, 0.92)',
+          'text-halo-width': 2.2,
+          'text-halo-blur': 0.4,
+          'text-opacity': 1,
+        }
+      };
+    });
   return {
     version: styleJson.version || 8,
     name: 'Labels Only Overlay',
@@ -514,7 +536,7 @@ function createNamesRasterOverlayLayer() {
   return L.tileLayer(rasterUrl, {
     attribution: LAYERS.names_overlay?.attribution || '',
     maxZoom: 20,
-    opacity: 0.95,
+    opacity: 1,
     pane: 'labelPane',
   });
 }
@@ -557,19 +579,19 @@ async function createNamesVectorOverlayLayer() {
 async function createNamesOverlayLayer() {
   if (namesGlLayer) return namesGlLayer;
 
-  // Prefer the configured raster reference labels — reliable on Satellite without
-  // depending on a vector style fetch. Fall back to filtered navigation labels.
+  // Prefer Imagery Labels (vector) — designed for satellite contrast.
+  // Fall back to raster World_Boundaries_and_Places if the style proxy fails.
   try {
-    namesGlLayer = createNamesRasterOverlayLayer();
-    if (namesGlLayer) return namesGlLayer;
-
     namesGlLayer = await createNamesVectorOverlayLayer();
     if (namesGlLayer) return namesGlLayer;
 
-    console.warn('[Names] No raster URL or vector style available for labels overlay');
+    namesGlLayer = createNamesRasterOverlayLayer();
+    if (namesGlLayer) return namesGlLayer;
+
+    console.warn('[Names] No vector style or raster URL available for labels overlay');
     return null;
   } catch (error) {
-    console.error('[Names] Failed to create labels overlay:', error);
+    console.error('[Names] Failed to create vector labels overlay:', error);
     namesGlLayer = createNamesRasterOverlayLayer();
     return namesGlLayer;
   }

@@ -70,8 +70,9 @@ export const LAYERS = {
     attribution: SHOW_ATTRIBUTION ? 'Census 2021 &copy; ONS' : ''
   },
   names_overlay: {
-    // Labels-only overlay to place names over imagery basemaps
-    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places_Alternate/MapServer/tile/{z}/{y}/{x}',
+    // Place names over satellite imagery (vector imagery/labels + raster fallback)
+    styleUrl: '/api/arcgis/style/arcgis/imagery/labels',
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
     attribution: SHOW_ATTRIBUTION ? 'Labels &copy; Esri' : ''
   }
 };
