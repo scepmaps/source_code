@@ -1,5 +1,5 @@
 import { LAYERS } from './config.js?v=20260805c';
-import { createToolbarController } from './toolbar/toolbar.js?v=20260806d';
+import { createToolbarController } from './toolbar/toolbar.js?v=20260806e';
 import { initSettingsController } from './settings/settings.js?v=20260805c';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
 import { initMapToolControls } from './tools/tools.js?v=20260805c';
@@ -2606,6 +2606,62 @@ map.on('mousemove', (e) => {
    }
 });
 
+const API_BASE = '';
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const safeName = filename || 'download.bin';
+
+  // Mobile browsers often block programmatic downloads after await/confirm.
+  // Show an explicit tap target so the save stays in a real user gesture.
+  if (isMobileApp) {
+    const toast = document.getElementById('mobileDownloadToast');
+    const link = document.getElementById('mobileDownloadLink');
+    const dismiss = document.getElementById('mobileDownloadDismiss');
+    if (toast && link) {
+      if (link.dataset.blobUrl) {
+        try { URL.revokeObjectURL(link.dataset.blobUrl); } catch (_) { /* ignore */ }
+      }
+      link.href = url;
+      link.download = safeName;
+      link.textContent = `Save ${safeName}`;
+      link.dataset.blobUrl = url;
+      toast.hidden = false;
+
+      const closeToast = () => {
+        toast.hidden = true;
+        // Keep blob alive briefly in case the share sheet is still opening.
+        setTimeout(() => {
+          if (link.dataset.blobUrl === url) {
+            try { URL.revokeObjectURL(url); } catch (_) { /* ignore */ }
+            link.removeAttribute('href');
+            delete link.dataset.blobUrl;
+            link.textContent = 'Save file';
+          }
+        }, 60_000);
+      };
+      dismiss?.addEventListener('click', closeToast, { once: true });
+      link.addEventListener('click', () => {
+        // After the user taps Save, close shortly afterward.
+        setTimeout(closeToast, 800);
+      }, { once: true });
+      return;
+    }
+  }
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = safeName;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    try { URL.revokeObjectURL(url); } catch (_) { /* ignore */ }
+    a.remove();
+  }, 10_000);
+}
+
 async function exportHgtTiles(customName, bboxOverride = null) {
   let bbox;
   if (Array.isArray(bboxOverride) && bboxOverride.length === 4) {
@@ -2649,15 +2705,13 @@ async function exportHgtTiles(customName, bboxOverride = null) {
   }
   const blob = await res.blob();
   console.log('[HGT Export] Success, zip size (bytes):', blob.size);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  if (!blob || blob.size < 32) {
+    throw new Error('HGT export returned an empty file.');
+  }
   const cd = res.headers.get('Content-Disposition') || '';
   const match = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
   const serverName = match ? decodeURIComponent((match[1] || match[2] || '').trim()) : '';
-  a.href = url;
-  a.download = serverName || `${baseName}.zip`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, serverName || `${baseName}.zip`);
 }
 
 function normalizeWrappedHgtBbox(bbox) {
@@ -2976,8 +3030,6 @@ map.on('touchend', (e)=>{
 // Two-corner box selection is now ONLY available in drawing mode
 // (Removed automatic two-corner on any click - was causing conflicts)
 
-const API_BASE = '';
-
 exportBtn?.addEventListener('click', async () => {
   await performGeotiffExport({});
 });
@@ -3246,12 +3298,10 @@ async function performGeotiffExport({ forceView = false, button = exportBtn } = 
     }
     try {
       const { blob, res } = await doExportWithRetry();
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
       const cd = res.headers.get('Content-Disposition') || '';
       const match = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
       const serverName = match ? decodeURIComponent((match[1] || match[2] || '').trim()) : '';
-    const ts   = new Date().toISOString().replace(/[:.]/g,'');
+      const ts   = new Date().toISOString().replace(/[:.]/g,'');
       // Universal zoom naming (matches server _download_name / zoom badge)
       const inverseZoom = 21 - usedZoom;
       const prefix = `z${inverseZoom}_`;
@@ -3265,7 +3315,7 @@ async function performGeotiffExport({ forceView = false, button = exportBtn } = 
         downloadStarted: true
       });
 
-    a.href = url; a.download = finalName; a.click(); URL.revokeObjectURL(url);
+      downloadBlob(blob, finalName);
       completed++;
       partResults.push({ bbox: partBbox, finalName });
       console.log(`[Export] Part ${i+1}/${total} - Completed (${completed}/${total})`);

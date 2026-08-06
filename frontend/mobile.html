@@ -22,10 +22,10 @@
     <link rel="stylesheet" href="tools/tools.css">
     <link rel="stylesheet" href="zoom/zoom.css">
     <link rel="stylesheet" href="settings/settings.css">
-    <link rel="stylesheet" href="mobile/mobile.css?v=20260806d">
+    <link rel="stylesheet" href="mobile/mobile.css?v=20260806e">
     <script type="module">
       // Escape hatch: force desktop with ?desktop / stay with ?mobile
-      import { isMobileClient } from './mobile/device.js?v=20260806d';
+      import { isMobileClient } from './mobile/device.js?v=20260806e';
       try {
         const params = new URLSearchParams(location.search);
         const forceDesktop = params.has('desktop') || params.get('view') === 'desktop';
@@ -353,10 +353,19 @@
       </div>
     </div>
 
+    <!-- Mobile: tap-to-save after async export (browsers block auto-download without gesture) -->
+    <div id="mobileDownloadToast" class="mobile-download-toast" hidden>
+      <div class="mobile-download-toast-card">
+        <div class="mobile-download-toast-title">Download ready</div>
+        <a id="mobileDownloadLink" class="mobile-download-toast-link" href="#" download>Save file</a>
+        <button type="button" id="mobileDownloadDismiss" class="mobile-download-toast-dismiss">Close</button>
+      </div>
+    </div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
     <script src="particles.js"></script>
-    <script type="module" src="app.js?v=20260806d"></script>
+    <script type="module" src="app.js?v=20260806e"></script>
   </body>
 </html>
