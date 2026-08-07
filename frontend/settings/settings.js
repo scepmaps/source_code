@@ -28,16 +28,79 @@ export function initSettingsController(opts) {
     populateFavoriteSelects,
     loadFavorites,
     applyFavorites,
+    kmlController,
   } = opts;
   const settingsModal = document.getElementById('userSettingsModal');
   const settingsBody = settingsModal.querySelector('.stats-modal-body');
   const saveBtn = document.getElementById('savePreferencesBtn');
   const settingsOverlaysList = document.getElementById('settingsOverlaysList');
+  const settingsKmlList = document.getElementById('settingsKmlList');
   let initialSettingsSnapshot = '';
+  let kmlRenderToken = 0;
+  /** Staged KML edits applied only on Save Changes: id -> {name,color,opacity,enabled} */
+  const kmlDrafts = new Map();
 
   function bindIfExists(elementId, eventName, handler) {
     const el = document.getElementById(elementId);
     if (el) el.addEventListener(eventName, handler);
+  }
+
+  function getKmlDraftView(item) {
+    const draft = kmlDrafts.get(Number(item.id)) || {};
+    return {
+      ...item,
+      name: draft.name != null ? draft.name : item.name,
+      color: draft.color != null ? draft.color : item.color,
+      opacity: draft.opacity != null ? draft.opacity : item.opacity,
+      enabled: draft.enabled != null ? draft.enabled : !!(item.active || item.enabled),
+    };
+  }
+
+  function stageKmlDraft(id, patch) {
+    const key = Number(id);
+    kmlDrafts.set(key, { ...(kmlDrafts.get(key) || {}), ...patch });
+    refreshSaveButtonVisibility();
+  }
+
+  function collectKmlDraftsFromDom() {
+    if (!settingsKmlList) return;
+    settingsKmlList.querySelectorAll('.settings-kml-card').forEach((card) => {
+      const id = Number(card.dataset.kmlId);
+      if (!Number.isFinite(id)) return;
+      const nameEl = document.getElementById(`settingsKmlName_${id}`);
+      const colorEl = document.getElementById(`settingsKmlColor_${id}`);
+      const opacityEl = document.getElementById(`settingsKmlOpacity_${id}`);
+      const enabledEl = document.getElementById(`settingsKmlEnabled_${id}`);
+      const patch = {};
+      if (nameEl) patch.name = nameEl.value.trim();
+      if (colorEl) patch.color = colorEl.value;
+      if (opacityEl) patch.opacity = parseFloat(opacityEl.value);
+      if (enabledEl) patch.enabled = !!enabledEl.checked;
+      kmlDrafts.set(id, { ...(kmlDrafts.get(id) || {}), ...patch });
+    });
+  }
+
+  async function applyKmlDrafts() {
+    if (!kmlController) return;
+    collectKmlDraftsFromDom();
+    const saved = kmlController.getItems() || [];
+    for (const item of saved) {
+      const draft = kmlDrafts.get(Number(item.id));
+      if (!draft) continue;
+      const patch = {};
+      if (draft.name != null && draft.name !== item.name) patch.name = draft.name;
+      if (draft.color != null && draft.color !== item.color) patch.color = draft.color;
+      if (draft.opacity != null && Number(draft.opacity) !== Number(item.opacity)) {
+        patch.opacity = Number(draft.opacity);
+      }
+      const wasEnabled = !!(item.active || item.enabled);
+      if (draft.enabled != null && !!draft.enabled !== wasEnabled) {
+        patch.enabled = !!draft.enabled;
+      }
+      if (!Object.keys(patch).length) continue;
+      await kmlController.updateStyle(item.id, patch);
+    }
+    kmlDrafts.clear();
   }
   const settingsOverlayDefs = [
     {
@@ -173,7 +236,130 @@ export function initSettingsController(opts) {
     });
   }
 
-  const showUserSettings = () => {
+  function renderKmlSettings(items) {
+    if (!settingsKmlList) return;
+    const token = ++kmlRenderToken;
+    const list = Array.isArray(items) ? items : (kmlController?.getItems?.() || []);
+    if (!list.length) {
+      settingsKmlList.innerHTML = '<div class="settings-kml-empty">No KML files imported yet.</div>';
+      return;
+    }
+
+    settingsKmlList.innerHTML = '';
+    list.forEach((raw) => {
+      if (token !== kmlRenderToken) return;
+      const item = getKmlDraftView(raw);
+      const card = document.createElement('div');
+      card.className = 'settings-kml-card';
+      card.dataset.kmlId = String(item.id);
+
+      const top = document.createElement('div');
+      top.className = 'settings-kml-card-top';
+
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.id = `settingsKmlName_${item.id}`;
+      nameInput.className = 'settings-kml-name';
+      nameInput.value = item.name || '';
+      nameInput.placeholder = 'Overlay name';
+      nameInput.addEventListener('input', () => {
+        stageKmlDraft(item.id, { name: nameInput.value.trim() });
+      });
+
+      const onOff = document.createElement('label');
+      onOff.className = 'settings-switch';
+      onOff.title = 'Show on map';
+      onOff.innerHTML = `
+        <input type="checkbox" id="settingsKmlEnabled_${item.id}" ${item.enabled ? 'checked' : ''} />
+        <span class="settings-switch-slider" aria-hidden="true"></span>
+      `;
+      const onOffInput = onOff.querySelector('input');
+      onOffInput.addEventListener('change', () => {
+        stageKmlDraft(item.id, { enabled: onOffInput.checked });
+      });
+
+      const actions = document.createElement('div');
+      actions.className = 'settings-kml-actions';
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'btn';
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', async () => {
+        if (!window.confirm(`Delete “${item.name}”?`)) return;
+        try {
+          kmlDrafts.delete(Number(item.id));
+          await kmlController.removeOverlay(item.id);
+        } catch (_) {
+          /* alert already shown */
+        }
+      });
+
+      actions.appendChild(delBtn);
+      top.appendChild(nameInput);
+      top.appendChild(onOff);
+      top.appendChild(actions);
+
+      const controls = document.createElement('div');
+      controls.className = 'settings-kml-controls';
+
+      const colorLabel = document.createElement('label');
+      colorLabel.textContent = 'Color';
+      colorLabel.setAttribute('for', `settingsKmlColor_${item.id}`);
+      const colorInput = document.createElement('input');
+      colorInput.type = 'color';
+      colorInput.id = `settingsKmlColor_${item.id}`;
+      colorInput.className = 'settings-kml-color';
+      colorInput.value = item.color || '#4de2ff';
+      colorInput.addEventListener('input', () => {
+        stageKmlDraft(item.id, { color: colorInput.value });
+      });
+
+      const opacityLabel = document.createElement('label');
+      opacityLabel.textContent = 'Opacity';
+      opacityLabel.setAttribute('for', `settingsKmlOpacity_${item.id}`);
+      const opacityRow = document.createElement('div');
+      opacityRow.className = 'settings-kml-opacity-row';
+      const opacityInput = document.createElement('input');
+      opacityInput.type = 'range';
+      opacityInput.id = `settingsKmlOpacity_${item.id}`;
+      opacityInput.min = '0';
+      opacityInput.max = '1';
+      opacityInput.step = '0.05';
+      opacityInput.value = String(item.opacity ?? 0.65);
+      const opacityVal = document.createElement('span');
+      opacityVal.className = 'settings-kml-opacity-val';
+      opacityVal.textContent = `${Math.round((item.opacity ?? 0.65) * 100)}%`;
+      opacityInput.addEventListener('input', () => {
+        opacityVal.textContent = `${Math.round(parseFloat(opacityInput.value) * 100)}%`;
+        stageKmlDraft(item.id, { opacity: parseFloat(opacityInput.value) });
+      });
+      opacityRow.appendChild(opacityInput);
+      opacityRow.appendChild(opacityVal);
+
+      controls.appendChild(colorLabel);
+      controls.appendChild(colorInput);
+      controls.appendChild(opacityLabel);
+      controls.appendChild(opacityRow);
+
+      card.appendChild(top);
+      card.appendChild(controls);
+      settingsKmlList.appendChild(card);
+    });
+  }
+
+  async function refreshKmlSettings({ preserveDrafts = false } = {}) {
+    if (!kmlController) return;
+    if (!preserveDrafts) kmlDrafts.clear();
+    try {
+      await kmlController.refreshList();
+    } catch (_) {
+      /* ignore */
+    }
+    renderKmlSettings(kmlController.getItems());
+  }
+
+  const showUserSettings = async () => {
     const user = userRef();
     document.body.classList.add('settings-modal-open');
     document.getElementById('userSettingsModal').style.display = 'flex';
@@ -225,10 +411,12 @@ export function initSettingsController(opts) {
     populateFavoriteSelects();
     loadFavorites();
     document.getElementById('exportAttribution').checked = localStorage.getItem('scepmaps_export_attribution') !== 'false';
+    await refreshKmlSettings({ preserveDrafts: false });
     markSettingsClean();
   };
 
   const closeSettingsModal = () => {
+    kmlDrafts.clear();
     document.body.classList.remove('settings-modal-open');
     document.getElementById('userSettingsModal').style.display = 'none';
     saveBtn.style.display = 'none';
@@ -270,6 +458,8 @@ export function initSettingsController(opts) {
     preferences.default_overlays = overlays;
 
     try {
+      await applyKmlDrafts();
+
       const res = await fetch(`${API_BASE}/auth/preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
@@ -289,6 +479,7 @@ export function initSettingsController(opts) {
         if (hasRulerPoints()) updateRulerLabels();
       }
       if (densityOpacityVal) updateDensityOpacity(parseFloat(densityOpacityVal));
+      await refreshKmlSettings({ preserveDrafts: false });
       const message = document.getElementById('preferencesMessage');
       message.style.display = 'inline';
       setTimeout(() => { message.style.display = 'none'; }, 3000);
@@ -360,6 +551,19 @@ export function initSettingsController(opts) {
       renderOverlayOptions(selectedBase);
       refreshSaveButtonVisibility();
     });
+    bindIfExists('settingsKmlImportBtn', 'click', async () => {
+      if (!kmlController?.pickFile) return;
+      kmlController.pickFile();
+    });
+    if (kmlController?.onChange) {
+      kmlController.onChange(() => {
+        if (document.getElementById('userSettingsModal')?.style.display === 'flex') {
+          collectKmlDraftsFromDom();
+          renderKmlSettings(kmlController.getItems());
+          refreshSaveButtonVisibility();
+        }
+      });
+    }
   }
 
   return { init };

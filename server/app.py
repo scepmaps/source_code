@@ -18,17 +18,25 @@ import requests
 from auth import extract_bearer_token, hash_password, mint_token_for_user, verify_password, verify_token
 from db import (
     count_exports_since,
+    count_user_kml,
     create_user,
+    create_user_kml,
     delete_user,
+    delete_user_kml,
     ensure_default_admin,
     get_all_export_stats,
     get_user_by_email,
     get_user_by_id,
     get_user_export_stats,
+    get_user_kml,
     init_db,
+    list_user_kml,
     list_users,
     log_export,
+    MAX_KML_BYTES,
+    MAX_KML_PER_USER,
     update_user,
+    update_user_kml,
 )
 from dotenv import load_dotenv
 
@@ -1145,6 +1153,8 @@ _shom_cache_ttl = 300  # 5 minutes cache for failed tiles
 
 @app.get("/tiles/shom/<int:z>/<int:x>/<int:y>.<ext>")
 def shom_tile(z: int, x: int, y: int, ext: str):
+    if not _require_user(request):
+        return ("Unauthorized", 401)
     # SHOM tiles are typically not available beyond zoom level 18
     if z > 18:
         return ("SHOM tiles not available at this zoom level", 404)
@@ -1293,6 +1303,8 @@ def _save_ukho_debug_png(image_bytes: bytes, prefix: str):
 
 @app.get("/tiles/ukho/<int:z>/<int:x>/<int:y>.png")
 def ukho_tile(z: int, x: int, y: int):
+    if not _require_user(request):
+        return ("Unauthorized", 401)
     if not UKHO_DISCOVERY_ENABLED or not UKHO_WMS_URL or not UKHO_SUBSCRIPTION_KEY:
         return ("UKHO Discovery disabled/not configured", 404)
     if z > 18:
@@ -1386,6 +1398,8 @@ def ukho_tile(z: int, x: int, y: int):
 @app.get("/api/ukho/status")
 def ukho_status():
     """Quick diagnostic endpoint for UKHO Discovery connectivity."""
+    if not _require_admin(request):
+        return ({"error": "Unauthorized"}, 401)
     configured = bool(UKHO_WMS_URL and UKHO_SUBSCRIPTION_KEY)
     enabled = bool(UKHO_DISCOVERY_ENABLED)
     if not (enabled and configured):
@@ -1446,6 +1460,8 @@ def ukho_probe():
     """
     Probe UKHO Discovery GetMap for a specific BBOX and return image diagnostics.
     """
+    if not _require_admin(request):
+        return {"error": "Unauthorized"}, 401
     if not UKHO_DISCOVERY_ENABLED or not UKHO_WMS_URL or not UKHO_SUBSCRIPTION_KEY:
         return {"error": "UKHO Discovery disabled/not configured"}, 404
 
@@ -1496,6 +1512,8 @@ def ukho_probe_southcoast():
     """
     Probe several south-coast candidate BBOX values and report which return non-transparent pixels.
     """
+    if not _require_admin(request):
+        return {"error": "Unauthorized"}, 401
     if not UKHO_DISCOVERY_ENABLED or not UKHO_WMS_URL or not UKHO_SUBSCRIPTION_KEY:
         return {"error": "UKHO Discovery disabled/not configured"}, 404
 
@@ -2217,6 +2235,8 @@ _OAIP_SUBS = ["a", "b", "c"]
 
 @app.get("/tiles/openaip/<int:z>/<int:x>/<int:y>.png")
 def openaip_tile(z: int, x: int, y: int):
+    if not _require_user(request):
+        return ("Unauthorized", 401)
     if not OPENAIP_KEY:
         return ("OpenAIP key not configured on server", 404)
     try:
@@ -2349,6 +2369,145 @@ def me():
     activity.enrich(user=user)
     refreshed = mint_token_for_user(user)
     return {"user": user, "token": refreshed}
+
+
+def _require_jwt_user(req):
+    """Strict JWT auth for user-data APIs (unlike tile proxy _require_user)."""
+    token = extract_bearer_token(req)
+    if not token:
+        return None
+    payload = verify_token(token)
+    if not payload:
+        return None
+    user = get_user_by_id(int(payload.get("uid", 0)))
+    return user or None
+
+
+def _looks_like_kml(text: str) -> bool:
+    sample = (text or "")[:4000].lstrip().lower()
+    if not sample:
+        return False
+    if "<kml" in sample:
+        return True
+    # Some exports wrap KML in a Document without the root tag early — still require XML-ish content.
+    return sample.startswith("<?xml") and ("placemark" in sample or "document" in sample)
+
+
+@app.get("/api/kml")
+def api_list_kml():
+    user = _require_jwt_user(request)
+    if not user:
+        return ({"error": "Unauthorized"}, 401)
+    activity.enrich(user=user, kml_action="list")
+    items = list_user_kml(int(user["id"]))
+    return {"items": items, "max_items": MAX_KML_PER_USER, "max_bytes": MAX_KML_BYTES}
+
+
+@app.get("/api/kml/<int:kml_id>")
+def api_get_kml(kml_id: int):
+    user = _require_jwt_user(request)
+    if not user:
+        return ({"error": "Unauthorized"}, 401)
+    row = get_user_kml(int(user["id"]), int(kml_id))
+    if not row:
+        return ({"error": "Not found"}, 404)
+    activity.enrich(user=user, kml_action="get", kml_id=kml_id)
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "content": row["content"],
+        "created_at": row["created_at"],
+        "color": row.get("color", "#4de2ff"),
+        "opacity": row.get("opacity", 0.65),
+        "enabled": bool(row.get("enabled")),
+    }
+
+
+@app.post("/api/kml")
+def api_create_kml():
+    user = _require_jwt_user(request)
+    if not user:
+        return ({"error": "Unauthorized"}, 401)
+
+    name = ""
+    content = ""
+
+    if request.files and "file" in request.files:
+        f = request.files["file"]
+        raw = f.read()
+        if len(raw) > MAX_KML_BYTES:
+            return ({"error": f"File too large (max {MAX_KML_BYTES // (1024 * 1024)} MB)"}, 400)
+        try:
+            content = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                content = raw.decode("latin-1")
+            except Exception:
+                return ({"error": "File must be UTF-8 text KML"}, 400)
+        name = (request.form.get("name") or f.filename or "overlay.kml").strip()
+    else:
+        data = request.get_json(silent=True) or {}
+        content = data.get("content") or ""
+        name = (data.get("name") or "overlay.kml").strip()
+        if len(content.encode("utf-8")) > MAX_KML_BYTES:
+            return ({"error": f"File too large (max {MAX_KML_BYTES // (1024 * 1024)} MB)"}, 400)
+
+    if not content or not _looks_like_kml(content):
+        return ({"error": "Invalid KML file"}, 400)
+
+    # Normalize name
+    name = name[:120] or "overlay.kml"
+
+    uid = int(user["id"])
+    if count_user_kml(uid) >= MAX_KML_PER_USER:
+        return ({"error": f"Limit of {MAX_KML_PER_USER} KML overlays reached"}, 400)
+
+    created = create_user_kml(uid, name, content, enabled=1)
+    activity.enrich(user=user, kml_action="create", kml_id=created["id"], kml_name=name)
+    return {"item": created}, 201
+
+
+@app.patch("/api/kml/<int:kml_id>")
+def api_patch_kml(kml_id: int):
+    user = _require_jwt_user(request)
+    if not user:
+        return ({"error": "Unauthorized"}, 401)
+    data = request.get_json(silent=True) or {}
+    updated = update_user_kml(
+        int(user["id"]),
+        int(kml_id),
+        name=data.get("name"),
+        color=data.get("color"),
+        opacity=data.get("opacity"),
+        enabled=data.get("enabled"),
+    )
+    if not updated:
+        return ({"error": "Not found"}, 404)
+    activity.enrich(user=user, kml_action="patch", kml_id=kml_id)
+    # Never return full content in patch response
+    return {
+        "item": {
+            "id": updated["id"],
+            "name": updated["name"],
+            "created_at": updated["created_at"],
+            "color": updated.get("color", "#4de2ff"),
+            "opacity": updated.get("opacity", 0.65),
+            "enabled": bool(updated.get("enabled")),
+            "size_bytes": updated.get("size_bytes", 0),
+        }
+    }
+
+
+@app.delete("/api/kml/<int:kml_id>")
+def api_delete_kml(kml_id: int):
+    user = _require_jwt_user(request)
+    if not user:
+        return ({"error": "Unauthorized"}, 401)
+    ok = delete_user_kml(int(user["id"]), int(kml_id))
+    if not ok:
+        return ({"error": "Not found"}, 404)
+    activity.enrich(user=user, kml_action="delete", kml_id=kml_id)
+    return {"ok": True}
 
 
 @app.post("/auth/preferences")

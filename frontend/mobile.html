@@ -18,11 +18,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806h">
-    <link rel="stylesheet" href="tools/tools.css?v=20260806h">
+    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
+    <link rel="stylesheet" href="tools/tools.css?v=20260806u">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css">
-    <link rel="stylesheet" href="mobile/mobile.css?v=20260806h">
+    <link rel="stylesheet" href="settings/settings.css?v=20260806u">
+    <link rel="stylesheet" href="mobile/mobile.css?v=20260806y">
     <script type="module">
       // Escape hatch: force desktop with ?desktop / stay with ?mobile
       import { isMobileClient } from './mobile/device.js?v=20260806e';
@@ -49,15 +49,16 @@
       <div class="topbar">
         <div class="brand topbar-tool topbar-tool--fixed"><span class="glow-dot"></span>SCEPMAPS</div>
         <div class="topbar-actions topbar-tool topbar-tool--fixed">
-          <button type="button" class="emoji-btn mobile-top-btn" id="mobileHgtBtn" title="Export HGT" aria-label="Export HGT">
-            <span class="mobile-top-btn-label">HGT</span>
-          </button>
-          <button type="button" class="emoji-btn mobile-top-btn" id="mobileTifBtn" title="Export GeoTIFF" aria-label="Export GeoTIFF">
-            <span class="mobile-top-btn-label">TIF</span>
-          </button>
-          <button type="button" class="emoji-btn mobile-top-btn" id="settingsBtn" title="Settings" aria-label="Settings">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
+          <input id="exportFilename" class="mobile-filename" type="text" placeholder="filename" autocomplete="off" enterkeyhint="done" spellcheck="false" />
+          <div class="mobile-download-stack">
+            <button type="button" class="emoji-btn mobile-top-btn" id="mobileDownloadBtn" title="Download" aria-label="Download">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            </button>
+            <div class="mobile-format-toggle" role="group" aria-label="Download format">
+              <button type="button" class="mobile-format-opt" id="mobileFormatHgt" data-format="hgt" aria-pressed="false">HGT</button>
+              <button type="button" class="mobile-format-opt is-active" id="mobileFormatTif" data-format="tif" aria-pressed="true">MAP</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -81,6 +82,12 @@
               <button class="emoji-btn more-btn" id="btnMoreTools" data-tip="More tools" aria-label="More tools" tabindex="-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
               <div class="more-dropdown" id="moreToolDropdown"></div>
             </div>
+          </div>
+
+          <div class="mobile-dock-btn" data-section="settings">
+            <button type="button" class="emoji-btn" id="settingsBtn" data-tip="Settings" title="Settings" aria-label="Settings">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
           </div>
         </section>
 
@@ -311,6 +318,19 @@
             </div>
           </div>
 
+          <div id="settingsKmlSection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <div class="settings-kml-header">
+              <div>
+                <h4>KML Overlays</h4>
+                <p style="color: var(--muted); font-size: 13px; margin: 0;">
+                  Import and configure your saved KML layers. Click Save Changes to apply.
+                </p>
+              </div>
+              <button type="button" class="btn" id="settingsKmlImportBtn">Import KML</button>
+            </div>
+            <div id="settingsKmlList" class="settings-kml-list"></div>
+          </div>
+
           <!-- Export settings omitted on mobile -->
           <div class="mobile-hide-export" hidden aria-hidden="true">
             <select id="settingsSystem"><option value="UAS">UAS</option></select>
@@ -369,6 +389,6 @@
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
     <script src="particles.js"></script>
-    <script type="module" src="app.js?v=20260806j"></script>
+    <script type="module" src="app.js?v=20260806x"></script>
   </body>
 </html>

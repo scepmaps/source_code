@@ -1,5 +1,5 @@
-import { iconHtml } from './icons.js?v=20260805c';
-import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260805c';
+import { iconHtml } from './icons.js?v=20260806u';
+import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260806u';
 
 export function createToolbarController(opts) {
   const {
@@ -80,7 +80,7 @@ export function createToolbarController(opts) {
   }
 
   function closeAllPanels(exceptId = null) {
-    ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown'].forEach((id) => {
+    ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown', 'kmlPickerPanel'].forEach((id) => {
       if (id === exceptId) return;
       const el = document.getElementById(id);
       el?.classList.remove('open');
@@ -94,10 +94,12 @@ export function createToolbarController(opts) {
     });
     document.getElementById('btnMaps')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnOverlays')?.setAttribute('aria-expanded', 'false');
+    document.getElementById('btnKml')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnMaps')?.classList.remove('panel-open');
     document.getElementById('btnOverlays')?.classList.remove('panel-open');
+    document.getElementById('btnKml')?.classList.remove('panel-open', 'map-tool-btn--active');
     const anyOpen = !!document.querySelector(
-      '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open'
+      '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open, #kmlPickerPanel.open'
     );
     setMobileSheetOpen(anyOpen);
   }
@@ -573,7 +575,7 @@ export function createToolbarController(opts) {
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' && e.key !== 'Esc') return;
       const anyOpen = document.querySelector(
-        '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open'
+        '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open, #kmlPickerPanel.open'
       );
       if (!anyOpen) return;
       e.preventDefault();

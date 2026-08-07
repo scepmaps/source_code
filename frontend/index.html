@@ -16,10 +16,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css?v=20260806m">
-    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806n">
-    <link rel="stylesheet" href="tools/tools.css?v=20260806h">
+    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
+    <link rel="stylesheet" href="tools/tools.css?v=20260806u">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css">
+    <link rel="stylesheet" href="settings/settings.css?v=20260806u">
     <script type="module">
       import { isMobileClient } from './mobile/device.js?v=20260806e';
       try {
@@ -317,6 +317,19 @@
             </div>
           </div>
 
+          <div id="settingsKmlSection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <div class="settings-kml-header">
+              <div>
+                <h4>KML Overlays</h4>
+                <p style="color: var(--muted); font-size: 13px; margin: 0;">
+                  Import and configure your saved KML layers. Click Save Changes to apply.
+                </p>
+              </div>
+              <button type="button" class="btn" id="settingsKmlImportBtn">Import KML</button>
+            </div>
+            <div id="settingsKmlList" class="settings-kml-list"></div>
+          </div>
+
           <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
             <h4>Export settings</h4>
             <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
@@ -396,6 +409,6 @@
     <!-- Interactive Mapping Grid System -->
     <script src="particles.js"></script>
 
-    <script type="module" src="app.js?v=20260806k"></script>
+    <script type="module" src="app.js?v=20260806x"></script>
   </body>
 </html>

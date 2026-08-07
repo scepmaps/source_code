@@ -1,8 +1,10 @@
 import { LAYERS } from './config.js?v=20260806k';
 import { createToolbarController } from './toolbar/toolbar.js?v=20260806h';
-import { initSettingsController } from './settings/settings.js?v=20260805c';
+import { initSettingsController } from './settings/settings.js?v=20260806v';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
-import { initMapToolControls } from './tools/tools.js?v=20260806h';
+import { initMapToolControls } from './tools/tools.js?v=20260806u';
+import { initKmlOverlays } from './tools/kml.js?v=20260806u';
+import { iconHtml } from './toolbar/icons.js?v=20260806p';
 import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260805c';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
 import { absolutizeMapStyleUrls, makeArcgisTransformRequest } from './map-style.js?v=20260805c';
@@ -60,7 +62,7 @@ const defaultLat = (user.default_lat !== null && user.default_lat !== undefined)
 const defaultLon = (user.default_lon !== null && user.default_lon !== undefined) ? user.default_lon : 0.9325;
 const defaultZoom = (user.default_zoom !== null && user.default_zoom !== undefined) ? user.default_zoom : 15;
 
-const map = L.map('map', { zoomControl: true }).setView([defaultLat, defaultLon], defaultZoom);
+const map = L.map('map', { zoomControl: !isMobileApp }).setView([defaultLat, defaultLon], defaultZoom);
 map.invalidateSize(); // Ensure map renders correctly after display change
 
 // Mobile: keep dock height CSS var in sync and remeasure the map so tiles fill the visible area.
@@ -141,6 +143,25 @@ function getZoomLimitsForBase(baseType) {
   return BASE_ZOOM_LIMITS[baseType] || DEFAULT_MAP_ZOOM_LIMITS;
 }
 
+/** Append JWT as ?t= / &t= for backend tile proxies (Leaflet <img> cannot send Authorization). */
+function withAuthTileToken(url) {
+  if (!url) return url;
+  const needsAuth =
+    url.includes('/tiles/arcgis/') ||
+    url.includes('/tiles/shom') ||
+    url.includes('/tiles/ukho') ||
+    url.includes('/tiles/openaip');
+  if (!needsAuth) return url;
+  const token = localStorage.getItem('token') || '';
+  if (!token) return url;
+  // Keep Leaflet {z}/{x}/{y} placeholders intact (URL() can encode braces).
+  if (/[?&]t=/.test(url)) {
+    return url.replace(/([?&])t=[^&]*/, `$1t=${encodeURIComponent(token)}`);
+  }
+  const sep = url.includes('?') ? '&' : '?';
+  return url + sep + 't=' + encodeURIComponent(token);
+}
+
 function createBaseRasterLayer(baseType, url, attribution) {
   // OSM Dark is a dual-layer basemap (map body + brightened labels).
   if (baseType === 'dark') return createDarkBasemap();
@@ -156,10 +177,7 @@ function createBaseRasterLayer(baseType, url, attribution) {
   }
   // Raster tiles load via <img> tags and cannot send Authorization headers.
   // Inject the JWT as ?t= so the server-side proxy can authenticate the request.
-  const tileUrl = url.includes('/tiles/arcgis/')
-    ? url + '&t=' + (localStorage.getItem('token') || '')
-    : url;
-  return L.tileLayer(tileUrl, opts);
+  return L.tileLayer(withAuthTileToken(url), opts);
 }
 
 function applyZoomLimitsForBase(baseType) {
@@ -320,10 +338,33 @@ function refreshHgtControlButton(){
   if (typeof updateMoreButtonsHighlight === 'function') updateMoreButtonsHighlight();
 }
 
-function setRulerControlActive(active) {
+function refreshRulerControlButton() {
   if (!rulerControlBtn) return;
-  rulerControlBtn.classList.toggle('map-tool-btn--active', !!active);
+  rulerControlBtn.classList.remove('map-tool-btn--danger', 'map-tool-btn--armed', 'map-tool-btn--active');
+  // Points placed → red trash (clear), like box/HGT delete.
+  if (rulerPoints.length > 0) {
+    rulerControlBtn.classList.add('map-tool-btn--danger');
+    rulerControlBtn.innerHTML = iconHtml('trash');
+    rulerControlBtn.dataset.tip = 'Clear Ruler';
+    rulerControlBtn.setAttribute('aria-label', 'Clear Ruler');
+  } else if (isRulerActive) {
+    // Armed measuring mode → green, like box/HGT place.
+    rulerControlBtn.classList.add('map-tool-btn--armed');
+    rulerControlBtn.innerHTML = iconHtml('ruler');
+    rulerControlBtn.dataset.tip = 'Place Ruler';
+    rulerControlBtn.setAttribute('aria-label', 'Place Ruler');
+  } else {
+    rulerControlBtn.innerHTML = iconHtml('ruler');
+    rulerControlBtn.dataset.tip = 'Ruler';
+    rulerControlBtn.setAttribute('aria-label', 'Ruler');
+  }
+  rulerControlBtn.removeAttribute('title');
   if (typeof updateMoreButtonsHighlight === 'function') updateMoreButtonsHighlight();
+}
+
+function setRulerControlActive(_active) {
+  // Visual state is derived from isRulerActive + rulerPoints.
+  refreshRulerControlButton();
 }
 
 // Build layers based on user permissions
@@ -397,7 +438,7 @@ if (allowedBases.includes('esri')) layerDefs.esri = createBaseRasterLayer('esri'
 let shomOverlay = null, ukhoOverlay = null, gbsouthOverlay = null;
 
 if (allowedBases.includes('shom')) {
-  shomOverlay = L.tileLayer(LAYERS.shom.url, {
+  shomOverlay = L.tileLayer(withAuthTileToken(LAYERS.shom.url), {
     attribution: LAYERS.shom.attribution,
     maxZoom: 18, // SHOM tiles are typically available up to zoom 18
     maxNativeZoom: 18,
@@ -420,10 +461,12 @@ if (allowedBases.includes('shom')) {
         // Retry the SHOM tile with a slight delay
         failedTiles.set(tileKey, retryCount + 1);
         setTimeout(() => {
-          const newUrl = LAYERS.shom.url
-            .replace('{z}', coords.z)
-            .replace('{x}', coords.x)
-            .replace('{y}', coords.y) + '?retry=' + (retryCount + 1);
+          const newUrl = withAuthTileToken(
+            LAYERS.shom.url
+              .replace('{z}', coords.z)
+              .replace('{x}', coords.x)
+              .replace('{y}', coords.y) + '?retry=' + (retryCount + 1)
+          );
           e.tile.src = newUrl;
         }, 500 + (retryCount * 1000)); // Exponential backoff
       } else {
@@ -455,7 +498,7 @@ if (allowedBases.includes('gbsouth')) {
 if (allowedBases.includes('ukho')) {
   let ukhoTileErrorCount = 0;
   let ukhoWarnedNoCoverage = false;
-  ukhoOverlay = L.tileLayer(LAYERS.ukho.url, {
+  ukhoOverlay = L.tileLayer(withAuthTileToken(LAYERS.ukho.url), {
     attribution: LAYERS.ukho.attribution,
     maxZoom: 18,
     maxNativeZoom: 18,
@@ -1161,7 +1204,7 @@ async function applyUserPreferences() {
     if (user.default_overlays.includes('openaip') && LAYERS.openaip?.url && allowedOver.includes('openaip')) {
       openaipCb.checked = true;
       // Create the layer directly since event listeners aren't attached yet
-      openaipLayer = L.tileLayer(LAYERS.openaip.url, {
+      openaipLayer = L.tileLayer(withAuthTileToken(LAYERS.openaip.url), {
         attribution: LAYERS.openaip.attribution,
         maxZoom: 20, opacity: 0.9, pane: 'overlayPane'
       }).addTo(map).bringToFront();
@@ -1450,7 +1493,7 @@ openaipCb.addEventListener('change', () => {
       alert('OpenAIP URL not configured.');
       openaipCb.checked = false; return;
     }
-    openaipLayer = L.tileLayer(LAYERS.openaip.url, {
+    openaipLayer = L.tileLayer(withAuthTileToken(LAYERS.openaip.url), {
       attribution: LAYERS.openaip.attribution,
       maxZoom: 20, opacity: 0.9, pane: 'overlayPane'
     }).addTo(map).bringToFront();
@@ -2308,6 +2351,7 @@ function clearRuler() {
   rulerSegmentLabels = [];
   rulerTotalLabel = null;
   isDraggingRulerPoint = false;
+  refreshRulerControlButton();
 }
 
 function deactivateRuler() {
@@ -2535,6 +2579,7 @@ function deleteRulerPoint(index) {
   // Update polyline and labels
   updateRulerPolyline();
   updateRulerLabels();
+  refreshRulerControlButton();
 }
 
 function addRulerPoint(latlng) {
@@ -2639,7 +2684,15 @@ function addRulerPoint(latlng) {
   // Update polyline and labels with animation
   updateRulerPolyline();
   updateRulerLabels(true); // Animate new labels
+  refreshRulerControlButton();
 }
+
+const API_BASE = '';
+const kmlController = initKmlOverlays({
+  map,
+  getToken: () => token,
+  API_BASE,
+});
 
 const controls = initMapToolControls({
   allowedTools,
@@ -2698,6 +2751,9 @@ const controls = initMapToolControls({
   onHideInlineHgtButton: () => {
     if (hgtBoxBtn) hgtBoxBtn.style.display = 'none';
   },
+  onKmlButtonReady: (btn) => {
+    kmlController.bindButton(btn);
+  },
   onToolsReady: () => {
     applyToolbarOverflowLayout();
     updateMoreButtonsHighlight();
@@ -2733,8 +2789,6 @@ map.on('mousemove', (e) => {
       rulerTempLine.setLatLngs([lastPoint, current]);
    }
 });
-
-const API_BASE = '';
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -3568,62 +3622,92 @@ hgtBoxBtn?.addEventListener('click', () => {
   refreshHgtControlButton();
 });
 
-// Mobile top-right: HGT / TIF export current view (no selection box)
+// Mobile top-right: one download button + HGT/TIF format toggle
 if (isMobileApp) {
-  const mobileHgtBtn = document.getElementById('mobileHgtBtn');
-  const mobileTifBtn = document.getElementById('mobileTifBtn');
+  const mobileDownloadBtn = document.getElementById('mobileDownloadBtn');
+  const mobileFormatHgt = document.getElementById('mobileFormatHgt');
+  const mobileFormatTif = document.getElementById('mobileFormatTif');
+  const formatToggle = document.querySelector('.mobile-format-toggle');
+  let mobileExportFormat = 'tif';
 
-  if (mobileHgtBtn && !allowedTools.includes('hgt')) {
-    mobileHgtBtn.style.display = 'none';
+  const setMobileExportFormat = (format) => {
+    const next = format === 'hgt' ? 'hgt' : 'tif';
+    if (next === 'hgt' && !allowedTools.includes('hgt')) return;
+    mobileExportFormat = next;
+    mobileFormatHgt?.classList.toggle('is-active', next === 'hgt');
+    mobileFormatTif?.classList.toggle('is-active', next === 'tif');
+    mobileFormatHgt?.setAttribute('aria-pressed', next === 'hgt' ? 'true' : 'false');
+    mobileFormatTif?.setAttribute('aria-pressed', next === 'tif' ? 'true' : 'false');
+    if (mobileDownloadBtn) {
+      const tip = next === 'hgt' ? 'Download HGT' : 'Download map';
+      mobileDownloadBtn.title = tip;
+      mobileDownloadBtn.setAttribute('aria-label', tip);
+    }
+  };
+
+  if (!allowedTools.includes('hgt')) {
+    if (mobileFormatHgt) mobileFormatHgt.style.display = 'none';
+    if (formatToggle) formatToggle.classList.add('tif-only');
   }
+  setMobileExportFormat('tif');
 
-  mobileHgtBtn?.addEventListener('click', async (e) => {
+  mobileFormatHgt?.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (mobileHgtBtn.disabled) return;
-
-    const bounds = map.getBounds();
-    const south = Math.max(HGT_MIN_LAT, bounds.getSouth());
-    const north = Math.min(HGT_MAX_LAT, bounds.getNorth());
-    if (!(north > south)) {
-      alert('Current view is outside the HGT coverage area.');
-      return;
-    }
-
-    const bbox = normalizeWrappedHgtBbox([
-      bounds.getWest(),
-      south,
-      bounds.getEast(),
-      north
-    ]);
-    const tileCount = countHgtTilesForBbox(bbox);
-    if (tileCount > HGT_EXPORT_MAX_TILES) {
-      alert('This area is too large for HGT export. Zoom in and try again.');
-      return;
-    }
-
-    const ok = window.confirm(
-      'HGT export is a heavy download and may take a while.\n\nDo you want to continue?'
-    );
-    if (!ok) return;
-
-    mobileHgtBtn.disabled = true;
-    mobileHgtBtn.classList.add('busy');
-    try {
-      await exportHgtTiles('', bbox);
-    } catch (err) {
-      alert('HGT export failed: ' + (err?.message || err));
-    } finally {
-      mobileHgtBtn.disabled = false;
-      mobileHgtBtn.classList.remove('busy');
-    }
+    setMobileExportFormat('hgt');
+  });
+  mobileFormatTif?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMobileExportFormat('tif');
   });
 
-  mobileTifBtn?.addEventListener('click', async (e) => {
+  mobileDownloadBtn?.addEventListener('click', async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (mobileTifBtn.disabled) return;
-    await performGeotiffExport({ forceView: true, button: mobileTifBtn });
+    if (mobileDownloadBtn.disabled) return;
+
+    if (mobileExportFormat === 'hgt') {
+      const bounds = map.getBounds();
+      const south = Math.max(HGT_MIN_LAT, bounds.getSouth());
+      const north = Math.min(HGT_MAX_LAT, bounds.getNorth());
+      if (!(north > south)) {
+        alert('Current view is outside the HGT coverage area.');
+        return;
+      }
+
+      const bbox = normalizeWrappedHgtBbox([
+        bounds.getWest(),
+        south,
+        bounds.getEast(),
+        north
+      ]);
+      const tileCount = countHgtTilesForBbox(bbox);
+      if (tileCount > HGT_EXPORT_MAX_TILES) {
+        alert('This area is too large for HGT export. Zoom in and try again.');
+        return;
+      }
+
+      const ok = window.confirm(
+        'HGT export is a heavy download and may take a while.\n\nDo you want to continue?'
+      );
+      if (!ok) return;
+
+      mobileDownloadBtn.disabled = true;
+      mobileDownloadBtn.classList.add('busy');
+      try {
+        const customName = filenameInput?.value?.trim() || '';
+        await exportHgtTiles(customName, bbox);
+      } catch (err) {
+        alert('HGT export failed: ' + (err?.message || err));
+      } finally {
+        mobileDownloadBtn.disabled = false;
+        mobileDownloadBtn.classList.remove('busy');
+      }
+      return;
+    }
+
+    await performGeotiffExport({ forceView: true, button: mobileDownloadBtn });
   });
 }
 
@@ -3777,6 +3861,7 @@ initSettingsController({
   populateFavoriteSelects,
   loadFavorites,
   applyFavorites,
+  kmlController,
 }).init();
 
 // Toolbar behavior moved to source_code/frontend/toolbar/toolbar.js

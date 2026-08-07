@@ -6,7 +6,32 @@ import base64
 import json
 from typing import Optional, Tuple
 
-SECRET = os.getenv("AUTH_SECRET", "dev-secret-change-me")
+_DEFAULT_DEV_SECRET = "dev-secret-change-me"
+
+
+def _resolve_auth_secret() -> str:
+    """JWT HMAC secret. Production must set AUTH_SECRET to a non-default value."""
+    secret = (os.getenv("AUTH_SECRET") or "").strip()
+    flask_env = (os.getenv("FLASK_ENV") or "").strip().lower()
+    is_prod = flask_env == "production"
+
+    if not secret:
+        if is_prod:
+            raise RuntimeError(
+                "AUTH_SECRET must be set in production (refuse to mint/verify JWTs with a default)"
+            )
+        return _DEFAULT_DEV_SECRET
+
+    if secret == _DEFAULT_DEV_SECRET and is_prod:
+        raise RuntimeError(
+            "AUTH_SECRET must not be the known default 'dev-secret-change-me' in production"
+        )
+
+    return secret
+
+
+SECRET = _resolve_auth_secret()
+
 
 
 def jwt_ttl_seconds() -> int:

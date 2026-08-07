@@ -4,18 +4,21 @@ export const TOOL_BTN_IDS = {
   ruler: 'btnRuler',
   box: 'btnBox',
   hgt: 'btnHgt',
+  kml: 'btnKml',
 };
 
 export const TOOL_LABELS = {
   ruler: 'Ruler',
   box: 'Selection Box',
   hgt: 'HGT',
+  kml: 'KML',
 };
 
 export const TOOL_ICONS = {
   ruler: iconHtml('ruler'),
   box: iconHtml('box'),
   hgt: '<span class="tool-hgt-label">HGT</span>',
+  kml: iconHtml('kml'),
 };
 
 function setBoxButtonState(btn, state) {
@@ -72,6 +75,7 @@ export function initMapToolControls(opts) {
     onHgtButtonReady,
     onHgtClick,
     onHideInlineHgtButton,
+    onKmlButtonReady,
     onToolsReady,
   } = opts;
 
@@ -135,6 +139,16 @@ export function initMapToolControls(opts) {
   } else if (typeof onHideInlineHgtButton === 'function') {
     onHideInlineHgtButton();
   }
+
+  const kmlBtn = createToolButton({
+    id: TOOL_BTN_IDS.kml,
+    className: 'map-tool-btn--kml',
+    title: 'KML overlays',
+    html: iconHtml('kml'),
+    onClick: () => {},
+  });
+  insertBeforeMore(kmlBtn);
+  if (typeof onKmlButtonReady === 'function') onKmlButtonReady(kmlBtn);
 
   if (typeof onToolsReady === 'function') onToolsReady();
 

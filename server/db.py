@@ -162,6 +162,37 @@ def init_db():
         conn.commit()
     except Exception:
         pass
+
+    # User-imported KML overlays (content stored in DB, owned by user_id)
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_kml_overlays (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            color TEXT NOT NULL DEFAULT '#4de2ff',
+            opacity REAL NOT NULL DEFAULT 0.65,
+            enabled INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_kml_overlays_user_id ON user_kml_overlays(user_id)"
+    )
+    for ddl in (
+        "ALTER TABLE user_kml_overlays ADD COLUMN color TEXT NOT NULL DEFAULT '#4de2ff'",
+        "ALTER TABLE user_kml_overlays ADD COLUMN opacity REAL NOT NULL DEFAULT 0.65",
+        "ALTER TABLE user_kml_overlays ADD COLUMN enabled INTEGER NOT NULL DEFAULT 0",
+    ):
+        try:
+            cur.execute(ddl)
+            conn.commit()
+        except Exception:
+            pass
+    conn.commit()
     conn.close()
 
 
@@ -709,3 +740,163 @@ def get_all_export_stats() -> dict:
         "top_users": top_users,
         "popular_bases": popular_bases,
     }
+
+
+# ---- User KML overlays ----
+
+MAX_KML_PER_USER = 25
+MAX_KML_BYTES = 5 * 1024 * 1024
+
+
+def count_user_kml(user_id: int) -> int:
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM user_kml_overlays WHERE user_id = ?", (user_id,))
+    n = int(cur.fetchone()[0])
+    conn.close()
+    return n
+
+
+def _kml_meta_from_row(r, include_content=False):
+    try:
+        color = r["color"] or "#4de2ff"
+    except (KeyError, IndexError):
+        color = "#4de2ff"
+    try:
+        opacity = float(r["opacity"] if r["opacity"] is not None else 0.65)
+    except (KeyError, IndexError, TypeError, ValueError):
+        opacity = 0.65
+    try:
+        enabled = bool(int(r["enabled"] or 0))
+    except (KeyError, IndexError, TypeError, ValueError):
+        enabled = False
+    opacity = max(0.0, min(1.0, opacity))
+    out = {
+        "id": int(r["id"]),
+        "name": r["name"],
+        "created_at": int(r["created_at"]),
+        "color": color if isinstance(color, str) and color.startswith("#") else "#4de2ff",
+        "opacity": opacity,
+        "enabled": enabled,
+    }
+    try:
+        out["size_bytes"] = int(r["size_bytes"] or 0)
+    except (KeyError, IndexError, TypeError):
+        pass
+    if include_content:
+        out["content"] = r["content"]
+        out["user_id"] = int(r["user_id"])
+    return out
+
+
+def list_user_kml(user_id: int):
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT id, name, created_at, length(content) AS size_bytes,
+               color, opacity, enabled
+        FROM user_kml_overlays
+        WHERE user_id = ?
+        ORDER BY created_at DESC, id DESC
+        """,
+        (user_id,),
+    )
+    rows = [_kml_meta_from_row(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_user_kml(user_id: int, kml_id: int):
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT id, user_id, name, content, created_at, color, opacity, enabled,
+               length(content) AS size_bytes
+        FROM user_kml_overlays
+        WHERE id = ? AND user_id = ?
+        """,
+        (kml_id, user_id),
+    )
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return _kml_meta_from_row(row, include_content=True)
+
+
+def create_user_kml(user_id: int, name: str, content: str, color="#4de2ff", opacity=0.65, enabled=0):
+    conn = _get_conn()
+    cur = conn.cursor()
+    now = int(time.time())
+    opacity = max(0.0, min(1.0, float(opacity)))
+    cur.execute(
+        """
+        INSERT INTO user_kml_overlays (user_id, name, content, created_at, color, opacity, enabled)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (user_id, name, content, now, color or "#4de2ff", opacity, 1 if enabled else 0),
+    )
+    kml_id = int(cur.lastrowid)
+    conn.commit()
+    conn.close()
+    return {
+        "id": kml_id,
+        "name": name,
+        "created_at": now,
+        "size_bytes": len(content.encode("utf-8")),
+        "color": color or "#4de2ff",
+        "opacity": opacity,
+        "enabled": bool(enabled),
+    }
+
+
+def update_user_kml(user_id: int, kml_id: int, **fields):
+    allowed = {}
+    if "name" in fields and fields["name"] is not None:
+        name = str(fields["name"]).strip()[:120]
+        if name:
+            allowed["name"] = name
+    if "color" in fields and fields["color"] is not None:
+        color = str(fields["color"]).strip()
+        if color.startswith("#") and len(color) in (4, 7):
+            allowed["color"] = color
+    if "opacity" in fields and fields["opacity"] is not None:
+        try:
+            allowed["opacity"] = max(0.0, min(1.0, float(fields["opacity"])))
+        except (TypeError, ValueError):
+            pass
+    if "enabled" in fields and fields["enabled"] is not None:
+        allowed["enabled"] = 1 if fields["enabled"] else 0
+
+    if not allowed:
+        return get_user_kml(user_id, kml_id)
+
+    sets = ", ".join(f"{k} = ?" for k in allowed.keys())
+    values = list(allowed.values()) + [kml_id, user_id]
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE user_kml_overlays SET {sets} WHERE id = ? AND user_id = ?",
+        values,
+    )
+    updated = cur.rowcount > 0
+    conn.commit()
+    conn.close()
+    if not updated:
+        return None
+    return get_user_kml(user_id, kml_id)
+
+
+def delete_user_kml(user_id: int, kml_id: int) -> bool:
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "DELETE FROM user_kml_overlays WHERE id = ? AND user_id = ?",
+        (kml_id, user_id),
+    )
+    deleted = cur.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted

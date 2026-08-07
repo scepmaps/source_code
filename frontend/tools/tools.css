@@ -29,3 +29,164 @@
   border-color: #28a745 !important;
   color: #fff !important;
 }
+
+/* ---- KML overlay panel ---- */
+.kml-panel {
+  min-width: 240px;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 10px 10px 8px !important;
+  gap: 8px;
+  display: none;
+  flex-direction: column;
+  align-items: stretch !important;
+}
+.kml-panel.open {
+  display: flex !important;
+}
+.kml-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.kml-panel-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+.kml-panel-upload {
+  appearance: none;
+  border: 1px solid rgba(77, 226, 255, 0.28);
+  background: rgba(77, 226, 255, 0.12);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.kml-panel-upload svg {
+  width: 12px;
+  height: 12px;
+}
+.kml-panel-upload:hover {
+  background: rgba(77, 226, 255, 0.2);
+}
+.kml-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+}
+.kml-panel-empty {
+  font-size: 12px;
+  color: rgba(215, 227, 255, 0.65);
+  padding: 10px 6px;
+  text-align: center;
+}
+.kml-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(77, 226, 255, 0.12);
+  background: rgba(10, 18, 42, 0.45);
+}
+.kml-toggle {
+  appearance: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(10, 16, 32, 0.55);
+  color: rgba(215, 227, 255, 0.75);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+  padding: 0;
+}
+.kml-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+.kml-toggle.is-on {
+  border-color: rgba(77, 226, 255, 0.55);
+  background: rgba(77, 226, 255, 0.16);
+  color: var(--accent);
+}
+.kml-panel-meta {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.kml-panel-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kml-panel-sub {
+  font-size: 10px;
+  color: rgba(215, 227, 255, 0.55);
+  margin-top: 1px;
+}
+.kml-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.kml-action {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: rgba(215, 227, 255, 0.7);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.kml-action svg {
+  width: 14px;
+  height: 14px;
+}
+.kml-action:hover:not(:disabled) {
+  background: rgba(77, 226, 255, 0.12);
+  color: var(--accent);
+}
+.kml-action:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.kml-action--danger:hover:not(:disabled) {
+  background: rgba(255, 77, 109, 0.16);
+  color: #ff4d6d;
+}
+.kml-panel-hint {
+  font-size: 10px;
+  color: rgba(215, 227, 255, 0.5);
+  padding: 2px 4px 0;
+}
+.kml-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  flex: 0 0 auto;
+  display: inline-block;
+}
+

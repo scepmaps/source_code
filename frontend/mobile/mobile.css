@@ -2,8 +2,8 @@
    Does NOT reuse desktop rail absolute positioning. */
 
 :root {
-  --mobile-dock-height: 72px;
-  --mobile-topbar-height: 64px;
+  --mobile-dock-height: 68px;
+  --mobile-topbar-height: 56px;
   --mobile-sheet-bg: rgba(10, 16, 36, 0.96);
   --mobile-sheet-border: rgba(77, 226, 255, 0.22);
   --mobile-tile-bg: rgba(15, 27, 59, 0.95);
@@ -16,6 +16,11 @@ body.mobile-app {
   touch-action: manipulation;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
+}
+
+/* Pinch/gesture zoom still works; hide Leaflet +/- controls on mobile */
+body.mobile-app .leaflet-control-zoom {
+  display: none !important;
 }
 
 body.mobile-app::before {
@@ -36,28 +41,116 @@ body.mobile-app .topbar {
 }
 
 body.mobile-app .topbar .brand {
-  font-size: 13px;
-  letter-spacing: 0.06em;
+  font-size: 11px;
+  letter-spacing: 0.05em;
   align-self: center;
+  flex: 0 0 auto;
+}
+
+body.mobile-app .topbar .brand .glow-dot {
+  width: 5px;
+  height: 5px;
+  margin-right: 4px;
 }
 
 body.mobile-app .topbar-actions {
-  gap: 10px;
+  gap: 8px;
   margin-left: auto;
   align-items: center;
   align-self: center;
   display: flex;
   flex-wrap: nowrap;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
-/* Top-right circular actions — same 52px touch target as the dock */
+/* Compact optional filename for mobile exports */
+body.mobile-app .mobile-filename,
+body.mobile-app #exportFilename.mobile-filename {
+  display: block !important;
+  flex: 0 0 auto;
+  width: clamp(96px, 28vw, 160px) !important;
+  min-width: 96px !important;
+  max-width: 160px !important;
+  min-height: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 6px 10px !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(77, 226, 255, 0.16) !important;
+  background: linear-gradient(180deg, rgba(14, 23, 55, 0.52), rgba(10, 20, 47, 0.42)) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--text) !important;
+  font-size: 12px !important;
+  text-align: left;
+  opacity: 1 !important;
+}
+body.mobile-app #exportFilename.mobile-filename::placeholder {
+  color: var(--text);
+  opacity: 0.7;
+}
+
+/* Download arrow + HGT/MAP toggle beside it */
+body.mobile-app .mobile-download-stack {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+body.mobile-app .mobile-format-toggle {
+  position: static;
+  top: auto;
+  left: auto;
+  transform: none;
+  z-index: 1;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 2px;
+  border-radius: 10px;
+  border: 1px solid rgba(77, 226, 255, 0.18);
+  background: linear-gradient(180deg, rgba(14, 23, 55, 0.72), rgba(10, 20, 47, 0.62));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+body.mobile-app .mobile-format-toggle.tif-only .mobile-format-opt[data-format="hgt"] {
+  display: none !important;
+}
+body.mobile-app .mobile-format-opt {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: rgba(215, 227, 255, 0.7);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  padding: 5px 7px;
+  border-radius: 8px;
+  cursor: pointer;
+  min-width: 32px;
+  text-align: center;
+}
+body.mobile-app .mobile-format-opt.is-active {
+  background: rgba(77, 226, 255, 0.18);
+  color: var(--accent);
+}
+
+/* Top-right circular actions */
 body.mobile-app .mobile-top-btn {
-  width: 52px !important;
-  height: 52px !important;
-  min-width: 52px !important;
-  min-height: 52px !important;
-  max-width: 52px !important;
-  max-height: 52px !important;
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  max-width: 40px !important;
+  max-height: 40px !important;
   padding: 0 !important;
   margin: 0 !important;
   border-radius: 50% !important;
@@ -72,7 +165,7 @@ body.mobile-app .mobile-top-btn {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  flex: 0 0 52px !important;
+  flex: 0 0 40px !important;
   line-height: 1 !important;
   box-sizing: border-box !important;
 }
@@ -92,8 +185,8 @@ body.mobile-app .mobile-top-btn-label {
   line-height: 1;
 }
 body.mobile-app .mobile-top-btn svg {
-  width: 22px !important;
-  height: 22px !important;
+  width: 18px !important;
+  height: 18px !important;
   display: block !important;
   flex-shrink: 0;
 }
@@ -143,19 +236,19 @@ body.mobile-app .side-oval--unified {
   flex-wrap: nowrap !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 20px !important;
+  gap: 10px !important;
   width: max-content !important;
   max-width: none !important;
   height: auto !important;
   min-height: 0 !important;
-  padding: 0 !important;
+  padding: 8px 12px !important;
   margin: 0 auto !important;
-  border: none !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+  border: 1px solid rgba(77, 226, 255, 0.16) !important;
+  border-radius: 999px !important;
+  background: linear-gradient(180deg, rgba(14, 23, 55, 0.52), rgba(10, 20, 47, 0.42)) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(33, 48, 105, 0.28) inset !important;
+  backdrop-filter: blur(14px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.15) !important;
   overflow: visible !important;
 }
 
@@ -189,25 +282,26 @@ body.mobile-app #toolBtnGroup > :not(#btnRuler) {
 
 body.mobile-app .side-rail .emoji-btn,
 body.mobile-app .side-rail .map-tool-btn {
-  width: 52px !important;
-  height: 52px !important;
-  min-width: 52px !important;
-  min-height: 52px !important;
-  max-width: 52px !important;
-  max-height: 52px !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
   padding: 0 !important;
   margin: 0 !important;
   border-radius: 50% !important;
-  flex: 0 0 52px !important;
+  flex: 0 0 36px !important;
   flex-direction: row !important;
   align-items: center !important;
   justify-content: center !important;
   gap: 0 !important;
-  background: rgba(10, 16, 32, 0.72) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  /* Blend into the dock bar; circle shows on hover/active */
+  background: transparent !important;
+  border: 2px solid transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   color: var(--text) !important;
   -webkit-appearance: none !important;
   appearance: none !important;
@@ -218,8 +312,8 @@ body.mobile-app .side-rail .map-tool-btn {
 
 body.mobile-app .side-rail .emoji-btn svg,
 body.mobile-app .side-rail .map-tool-btn svg {
-  width: 22px !important;
-  height: 22px !important;
+  width: 18px !important;
+  height: 18px !important;
   display: block !important;
   margin: 0 !important;
   flex-shrink: 0;
@@ -238,10 +332,18 @@ body.mobile-app .side-rail .emoji-btn[data-tip]::after {
 body.mobile-app .side-rail .emoji-btn.active,
 body.mobile-app .side-rail .emoji-btn.panel-open,
 body.mobile-app .side-rail .emoji-btn.has-active-items,
-body.mobile-app .side-rail .map-tool-btn.map-tool-btn--active {
-  border-color: var(--accent) !important;
+body.mobile-app .side-rail .map-tool-btn.map-tool-btn--active,
+body.mobile-app .side-rail .map-tool-btn.map-tool-btn--armed {
+  border-color: rgba(77, 226, 255, 0.45) !important;
+  background: rgba(77, 226, 255, 0.14) !important;
   color: var(--accent) !important;
-  box-shadow: 0 0 0 2px rgba(77, 226, 255, 0.35), 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+  box-shadow: none !important;
+}
+body.mobile-app .side-rail .map-tool-btn.map-tool-btn--danger {
+  border-color: #ff4d6d !important;
+  background: rgba(255, 77, 109, 0.92) !important;
+  color: #fff !important;
+  box-shadow: none !important;
 }
 
 body.mobile-app #btnMoreTools,
@@ -431,7 +533,6 @@ body.mobile-app .leaflet-control-attribution {
 }
 
 body.mobile-app .mobile-hide-export,
-body.mobile-app #exportFilename,
 body.mobile-app #exportBtn {
   display: none !important;
 }
