@@ -7,10 +7,20 @@ import {
   pathStyleFromFeature,
   pointStyleFromFeature,
   summarizeStats,
-} from './kml-parse.js?v=20260807f';
+} from './kml-parse.js?v=20260807h';
 
 const DEFAULT_COLOR = '#4de2ff';
 const DEFAULT_OPACITY = 0.65;
+const RED_OUTLINE_KEY = 'scepmaps_kml_red_outline';
+const RED_OUTLINE_COLOR = '#ff1f1f';
+
+function readRedOutlinePref() {
+  try {
+    return localStorage.getItem(RED_OUTLINE_KEY) === '1';
+  } catch (_) {
+    return false;
+  }
+}
 
 function authHeaders(token) {
   return { Authorization: 'Bearer ' + token };
@@ -37,6 +47,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
   let fileInput = null;
   let btnEl = null;
   let bootstrapped = false;
+  let redOutline = readRedOutlinePref();
   const listeners = new Set();
 
   function notify() {
@@ -230,8 +241,8 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
       const toggle = document.createElement('button');
       toggle.type = 'button';
       toggle.className = 'kml-toggle' + (active ? ' is-on' : '');
-      toggle.style.borderColor = active ? item.color : '';
-      toggle.style.color = active ? item.color : '';
+      toggle.style.borderColor = active ? 'var(--accent)' : '';
+      toggle.style.color = active ? 'var(--accent)' : '';
       toggle.setAttribute('aria-pressed', active ? 'true' : 'false');
       toggle.title = active ? 'Hide on map' : 'Show on map';
       toggle.innerHTML = iconHtml('kml') || '';
@@ -254,11 +265,6 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
       sub.textContent = `${kb} KB · ${Math.round(item.opacity * 100)}%${summary}`;
       meta.appendChild(nameEl);
       meta.appendChild(sub);
-
-      const swatch = document.createElement('span');
-      swatch.className = 'kml-swatch';
-      swatch.style.background = item.color;
-      swatch.title = item.color;
 
       const actions = document.createElement('div');
       actions.className = 'kml-panel-actions';
@@ -287,7 +293,6 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
         await removeOverlay(item.id);
       });
 
-      actions.appendChild(swatch);
       actions.appendChild(fitBtn);
       actions.appendChild(delBtn);
       row.appendChild(toggle);
@@ -298,50 +303,49 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
   }
 
   function applyLayerStyle(layer, item) {
-    if (!layer) return;
-    // Settings color/opacity intentionally override embedded KML styles.
-    const forced = {
-      color: item?.color || DEFAULT_COLOR,
-      opacity: item?.opacity ?? DEFAULT_OPACITY,
+    if (!layer?._kmlParsed || !item) return;
+    // Rebuild from KML styles so opacity / red-outline updates don't invent a flat color.
+    map.removeLayer(layer);
+    const next = buildLayer(layer._kmlParsed, item);
+    next.addTo(map);
+    activeLayers.set(Number(item.id), next);
+  }
+
+  function withRedOutline(style) {
+    if (!redOutline || !style) return style;
+    return {
+      ...style,
+      color: RED_OUTLINE_COLOR,
+      weight: 1.5,
+      opacity: 1,
     };
-    const lineStyle = {
-      color: forced.color,
-      weight: 2,
-      opacity: Math.max(0.25, Math.min(1, forced.opacity + 0.2)),
-      fillColor: forced.color,
-      fillOpacity: Math.max(0, Math.min(0.55, forced.opacity * 0.35)),
-    };
-    const pointStyle = {
-      radius: 6,
-      color: forced.color,
-      weight: 2,
-      fillColor: forced.color,
-      fillOpacity: Math.max(0.35, Math.min(0.85, forced.opacity * 0.85)),
-      opacity: lineStyle.opacity,
-    };
-    const walk = (sub) => {
-      if (sub instanceof L.ImageOverlay) {
-        if (typeof sub.setOpacity === 'function') sub.setOpacity(forced.opacity);
-        return;
-      }
-      if (
-        typeof sub.eachLayer === 'function' &&
-        !(sub instanceof L.Path) &&
-        !(sub instanceof L.Marker) &&
-        !(sub instanceof L.CircleMarker)
-      ) {
-        try {
-          sub.eachLayer(walk);
-          return;
-        } catch (_) {
-          /* fall through */
-        }
-      }
-      if (typeof sub.setStyle !== 'function') return;
-      if (sub instanceof L.CircleMarker) sub.setStyle(pointStyle);
-      else sub.setStyle(lineStyle);
-    };
-    if (typeof layer.eachLayer === 'function') layer.eachLayer(walk);
+  }
+
+  function refreshActiveStyles() {
+    for (const [id, layer] of activeLayers.entries()) {
+      const item = findItem(id);
+      if (!item || !layer?._kmlParsed) continue;
+      // Rebuild so KML-native fills stay correct while outline toggles.
+      map.removeLayer(layer);
+      const next = buildLayer(layer._kmlParsed, item);
+      next.addTo(map);
+      activeLayers.set(id, next);
+    }
+    notify();
+  }
+
+  function setRedOutline(on) {
+    redOutline = !!on;
+    try {
+      localStorage.setItem(RED_OUTLINE_KEY, redOutline ? '1' : '0');
+    } catch (_) {
+      /* ignore */
+    }
+    refreshActiveStyles();
+  }
+
+  function getRedOutline() {
+    return !!redOutline;
   }
 
   function popupHtml(feature) {
@@ -427,7 +431,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     };
 
     const geoLayer = L.geoJSON(sorted, {
-      style: (feature) => pathStyleFromFeature(feature, fallback),
+      style: (feature) => withRedOutline(pathStyleFromFeature(feature, fallback)),
       pointToLayer: (feature, latlng) => {
         const ps = pointStyleFromFeature(feature, fallback);
         // Ignore KML pushpin / Google Earth icon hrefs — use a clean dot marker.
@@ -472,6 +476,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
 
     group._kmlStats = parsed.stats || null;
     group._kmlInventory = parsed.inventory || null;
+    group._kmlParsed = parsed;
     return group;
   }
 
@@ -544,14 +549,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
       }
       const layer = buildLayer(parsed, merged);
       layer.addTo(map);
-      if (fit) {
-        try {
-          const b = layer.getBounds?.();
-          if (b && b.isValid()) map.fitBounds(b.pad(0.08));
-        } catch (_) {
-          /* ignore */
-        }
-      }
+      if (fit) fitLayerToMap(layer);
       activeLayers.set(kmlId, layer);
       if (merged && (parsed.stats || parsed.inventory)) {
         merged.parse_summary = summarizeStats(parsed.stats, parsed.inventory);
@@ -580,15 +578,60 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     return setOverlayActive(id, on, { persist: true, fit: !!opts.fit, ...opts });
   }
 
-  function fitOverlay(id) {
-    const layer = activeLayers.get(Number(id));
-    if (!layer) return;
+  function refreshMapTilesAfterViewChange() {
     try {
-      const b = layer.getBounds?.();
-      if (b && b.isValid()) map.fitBounds(b.pad(0.08));
+      map.invalidateSize({ animate: false });
     } catch (_) {
       /* ignore */
     }
+    map.eachLayer((lyr) => {
+      try {
+        if (typeof lyr.redraw === 'function') lyr.redraw();
+      } catch (_) {
+        /* ignore */
+      }
+      try {
+        const gl = typeof lyr.getMaplibreMap === 'function' ? lyr.getMaplibreMap() : lyr._glMap;
+        if (gl) {
+          if (typeof gl.resize === 'function') gl.resize();
+          if (typeof gl.triggerRepaint === 'function') gl.triggerRepaint();
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    });
+    // Tiny pan forces some tile pipelines to request the new zoom level.
+    try {
+      map.panBy([1, 0], { animate: false });
+      map.panBy([-1, 0], { animate: false });
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function fitLayerToMap(layer) {
+    if (!layer) return;
+    try {
+      const b = layer.getBounds?.();
+      if (!b || !b.isValid()) return;
+      const maxZoom = Math.min(typeof map.getMaxZoom === 'function' ? map.getMaxZoom() : 18, 15);
+      map.once('moveend', () => {
+        // Defer one frame so Leaflet finishes the zoom before we poke tile/GL layers.
+        requestAnimationFrame(() => refreshMapTilesAfterViewChange());
+      });
+      map.fitBounds(b.pad(0.08), {
+        animate: true,
+        duration: 0.35,
+        maxZoom,
+        padding: [28, 28],
+      });
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function fitOverlay(id) {
+    fitLayerToMap(activeLayers.get(Number(id)));
   }
 
   async function updateStyle(id, patch = {}) {
@@ -598,7 +641,6 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
 
     const body = {};
     if (patch.name != null) body.name = String(patch.name).trim().slice(0, 120);
-    if (patch.color != null) body.color = patch.color;
     if (patch.opacity != null) body.opacity = Number(patch.opacity);
     if (patch.enabled != null) body.enabled = !!patch.enabled;
 
@@ -754,6 +796,8 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     pickFile,
     removeOverlay,
     fitOverlay,
+    getRedOutline,
+    setRedOutline,
     onChange(fn) {
       if (typeof fn === 'function') listeners.add(fn);
       return () => listeners.delete(fn);

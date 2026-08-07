@@ -288,7 +288,12 @@ def _resolve_export_kml_layers(user: dict, data: dict) -> list:
                 "opacity": row.get("opacity", 0.65),
             }
         )
-    return prepare_kml_export_layers(layers)
+    prepared = prepare_kml_export_layers(layers)
+    red_outline = bool(data.get("kmlRedOutline") or data.get("kml_red_outline"))
+    if red_outline:
+        for layer in prepared:
+            layer["redOutline"] = True
+    return prepared
 
 
 def _export_headless_geotiff_bytes(

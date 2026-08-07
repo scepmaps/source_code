@@ -1,9 +1,9 @@
 import { LAYERS } from './config.js?v=20260806k';
 import { createToolbarController } from './toolbar/toolbar.js?v=20260806h';
-import { initSettingsController } from './settings/settings.js?v=20260807b';
+import { initSettingsController } from './settings/settings.js?v=20260807h';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
 import { initMapToolControls } from './tools/tools.js?v=20260806u';
-import { initKmlOverlays } from './tools/kml.js?v=20260807f';
+import { initKmlOverlays } from './tools/kml.js?v=20260807h';
 import { iconHtml } from './toolbar/icons.js?v=20260806p';
 import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260805c';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
@@ -3308,6 +3308,7 @@ async function performGeotiffExport({ forceView = false, button = exportBtn } = 
     .filter((item) => item && (item.active || item.enabled))
     .map((item) => Number(item.id))
     .filter((id) => Number.isFinite(id));
+  const kmlRedOutline = !!(typeof kmlController?.getRedOutline === 'function' && kmlController.getRedOutline());
   const crs = undefined; // deprecated in favor of system
   const customName = filenameInput?.value?.trim() || '';
   if (!forceView && isHgtActive && hgtSelectionRect) {
@@ -3347,6 +3348,7 @@ async function performGeotiffExport({ forceView = false, button = exportBtn } = 
     baseLayer: base,
     overlays: overlays,
     kmlIds: kmlIds,
+    kmlRedOutline: kmlRedOutline,
     customFilename: customName || '(none)',
     viewportSize: { width: viewW, height: viewH },
     exportMethod: 'headless',
@@ -3496,7 +3498,7 @@ async function performGeotiffExport({ forceView = false, button = exportBtn } = 
     const partName = customName ? (total>1 ? `${customName}_${partSuffix}` : customName) : (total>1 ? `export_${partSuffix}` : 'export');
     const endpoint = endpointBase;
     const showAttribution = document.getElementById('exportAttribution')?.checked ?? true;
-    const payload = { bbox: partBbox, zoom: usedZoom, width: partWidth, height: partHeight, base, overlays, kmlIds, system, crs: outCrs, quality: exportQuality?.value || 'SD', filename: partName, showAttribution };
+    const payload = { bbox: partBbox, zoom: usedZoom, width: partWidth, height: partHeight, base, overlays, kmlIds, kmlRedOutline, system, crs: outCrs, quality: exportQuality?.value || 'SD', filename: partName, showAttribution };
 
     console.log(`[Export] Part ${i+1}/${total} Starting:`, {
       partNumber: i + 1,

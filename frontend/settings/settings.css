@@ -166,6 +166,22 @@ body.settings-modal-open::before {
   gap: 12px;
   margin-bottom: 12px;
 }
+.settings-kml-outline-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.settings-kml-outline-toggle > span:first-child {
+  flex: 1;
+}
 .settings-kml-header h4 {
   margin: 0 0 4px;
 }
@@ -233,14 +249,6 @@ body.settings-modal-open::before {
   min-width: 40px;
   text-align: right;
   font-size: 12px;
-}
-.settings-kml-color {
-  width: 40px;
-  height: 32px;
-  border: 1px solid var(--stroke);
-  border-radius: 4px;
-  cursor: pointer;
-  background: transparent;
 }
 @media (max-width: 640px) {
   .settings-kml-header {

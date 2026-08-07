@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
     <link rel="stylesheet" href="tools/tools.css?v=20260806u">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css?v=20260807b">
+    <link rel="stylesheet" href="settings/settings.css?v=20260807h">
     <link rel="stylesheet" href="mobile/mobile.css?v=20260806y">
     <script type="module">
       // Escape hatch: force desktop with ?desktop / stay with ?mobile
@@ -301,6 +301,13 @@
               </div>
               <button type="button" class="btn" id="settingsKmlImportBtn">Import KML</button>
             </div>
+            <label class="settings-kml-outline-toggle" title="Draw a bright thin red outline on every KML zone">
+              <span>Red zone outlines</span>
+              <span class="settings-switch">
+                <input type="checkbox" id="settingsKmlRedOutline" />
+                <span class="settings-switch-slider" aria-hidden="true"></span>
+              </span>
+            </label>
             <div id="settingsKmlList" class="settings-kml-list"></div>
           </div>
 
@@ -362,6 +369,6 @@
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
     <script src="particles.js"></script>
-    <script type="module" src="app.js?v=20260807f"></script>
+    <script type="module" src="app.js?v=20260807h"></script>
   </body>
 </html>

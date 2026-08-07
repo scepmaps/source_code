@@ -433,7 +433,7 @@ HTML = """<!doctype html>
       );
       const weight = Number(propOf(props, ['stroke-width', 'strokeWidth']));
       const t = feature?.geometry?.type || '';
-      return {
+      const style = {
         color: stroke,
         weight: Number.isFinite(weight) && weight > 0 ? Math.max(1, Math.min(12, weight)) : 2,
         opacity: strokeOpacity,
@@ -441,6 +441,12 @@ HTML = """<!doctype html>
         fillOpacity: t.includes('Line') ? 0 : fillOpacity,
         pane: 'kmlPane'
       };
+      if (fallback.redOutline) {
+        style.color = '#ff1f1f';
+        style.weight = 1.5;
+        style.opacity = 1;
+      }
+      return style;
     }
     function pointStyleFromFeature(feature, fallback) {
       const props = feature?.properties || {};
@@ -464,7 +470,8 @@ HTML = """<!doctype html>
     for (const layer of KML_LAYERS) {
       const fallback = {
         color: layer.color || '#4de2ff',
-        opacity: (typeof layer.opacity === 'number') ? layer.opacity : 0.65
+        opacity: (typeof layer.opacity === 'number') ? layer.opacity : 0.65,
+        redOutline: !!layer.redOutline
       };
       try {
         const geoLayer = L.geoJSON(layer.geojson || { type: 'FeatureCollection', features: [] }, {

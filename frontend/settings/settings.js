@@ -34,7 +34,7 @@ export function initSettingsController(opts) {
   const settingsKmlList = document.getElementById('settingsKmlList');
   let initialSettingsSnapshot = '';
   let kmlRenderToken = 0;
-  /** Staged KML edits applied only on Save Changes: id -> {name,color,opacity,enabled} */
+  /** Staged KML edits applied only on Save Changes: id -> {name,opacity,enabled} */
   const kmlDrafts = new Map();
 
   function bindIfExists(elementId, eventName, handler) {
@@ -47,7 +47,6 @@ export function initSettingsController(opts) {
     return {
       ...item,
       name: draft.name != null ? draft.name : item.name,
-      color: draft.color != null ? draft.color : item.color,
       opacity: draft.opacity != null ? draft.opacity : item.opacity,
       enabled: draft.enabled != null ? draft.enabled : !!(item.active || item.enabled),
     };
@@ -65,12 +64,10 @@ export function initSettingsController(opts) {
       const id = Number(card.dataset.kmlId);
       if (!Number.isFinite(id)) return;
       const nameEl = document.getElementById(`settingsKmlName_${id}`);
-      const colorEl = document.getElementById(`settingsKmlColor_${id}`);
       const opacityEl = document.getElementById(`settingsKmlOpacity_${id}`);
       const enabledEl = document.getElementById(`settingsKmlEnabled_${id}`);
       const patch = {};
       if (nameEl) patch.name = nameEl.value.trim();
-      if (colorEl) patch.color = colorEl.value;
       if (opacityEl) patch.opacity = parseFloat(opacityEl.value);
       if (enabledEl) patch.enabled = !!enabledEl.checked;
       kmlDrafts.set(id, { ...(kmlDrafts.get(id) || {}), ...patch });
@@ -86,7 +83,6 @@ export function initSettingsController(opts) {
       if (!draft) continue;
       const patch = {};
       if (draft.name != null && draft.name !== item.name) patch.name = draft.name;
-      if (draft.color != null && draft.color !== item.color) patch.color = draft.color;
       if (draft.opacity != null && Number(draft.opacity) !== Number(item.opacity)) {
         patch.opacity = Number(draft.opacity);
       }
@@ -300,18 +296,6 @@ export function initSettingsController(opts) {
       const controls = document.createElement('div');
       controls.className = 'settings-kml-controls';
 
-      const colorLabel = document.createElement('label');
-      colorLabel.textContent = 'Color';
-      colorLabel.setAttribute('for', `settingsKmlColor_${item.id}`);
-      const colorInput = document.createElement('input');
-      colorInput.type = 'color';
-      colorInput.id = `settingsKmlColor_${item.id}`;
-      colorInput.className = 'settings-kml-color';
-      colorInput.value = item.color || '#4de2ff';
-      colorInput.addEventListener('input', () => {
-        stageKmlDraft(item.id, { color: colorInput.value });
-      });
-
       const opacityLabel = document.createElement('label');
       opacityLabel.textContent = 'Opacity';
       opacityLabel.setAttribute('for', `settingsKmlOpacity_${item.id}`);
@@ -334,8 +318,6 @@ export function initSettingsController(opts) {
       opacityRow.appendChild(opacityInput);
       opacityRow.appendChild(opacityVal);
 
-      controls.appendChild(colorLabel);
-      controls.appendChild(colorInput);
       controls.appendChild(opacityLabel);
       controls.appendChild(opacityRow);
 
@@ -428,6 +410,8 @@ export function initSettingsController(opts) {
     }
 
     document.getElementById('exportAttribution').checked = localStorage.getItem('scepmaps_export_attribution') !== 'false';
+    const redOutlineCb = document.getElementById('settingsKmlRedOutline');
+    if (redOutlineCb) redOutlineCb.checked = !!kmlController?.getRedOutline?.();
     await refreshKmlSettings({ preserveDrafts: false });
     markSettingsClean();
   };
@@ -570,6 +554,10 @@ export function initSettingsController(opts) {
     bindIfExists('settingsKmlImportBtn', 'click', async () => {
       if (!kmlController?.pickFile) return;
       kmlController.pickFile();
+    });
+    bindIfExists('settingsKmlRedOutline', 'change', (e) => {
+      if (!kmlController?.setRedOutline) return;
+      kmlController.setRedOutline(!!e.target.checked);
     });
     if (kmlController?.onChange) {
       kmlController.onChange(() => {
