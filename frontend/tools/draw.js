@@ -364,24 +364,7 @@ export function initDrawTool({
     const labels = L.layerGroup();
     const kind = layer._scepDrawKind;
 
-    if (kind === 'point' || layer instanceof L.CircleMarker) {
-      const ll = layer.getLatLng?.();
-      if (ll && showCoords) {
-        labels.addLayer(measureLabel(ll, `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`));
-      }
-    } else if (kind === 'arrow') {
-      const from = layer._scepFrom;
-      const to = layer._scepTo;
-      if (from && to) {
-        if (showMeas && settings.showLength) {
-          const mid = L.latLng((from.lat + to.lat) / 2, (from.lng + to.lng) / 2);
-          labels.addLayer(measureLabel(mid, formatMeters(map.distance(from, to), units)));
-        }
-        if (showCoords) {
-          labels.addLayer(measureLabel(to, `${to.lat.toFixed(5)}, ${to.lng.toFixed(5)}`));
-        }
-      }
-    } else if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
+    if (kind === 'circle' || layer instanceof L.Circle) {
       const c = layer.getLatLng();
       const r = layer.getRadius();
       if (showMeas) {
@@ -397,6 +380,23 @@ export function initDrawTool({
             `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`
           )
         );
+      }
+    } else if (kind === 'point' || (layer instanceof L.CircleMarker && !(layer instanceof L.Circle))) {
+      const ll = layer.getLatLng?.();
+      if (ll && showCoords) {
+        labels.addLayer(measureLabel(ll, `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`));
+      }
+    } else if (kind === 'arrow') {
+      const from = layer._scepFrom;
+      const to = layer._scepTo;
+      if (from && to) {
+        if (showMeas && settings.showLength) {
+          const mid = L.latLng((from.lat + to.lat) / 2, (from.lng + to.lng) / 2);
+          labels.addLayer(measureLabel(mid, formatMeters(map.distance(from, to), units)));
+        }
+        if (showCoords) {
+          labels.addLayer(measureLabel(to, `${to.lat.toFixed(5)}, ${to.lng.toFixed(5)}`));
+        }
       }
     } else if (layer instanceof L.Polygon) {
       const latlngs = layer.getLatLngs()?.[0] || layer.getLatLngs() || [];
@@ -470,6 +470,20 @@ export function initDrawTool({
           styleLineLike(child, c, selected);
         }
       });
+      return;
+    }
+
+    // L.Circle extends L.CircleMarker — check Circle first.
+    if (layer instanceof L.Circle) {
+      layer.setStyle?.(
+        pathStyle(
+          {
+            fillOpacity: fill,
+            weight: selected ? strokeWeight() + 0.75 : strokeWeight(),
+          },
+          c
+        )
+      );
       return;
     }
 
@@ -1303,7 +1317,8 @@ export function initDrawTool({
       return out;
     }
 
-    if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
+    // L.Circle extends L.CircleMarker — must not treat geographic circles as points.
+    if (kind === 'circle' || layer instanceof L.Circle) {
       const ll = layer.getLatLng();
       return [
         {
@@ -1319,7 +1334,9 @@ export function initDrawTool({
     if (!gj) return [];
     const props = { ...baseProps };
     if (kind === 'line' || kind === 'freehand') props.fillOpacity = 0;
-    if (kind === 'point' || layer instanceof L.CircleMarker) props.kind = 'point';
+    if (kind === 'point' || (layer instanceof L.CircleMarker && !(layer instanceof L.Circle))) {
+      props.kind = 'point';
+    }
     if (gj.type === 'FeatureCollection') {
       return (gj.features || []).map((f) => ({
         ...f,
