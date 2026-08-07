@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
     <link rel="stylesheet" href="tools/tools.css?v=20260806u">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css?v=20260806u">
+    <link rel="stylesheet" href="settings/settings.css?v=20260807b">
     <script type="module">
       import { isMobileClient } from './mobile/device.js?v=20260806e';
       try {
@@ -184,7 +184,13 @@
     <div id="userSettingsModal" class="stats-modal">
       <div class="stats-modal-content">
         <div class="stats-modal-header">
-          <h3>User Preferences</h3>
+          <div class="settings-header-title">
+            <h3>User Preferences</h3>
+            <div class="settings-user-identity" id="settingsUserIdentity" hidden>
+              <div class="settings-user-name" id="settingsUserName"></div>
+              <div class="settings-user-email" id="settingsUserEmail"></div>
+            </div>
+          </div>
           <div class="settings-header-actions">
             <button class="btn settings-save-btn" id="savePreferencesBtn" style="display:none;">💾 Save Changes</button>
             <button class="btn" id="closeSettingsBtn">&times;</button>
@@ -235,33 +241,6 @@
               Use Current as Default Layer Settings
             </button>
 
-          </div>
-
-          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
-            <h4>Favorite Buttons</h4>
-            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
-              Choose up to 4 map and 4 overlay buttons to prioritize in the side panels
-            </p>
-
-            <div style="margin-bottom: 16px;">
-              <label style="display: block; margin-bottom: 8px; font-weight: 600;">Map Buttons</label>
-              <div class="favorites-grid">
-                <select id="favMap1" class="fav-select"><option value="">-- None --</option></select>
-                <select id="favMap2" class="fav-select"><option value="">-- None --</option></select>
-                <select id="favMap3" class="fav-select"><option value="">-- None --</option></select>
-                <select id="favMap4" class="fav-select"><option value="">-- None --</option></select>
-              </div>
-            </div>
-
-            <div style="margin-bottom: 12px;">
-              <label style="display: block; margin-bottom: 8px; font-weight: 600;">Overlay Buttons</label>
-              <div class="favorites-grid">
-                <select id="favOverlay1" class="fav-select"><option value="">-- None --</option></select>
-                <select id="favOverlay2" class="fav-select"><option value="">-- None --</option></select>
-                <select id="favOverlay3" class="fav-select"><option value="">-- None --</option></select>
-                <select id="favOverlay4" class="fav-select"><option value="">-- None --</option></select>
-              </div>
-            </div>
           </div>
 
           <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">

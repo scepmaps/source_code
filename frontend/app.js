@@ -1,6 +1,6 @@
 import { LAYERS } from './config.js?v=20260806k';
 import { createToolbarController } from './toolbar/toolbar.js?v=20260806h';
-import { initSettingsController } from './settings/settings.js?v=20260806v';
+import { initSettingsController } from './settings/settings.js?v=20260807b';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
 import { initMapToolControls } from './tools/tools.js?v=20260806u';
 import { initKmlOverlays } from './tools/kml.js?v=20260806u';
@@ -1041,11 +1041,8 @@ const {
   updateBaseButtonStates,
   updateOverlayButtonStates,
   updateMoreButtonsHighlight,
-  applyFavorites,
   applyToolbarOverflowLayout,
   refreshOverlayPicker,
-  populateFavoriteSelects,
-  loadFavorites,
 } = toolbarController;
 toolbarController.init();
 
@@ -3858,9 +3855,6 @@ initSettingsController({
   hasRulerPoints: () => rulerPoints.length > 1,
   updateDensityOpacity,
   updateDensityBorderColors,
-  populateFavoriteSelects,
-  loadFavorites,
-  applyFavorites,
   kmlController,
 }).init();
 

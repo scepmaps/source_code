@@ -25,9 +25,6 @@ export function initSettingsController(opts) {
     hasRulerPoints,
     updateDensityOpacity,
     updateDensityBorderColors,
-    populateFavoriteSelects,
-    loadFavorites,
-    applyFavorites,
     kmlController,
   } = opts;
   const settingsModal = document.getElementById('userSettingsModal');
@@ -361,6 +358,28 @@ export function initSettingsController(opts) {
 
   const showUserSettings = async () => {
     const user = userRef();
+    const identity = document.getElementById('settingsUserIdentity');
+    const nameEl = document.getElementById('settingsUserName');
+    const emailEl = document.getElementById('settingsUserEmail');
+    if (identity && nameEl && emailEl) {
+      const displayName = (user?.name || '').trim();
+      const displayEmail = (user?.email || '').trim();
+      if (displayName || displayEmail) {
+        nameEl.textContent = displayName || displayEmail;
+        if (displayName && displayEmail) {
+          emailEl.textContent = displayEmail;
+          emailEl.hidden = false;
+        } else {
+          emailEl.textContent = '';
+          emailEl.hidden = true;
+        }
+        identity.hidden = false;
+      } else {
+        nameEl.textContent = '';
+        emailEl.textContent = '';
+        identity.hidden = true;
+      }
+    }
     document.body.classList.add('settings-modal-open');
     document.getElementById('userSettingsModal').style.display = 'flex';
     const setBase = document.getElementById('settingsBase');
@@ -408,8 +427,6 @@ export function initSettingsController(opts) {
       document.getElementById('hoverOpacityValue').textContent = Math.round((hoverMatch[4] || 1) * 100) + '%';
     }
 
-    populateFavoriteSelects();
-    loadFavorites();
     document.getElementById('exportAttribution').checked = localStorage.getItem('scepmaps_export_attribution') !== 'false';
     await refreshKmlSettings({ preserveDrafts: false });
     markSettingsClean();
@@ -472,7 +489,6 @@ export function initSettingsController(opts) {
       const data = await res.json();
       setUser(data.user);
       localStorage.setItem('user', JSON.stringify(data.user));
-      applyFavorites(true);
       localStorage.setItem('scepmaps_export_attribution', document.getElementById('exportAttribution').checked.toString());
       if (units) {
         setRulerUnits(units);

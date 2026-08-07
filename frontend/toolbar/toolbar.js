@@ -280,6 +280,8 @@ export function createToolbarController(opts) {
   }
 
   function saveFavorites() {
+    // Settings UI no longer exposes favorite selects — don't overwrite saved favorites with blanks.
+    if (!document.getElementById('favMap1') && !document.getElementById('favOverlay1')) return;
     const maps = [];
     const overlays = [];
     for (let i = 1; i <= 4; i++) {
