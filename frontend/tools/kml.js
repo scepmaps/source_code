@@ -7,7 +7,7 @@ import {
   pathStyleFromFeature,
   pointStyleFromFeature,
   summarizeStats,
-} from './kml-parse.js?v=20260807d';
+} from './kml-parse.js?v=20260807f';
 
 const DEFAULT_COLOR = '#4de2ff';
 const DEFAULT_OPACITY = 0.65;
@@ -430,17 +430,15 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
       style: (feature) => pathStyleFromFeature(feature, fallback),
       pointToLayer: (feature, latlng) => {
         const ps = pointStyleFromFeature(feature, fallback);
-        if (ps.iconHref) {
-          const size = Math.round(24 * (ps.iconScale || 1));
-          const icon = L.icon({
-            iconUrl: ps.iconHref,
-            iconSize: [size, size],
-            iconAnchor: [size / 2, size / 2],
-            popupAnchor: [0, -size / 2],
-          });
-          return L.marker(latlng, { icon, title: feature?.properties?.name || '' });
-        }
-        return L.circleMarker(latlng, { ...ps });
+        // Ignore KML pushpin / Google Earth icon hrefs — use a clean dot marker.
+        return L.circleMarker(latlng, {
+          radius: Math.max(5, Math.min(8, ps.radius || 6)),
+          color: '#ffffff',
+          weight: 1.5,
+          opacity: 0.95,
+          fillColor: ps.fillColor || ps.color || fallback.color,
+          fillOpacity: Math.max(0.75, Math.min(0.95, ps.fillOpacity || 0.85)),
+        });
       },
       onEachFeature: (feature, layer) => {
         const html = popupHtml(feature);

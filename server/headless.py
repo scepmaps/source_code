@@ -470,7 +470,18 @@ HTML = """<!doctype html>
         const geoLayer = L.geoJSON(layer.geojson || { type: 'FeatureCollection', features: [] }, {
           pane: 'kmlPane',
           style: (feature) => pathStyleFromFeature(feature, fallback),
-          pointToLayer: (feature, latlng) => L.circleMarker(latlng, pointStyleFromFeature(feature, fallback))
+          pointToLayer: (feature, latlng) => {
+            const ps = pointStyleFromFeature(feature, fallback);
+            return L.circleMarker(latlng, {
+              radius: Math.max(5, Math.min(8, ps.radius || 6)),
+              color: '#ffffff',
+              weight: 1.5,
+              opacity: 0.95,
+              fillColor: ps.fillColor || ps.color || fallback.color,
+              fillOpacity: Math.max(0.75, Math.min(0.95, ps.fillOpacity || 0.85)),
+              pane: 'kmlPane'
+            });
+          }
         }).addTo(map);
 
         // Match map stacking: largest polygons under, smallest / lines / points on top
