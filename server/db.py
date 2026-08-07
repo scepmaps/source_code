@@ -827,8 +827,9 @@ def get_all_export_stats() -> dict:
 
 # ---- User KML overlays ----
 
-MAX_KML_PER_USER = 25
-MAX_KML_BYTES = 5 * 1024 * 1024
+MAX_KML_PER_USER = 10
+MAX_KML_STORAGE_BYTES = 50 * 1024 * 1024 * 1024  # 50 GB total per user
+MAX_KML_BYTES = MAX_KML_STORAGE_BYTES  # single file may fill remaining quota
 
 
 def count_user_kml(user_id: int) -> int:
@@ -838,6 +839,19 @@ def count_user_kml(user_id: int) -> int:
     n = int(cur.fetchone()[0])
     conn.close()
     return n
+
+
+def sum_user_kml_bytes(user_id: int) -> int:
+    """Total stored KML size for a user (UTF-8 / blob byte length)."""
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COALESCE(SUM(LENGTH(CAST(content AS BLOB))), 0) FROM user_kml_overlays WHERE user_id = ?",
+        (user_id,),
+    )
+    total = int(cur.fetchone()[0] or 0)
+    conn.close()
+    return total
 
 
 def _kml_meta_from_row(r, include_content=False):
@@ -877,7 +891,7 @@ def list_user_kml(user_id: int):
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT id, name, created_at, length(content) AS size_bytes,
+        SELECT id, name, created_at, LENGTH(CAST(content AS BLOB)) AS size_bytes,
                color, opacity, enabled
         FROM user_kml_overlays
         WHERE user_id = ?
@@ -896,7 +910,7 @@ def get_user_kml(user_id: int, kml_id: int):
     cur.execute(
         """
         SELECT id, user_id, name, content, created_at, color, opacity, enabled,
-               length(content) AS size_bytes
+               LENGTH(CAST(content AS BLOB)) AS size_bytes
         FROM user_kml_overlays
         WHERE id = ? AND user_id = ?
         """,

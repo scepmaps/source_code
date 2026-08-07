@@ -35,8 +35,10 @@ from db import (
     list_users,
     MAX_KML_BYTES,
     MAX_KML_PER_USER,
+    MAX_KML_STORAGE_BYTES,
     release_export_quota,
     reserve_export_quota,
+    sum_user_kml_bytes,
     update_user,
     update_user_kml,
 )
@@ -2500,13 +2502,81 @@ def _require_jwt_user(req):
 
 
 def _looks_like_kml(text: str) -> bool:
-    sample = (text or "")[:4000].lstrip().lower()
+    sample = (text or "")[:8000].lstrip().lower()
     if not sample:
         return False
     if "<kml" in sample:
         return True
-    # Some exports wrap KML in a Document without the root tag early — still require XML-ish content.
-    return sample.startswith("<?xml") and ("placemark" in sample or "document" in sample)
+    # Some exports wrap geometry without an early <kml> root tag.
+    if sample.startswith("<?xml") and (
+        "placemark" in sample
+        or "document" in sample
+        or "groundoverlay" in sample
+        or "folder" in sample
+        or "<gx:track" in sample
+    ):
+        return True
+    return False
+
+
+def _decode_text_bytes(raw: bytes) -> str:
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("latin-1")
+
+
+def _extract_kml_from_kmz(raw: bytes) -> str:
+    """Return the primary KML document from a KMZ archive (images stay as relative hrefs)."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+            names = [n for n in zf.namelist() if not n.endswith("/")]
+            kml_name = next((n for n in names if n.lower().endswith("/doc.kml") or n.lower() == "doc.kml"), None)
+            if not kml_name:
+                kml_name = next((n for n in names if n.lower().endswith(".kml")), None)
+            if not kml_name:
+                raise ValueError("KMZ has no .kml document")
+            return _decode_text_bytes(zf.read(kml_name))
+    except zipfile.BadZipFile as e:
+        raise ValueError("Invalid KMZ archive") from e
+
+
+def _normalize_uploaded_kml(raw: bytes, filename: str) -> tuple[str, str]:
+    """
+    Accept .kml or .kmz bytes and return (kml_text, display_name).
+    Prefer client-side KMZ expansion (images inlined); server KMZ path is a fallback.
+    """
+    name = (filename or "overlay.kml").strip() or "overlay.kml"
+    lower = name.lower()
+    is_kmz = lower.endswith(".kmz") or (len(raw) >= 2 and raw[:2] == b"PK" and not lower.endswith(".kml"))
+    if is_kmz:
+        content = _extract_kml_from_kmz(raw)
+        if lower.endswith(".kmz"):
+            name = name[:-4] + ".kml"
+        elif not lower.endswith(".kml"):
+            name = f"{name}.kml"
+    else:
+        content = _decode_text_bytes(raw)
+        if not lower.endswith(".kml"):
+            name = f"{name}.kml"
+    return content, name[:120]
+
+
+def _format_bytes(n: int) -> str:
+    n = max(0, int(n))
+    gb = 1024 * 1024 * 1024
+    mb = 1024 * 1024
+    if n >= gb:
+        val = n / gb
+        text = f"{val:.0f}" if val >= 10 else f"{val:.1f}".rstrip("0").rstrip(".")
+        return f"{text} GB"
+    if n >= mb:
+        val = n / mb
+        text = f"{val:.0f}" if val >= 10 else f"{val:.1f}".rstrip("0").rstrip(".")
+        return f"{text} MB"
+    if n >= 1024:
+        return f"{n // 1024} KB"
+    return f"{n} B"
 
 
 @app.get("/api/kml")
@@ -2515,8 +2585,16 @@ def api_list_kml():
     if not user:
         return ({"error": "Unauthorized"}, 401)
     activity.enrich(user=user, kml_action="list")
-    items = list_user_kml(int(user["id"]))
-    return {"items": items, "max_items": MAX_KML_PER_USER, "max_bytes": MAX_KML_BYTES}
+    uid = int(user["id"])
+    items = list_user_kml(uid)
+    used_bytes = sum_user_kml_bytes(uid)
+    return {
+        "items": items,
+        "max_items": MAX_KML_PER_USER,
+        "max_bytes": MAX_KML_BYTES,
+        "max_storage_bytes": MAX_KML_STORAGE_BYTES,
+        "used_bytes": used_bytes,
+    }
 
 
 @app.get("/api/kml/<int:kml_id>")
@@ -2547,26 +2625,28 @@ def api_create_kml():
 
     name = ""
     content = ""
+    size_bytes = 0
 
     if request.files and "file" in request.files:
         f = request.files["file"]
         raw = f.read()
-        if len(raw) > MAX_KML_BYTES:
-            return ({"error": f"File too large (max {MAX_KML_BYTES // (1024 * 1024)} MB)"}, 400)
+        size_bytes = len(raw)
+        if size_bytes > MAX_KML_BYTES:
+            return ({"error": f"File too large (max {_format_bytes(MAX_KML_BYTES)})"}, 400)
         try:
-            content = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            try:
-                content = raw.decode("latin-1")
-            except Exception:
-                return ({"error": "File must be UTF-8 text KML"}, 400)
-        name = (request.form.get("name") or f.filename or "overlay.kml").strip()
+            content, name = _normalize_uploaded_kml(raw, f.filename or request.form.get("name") or "overlay.kml")
+        except ValueError as e:
+            return ({"error": str(e) or "Invalid KML/KMZ file"}, 400)
+        size_bytes = len(content.encode("utf-8"))
+        if request.form.get("name"):
+            name = str(request.form.get("name")).strip()[:120] or name
     else:
         data = request.get_json(silent=True) or {}
         content = data.get("content") or ""
         name = (data.get("name") or "overlay.kml").strip()
-        if len(content.encode("utf-8")) > MAX_KML_BYTES:
-            return ({"error": f"File too large (max {MAX_KML_BYTES // (1024 * 1024)} MB)"}, 400)
+        size_bytes = len(content.encode("utf-8"))
+        if size_bytes > MAX_KML_BYTES:
+            return ({"error": f"File too large (max {_format_bytes(MAX_KML_BYTES)})"}, 400)
 
     if not content or not _looks_like_kml(content):
         return ({"error": "Invalid KML file"}, 400)
@@ -2577,6 +2657,19 @@ def api_create_kml():
     uid = int(user["id"])
     if count_user_kml(uid) >= MAX_KML_PER_USER:
         return ({"error": f"Limit of {MAX_KML_PER_USER} KML overlays reached"}, 400)
+
+    used_bytes = sum_user_kml_bytes(uid)
+    if used_bytes + size_bytes > MAX_KML_STORAGE_BYTES:
+        remaining = max(0, MAX_KML_STORAGE_BYTES - used_bytes)
+        return (
+            {
+                "error": (
+                    f"KML storage limit of {_format_bytes(MAX_KML_STORAGE_BYTES)} reached "
+                    f"({_format_bytes(remaining)} remaining)"
+                )
+            },
+            400,
+        )
 
     created = create_user_kml(uid, name, content, enabled=1)
     activity.enrich(user=user, kml_action="create", kml_id=created["id"], kml_name=name)

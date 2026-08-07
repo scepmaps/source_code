@@ -1,24 +1,16 @@
 /** User KML import → DB-backed overlays with style + on/off toggle. */
 
 import { iconHtml } from '../toolbar/icons.js?v=20260806t';
+import {
+  parseKmlText,
+  parseKmlFile,
+  pathStyleFromFeature,
+  pointStyleFromFeature,
+  summarizeStats,
+} from './kml-parse.js?v=20260807a';
 
 const DEFAULT_COLOR = '#4de2ff';
 const DEFAULT_OPACITY = 0.65;
-let toGeoJsonKml = null;
-
-async function loadKmlConverter() {
-  if (toGeoJsonKml) return toGeoJsonKml;
-  const mod = await import('https://cdn.jsdelivr.net/npm/@tmcw/togeojson@5.8.1/+esm');
-  toGeoJsonKml = mod.kml;
-  return toGeoJsonKml;
-}
-
-function parseKmlToGeoJSON(kmlText) {
-  const dom = new DOMParser().parseFromString(kmlText, 'text/xml');
-  const err = dom.querySelector('parsererror');
-  if (err) throw new Error('Invalid KML XML');
-  return loadKmlConverter().then((kmlFn) => kmlFn(dom));
-}
 
 function authHeaders(token) {
   return { Authorization: 'Bearer ' + token };
@@ -34,30 +26,6 @@ function normalizeItem(raw = {}) {
     color: typeof raw.color === 'string' && raw.color.startsWith('#') ? raw.color : DEFAULT_COLOR,
     opacity: Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : DEFAULT_OPACITY,
     enabled: !!raw.enabled,
-  };
-}
-
-function styleFromItem(item) {
-  const color = item?.color || DEFAULT_COLOR;
-  const opacity = Number.isFinite(item?.opacity) ? item.opacity : DEFAULT_OPACITY;
-  return {
-    color,
-    weight: 2,
-    opacity: Math.max(0.25, Math.min(1, opacity + 0.2)),
-    fillColor: color,
-    fillOpacity: Math.max(0, Math.min(0.55, opacity * 0.35)),
-  };
-}
-
-function pointStyleFromItem(item) {
-  const base = styleFromItem(item);
-  return {
-    radius: 6,
-    color: base.color,
-    weight: 2,
-    fillColor: base.color,
-    fillOpacity: Math.max(0.35, Math.min(0.85, (item?.opacity ?? DEFAULT_OPACITY) * 0.85)),
-    opacity: base.opacity,
   };
 }
 
@@ -132,7 +100,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
         </button>
       </div>
       <div class="kml-panel-list" id="kmlPanelList"></div>
-      <div class="kml-panel-hint">Import a .kml file, then toggle it on the map.</div>
+      <div class="kml-panel-hint">Import a .kml or .kmz file, then toggle it on the map.</div>
     `;
 
     listEl = panelEl.querySelector('#kmlPanelList');
@@ -145,7 +113,8 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
 
     fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = '.kml,application/vnd.google-earth.kml+xml,application/xml,text/xml';
+    fileInput.accept =
+      '.kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,application/xml,text/xml,application/zip';
     fileInput.style.display = 'none';
     document.body.appendChild(fileInput);
     fileInput.addEventListener('change', async () => {
@@ -281,7 +250,8 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
       const sub = document.createElement('div');
       sub.className = 'kml-panel-sub';
       const kb = Math.max(1, Math.round((item.size_bytes || 0) / 1024));
-      sub.textContent = `${kb} KB · ${Math.round(item.opacity * 100)}%`;
+      const summary = item.parse_summary ? ` · ${item.parse_summary}` : '';
+      sub.textContent = `${kb} KB · ${Math.round(item.opacity * 100)}%${summary}`;
       meta.appendChild(nameEl);
       meta.appendChild(sub);
 
@@ -329,33 +299,120 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
 
   function applyLayerStyle(layer, item) {
     if (!layer) return;
-    const lineStyle = styleFromItem(item);
-    const pointStyle = pointStyleFromItem(item);
-    layer.eachLayer((sub) => {
-      if (typeof sub.setStyle === 'function') {
-        if (sub instanceof L.CircleMarker) sub.setStyle(pointStyle);
-        else sub.setStyle(lineStyle);
+    // Settings color/opacity intentionally override embedded KML styles.
+    const forced = {
+      color: item?.color || DEFAULT_COLOR,
+      opacity: item?.opacity ?? DEFAULT_OPACITY,
+    };
+    const lineStyle = {
+      color: forced.color,
+      weight: 2,
+      opacity: Math.max(0.25, Math.min(1, forced.opacity + 0.2)),
+      fillColor: forced.color,
+      fillOpacity: Math.max(0, Math.min(0.55, forced.opacity * 0.35)),
+    };
+    const pointStyle = {
+      radius: 6,
+      color: forced.color,
+      weight: 2,
+      fillColor: forced.color,
+      fillOpacity: Math.max(0.35, Math.min(0.85, forced.opacity * 0.85)),
+      opacity: lineStyle.opacity,
+    };
+    const walk = (sub) => {
+      if (sub instanceof L.ImageOverlay) {
+        if (typeof sub.setOpacity === 'function') sub.setOpacity(forced.opacity);
+        return;
       }
-    });
+      if (
+        typeof sub.eachLayer === 'function' &&
+        !(sub instanceof L.Path) &&
+        !(sub instanceof L.Marker) &&
+        !(sub instanceof L.CircleMarker)
+      ) {
+        try {
+          sub.eachLayer(walk);
+          return;
+        } catch (_) {
+          /* fall through */
+        }
+      }
+      if (typeof sub.setStyle !== 'function') return;
+      if (sub instanceof L.CircleMarker) sub.setStyle(pointStyle);
+      else sub.setStyle(lineStyle);
+    };
+    if (typeof layer.eachLayer === 'function') layer.eachLayer(walk);
   }
 
-  function buildLayer(geojson, item) {
-    const lineStyle = styleFromItem(item);
-    const pointStyle = pointStyleFromItem(item);
-    return L.geoJSON(geojson, {
-      style: () => ({ ...lineStyle }),
-      pointToLayer: (_feature, latlng) => L.circleMarker(latlng, { ...pointStyle }),
-      onEachFeature: (feature, layer) => {
-        const name = feature?.properties?.name || feature?.properties?.Name;
-        const desc = feature?.properties?.description || feature?.properties?.Description;
-        if (name || desc) {
-          const html = `<strong>${escapeHtml(name || 'Feature')}</strong>${
-            desc ? `<div style="margin-top:4px">${escapeHtml(String(desc).slice(0, 400))}</div>` : ''
-          }`;
-          layer.bindPopup(html);
+  function popupHtml(feature) {
+    const props = feature?.properties || {};
+    const name = props.name || props.Name || '';
+    const folder = props._folder || '';
+    const desc = props.description || props.Description || '';
+    if (!name && !desc && !folder) return null;
+    const bits = [];
+    if (name) bits.push(`<strong>${escapeHtml(name)}</strong>`);
+    if (folder) {
+      bits.push(`<div style="opacity:.7;font-size:11px;margin-top:2px">${escapeHtml(folder)}</div>`);
+    }
+    if (desc) {
+      const plain = stripHtml(String(desc)).slice(0, 500);
+      if (plain) bits.push(`<div style="margin-top:4px">${escapeHtml(plain)}</div>`);
+    }
+    return bits.join('') || null;
+  }
+
+  function buildLayer(parsed, item) {
+    const fallback = { color: item?.color || DEFAULT_COLOR, opacity: item?.opacity ?? DEFAULT_OPACITY };
+    const group = L.featureGroup();
+
+    const geoLayer = L.geoJSON(parsed.geojson || { type: 'FeatureCollection', features: [] }, {
+      style: (feature) => pathStyleFromFeature(feature, fallback),
+      pointToLayer: (feature, latlng) => {
+        const ps = pointStyleFromFeature(feature, fallback);
+        if (ps.iconHref) {
+          const size = Math.round(24 * (ps.iconScale || 1));
+          const icon = L.icon({
+            iconUrl: ps.iconHref,
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
+            popupAnchor: [0, -size / 2],
+          });
+          return L.marker(latlng, { icon, title: feature?.properties?.name || '' });
         }
+        return L.circleMarker(latlng, { ...ps });
+      },
+      onEachFeature: (feature, layer) => {
+        const html = popupHtml(feature);
+        if (html) layer.bindPopup(html);
       },
     });
+    group.addLayer(geoLayer);
+
+    for (const overlay of parsed.groundOverlays || []) {
+      try {
+        const b = overlay.bounds;
+        if (!b || !overlay.href) continue;
+        const bounds = L.latLngBounds([b.south, b.west], [b.north, b.east]);
+        if (!bounds.isValid()) continue;
+        const opacity = Math.max(0.05, Math.min(1, Number(overlay.opacity) || 1));
+        const img = L.imageOverlay(overlay.href, bounds, {
+          opacity,
+          interactive: true,
+          kmlOpacity: opacity,
+        });
+        const html = popupHtml({
+          properties: { name: overlay.name, description: overlay.description },
+        });
+        if (html && typeof img.bindPopup === 'function') img.bindPopup(html);
+        group.addLayer(img);
+      } catch (_) {
+        /* skip bad overlay */
+      }
+    }
+
+    group._kmlStats = parsed.stats || null;
+    return group;
   }
 
   function escapeHtml(s) {
@@ -364,6 +421,15 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function stripHtml(s) {
+    return String(s)
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s+\n/g, '\n')
+      .trim();
   }
 
   async function setOverlayActive(id, on, { persist = true, fit = false } = {}) {
@@ -412,8 +478,11 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     try {
       const data = await api(`/api/kml/${kmlId}`);
       const merged = upsertItem({ ...item, ...data, enabled: true });
-      const geojson = await parseKmlToGeoJSON(data.content);
-      const layer = buildLayer(geojson, merged);
+      const parsed = await parseKmlText(data.content);
+      if (!(parsed.geojson?.features?.length || parsed.groundOverlays?.length)) {
+        throw new Error('No drawable geometry found in KML');
+      }
+      const layer = buildLayer(parsed, merged);
       layer.addTo(map);
       if (fit) {
         try {
@@ -424,6 +493,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
         }
       }
       activeLayers.set(kmlId, layer);
+      if (merged && parsed.stats) merged.parse_summary = summarizeStats(parsed.stats);
       if (persist) {
         try {
           await api(`/api/kml/${kmlId}`, {
@@ -488,12 +558,43 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     return updated;
   }
 
+  async function prepareKmlUpload(file) {
+    const name = file.name || 'overlay.kml';
+    const lower = name.toLowerCase();
+    const isKmz =
+      lower.endsWith('.kmz') ||
+      file.type === 'application/vnd.google-earth.kmz' ||
+      file.type === 'application/zip';
+    if (isKmz) {
+      const parsed = await parseKmlFile(file);
+      return {
+        ...parsed,
+        isKmz: true,
+        uploadName: name.replace(/\.kmz$/i, '.kml'),
+      };
+    }
+    const text = await file.text();
+    const parsed = await parseKmlText(text);
+    return {
+      ...parsed,
+      kmlText: text,
+      isKmz: false,
+      uploadName: name.toLowerCase().endsWith('.kml') ? name : `${name}.kml`,
+    };
+  }
+
   async function uploadFile(file) {
     if (!file) return null;
-    const form = new FormData();
-    form.append('file', file, file.name);
-    form.append('name', file.name);
     try {
+      const prepared = await prepareKmlUpload(file);
+      if (!(prepared.geojson?.features?.length || prepared.groundOverlays?.length)) {
+        throw new Error(`No drawable geometry found in ${prepared.isKmz ? 'KMZ' : 'KML'}`);
+      }
+
+      const form = new FormData();
+      const blob = new Blob([prepared.kmlText], { type: 'application/vnd.google-earth.kml+xml' });
+      form.append('file', blob, prepared.uploadName);
+      form.append('name', prepared.uploadName);
       const token = typeof getToken === 'function' ? getToken() : '';
       const res = await fetch(`${API_BASE}/api/kml`, {
         method: 'POST',
