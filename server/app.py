@@ -1,5 +1,6 @@
 import hashlib
 import io
+import logging
 import math
 import os
 import random
@@ -77,10 +78,11 @@ ensure_default_admin(
 )
 
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
+logger = logging.getLogger(__name__)
+
 # Traefik terminates TLS and nginx forwards X-Forwarded-Proto. Without ProxyFix,
 # request.host_url stays http://… and MapLibre drops JWT on rewritten ArcGIS style URLs.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
-CORS(app)
 
 # Cap export raster dimensions (per side). Also used to bound headless device_scale_factor.
 try:
@@ -91,6 +93,60 @@ try:
     MAX_EXPORT_DEVICE_SCALE = max(1.0, float(os.getenv("MAX_EXPORT_DEVICE_SCALE", "4")))
 except ValueError:
     MAX_EXPORT_DEVICE_SCALE = 4.0
+
+_PROD_CORS_ORIGINS = (
+    "https://app.scep.city",
+    "https://scepmaps.scep.city",
+    "https://pamerkuf.scep.city",
+)
+_DEV_CORS_ORIGINS = (
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:5001",
+    "http://127.0.0.1:5001",
+    "http://localhost:8088",
+    "http://127.0.0.1:8088",
+)
+_CORS_PLACEHOLDERS = frozenset({"https://yourdomain.com", "https://www.yourdomain.com"})
+
+
+def _is_production() -> bool:
+    return os.getenv("FLASK_ENV", "production").strip().lower() == "production"
+
+
+def _parse_cors_origins() -> list[str]:
+    """Use CORS_ORIGINS from env; never allow '*' in production."""
+    raw = os.getenv("CORS_ORIGINS", "").strip()
+    defaults = list(_PROD_CORS_ORIGINS if _is_production() else _DEV_CORS_ORIGINS)
+    if not raw:
+        return defaults
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if "*" in parts:
+        if _is_production():
+            logger.warning("CORS_ORIGINS contains '*'; refusing wildcard in production")
+            return list(_PROD_CORS_ORIGINS)
+        return list(_DEV_CORS_ORIGINS)
+    cleaned = [p for p in parts if p not in _CORS_PLACEHOLDERS]
+    return cleaned or defaults
+
+
+CORS(app, origins=_parse_cors_origins(), supports_credentials=False)
+
+
+def _http_500(public: str = "Internal server error", *, exc: BaseException | None = None):
+    """Return a client-safe 500; log full exception server-side."""
+    if exc is not None:
+        logger.exception("%s", public)
+    if _is_production() or exc is None:
+        return (public, 500)
+    return (f"{public}: {exc}", 500)
+
+
+def _json_500(public: str = "Internal server error", *, exc: BaseException | None = None):
+    if exc is not None:
+        logger.exception("%s", public)
+    msg = public if (_is_production() or exc is None) else f"{public}: {exc}"
+    return jsonify({"error": msg}), 500
 
 
 def _parse_export_dimensions(data) -> tuple[int, int]:
@@ -115,8 +171,42 @@ def _activity_start():
 
 
 @app.after_request
+def _security_headers(response):
+    """Hardening that previously lived only in unused app_prod.py."""
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-XSS-Protection", "1; mode=block")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; "
+            "img-src 'self' data: https: blob:; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "connect-src 'self'; "
+            "worker-src 'self' blob:; "
+            "child-src 'self' blob:; "
+            "frame-ancestors 'none';"
+        ),
+    )
+    if _is_production():
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    return response
+
+
+@app.after_request
 def _activity_end(response):
     return activity.on_request_end(response)
+
+
+@app.errorhandler(500)
+def _handle_500(error):
+    logger.exception("Unhandled server error: %s", error)
+    return jsonify({"error": "Internal server error"}), 500
 
 
 @app.route("/")
@@ -315,7 +405,7 @@ def export_endpoint():
         logger.error(f"[Export] ========== Tile-based Export Failed ==========")
         logger.error(f"[Export] Error: {e}", exc_info=True)
         activity.enrich(error_message=str(e)[:300])
-        return (f"Export failed: {str(e)}", 500)
+        return _http_500("Export failed", exc=e)
 
 
 @app.route("/export_headless", methods=["POST"])
@@ -397,7 +487,7 @@ def export_headless():
         release_export_quota(export_log_id)
         logger.error(f"[Export] Error in export_headless preparation: {e}", exc_info=True)
         activity.enrich(error_message=str(e)[:300])
-        return (f"Export preparation failed: {str(e)}", 500)
+        return _http_500("Export preparation failed", exc=e)
 
     try:
         # Activity — output size (only reachable on success)
@@ -416,7 +506,7 @@ def export_headless():
         logger.error(f"[Export] ========== Headless Export Failed ==========")
         logger.error(f"[Export] Error: {e}", exc_info=True)
         activity.enrich(error_message=str(e)[:300])
-        return (f"Export processing failed: {str(e)}", 500)
+        return _http_500("Export processing failed", exc=e)
 
 
 def _sanitize_export_filename(raw: str | None, fallback: str) -> str:
@@ -870,25 +960,30 @@ def _hgt_prepare_export(data, logger):
     logger.info("[HGT] Tile debug samples=%s", tile_debug_samples)
 
     if not present_paths and not synthetic_water_tiles:
-        return (
-            None,
-            (
-                "No local HGT tiles found for this area. "
-                f"data_root={data_root} hgt_dir={hgt_dir} "
-                f"allowlist_size={len(missing_allowlist)} "
-                f"requested_tiles_count={len(requested_tiles)} requested_tiles_sample={requested_tiles[:20]} "
-                f"tile_debug_samples={tile_debug_samples}",
-                404,
-            ),
+        logger.warning(
+            "[HGT] No tiles for area data_root=%s hgt_dir=%s allowlist=%s "
+            "requested=%s sample=%s debug=%s",
+            data_root,
+            hgt_dir,
+            len(missing_allowlist),
+            len(requested_tiles),
+            requested_tiles[:20],
+            tile_debug_samples,
         )
+        return (None, ("No HGT elevation data available for this area.", 404))
     if unresolved_missing_tiles:
+        logger.warning(
+            "[HGT] Unresolved missing tiles=%s data_root=%s hgt_dir=%s debug=%s",
+            unresolved_missing_tiles[:20],
+            data_root,
+            hgt_dir,
+            tile_debug_samples,
+        )
         return (
             None,
             (
-                "Missing HGT tiles are not registered in missing_hgt_tiles_s56_n60.txt: "
-                + ", ".join(unresolved_missing_tiles[:20])
-                + f" | data_root={data_root} hgt_dir={hgt_dir} "
-                + f"tile_debug_samples={tile_debug_samples}",
+                "Some HGT tiles for this area are unavailable. "
+                f"Missing: {', '.join(unresolved_missing_tiles[:20])}",
                 404,
             ),
         )
@@ -1017,7 +1112,7 @@ def export_hgt():
         release_export_quota(export_log_id)
         logger.exception("[HGT] Export failed")
         activity.enrich(error_message=str(e)[:300])
-        return (f"HGT export failed: {str(e)}", 500)
+        return _http_500("HGT export failed", exc=e)
 
 
 @app.route("/export_hgt_map_tiff", methods=["POST"])
@@ -1082,7 +1177,7 @@ def export_hgt_map_tiff():
             release_export_quota(export_log_id)
             logger.exception("[HGT] Map PNG build failed")
             activity.enrich(error_message=str(e)[:300])
-            return (f"HGT map PNG failed: {str(e)}", 500)
+            return _http_500("HGT map PNG failed", exc=e)
 
         png_buf = io.BytesIO(map_overlay_png_bytes)
         png_buf.seek(0)
@@ -1098,7 +1193,7 @@ def export_hgt_map_tiff():
         release_export_quota(export_log_id)
         logger.exception("[HGT] Map PNG export failed")
         activity.enrich(error_message=str(e)[:300])
-        return (f"HGT map PNG export failed: {str(e)}", 500)
+        return _http_500("HGT map PNG export failed", exc=e)
 
 
 # --- SHOM tile proxy ---------------------------------------------------------
@@ -1232,7 +1327,7 @@ def shom_tile(z: int, x: int, y: int, ext: str):
     except Exception as e:
         # Cache the failure
         _shom_failed_tiles[tile_key] = current_time
-        return (f"Tile proxy error: {e}", 500)
+        return _http_500("Tile proxy error", exc=e)
 
 
 def _mercator_tile_bbox_3857(z: int, x: int, y: int):
@@ -1764,10 +1859,7 @@ def arcgis_vector_tile(z: int, x: int, y: int, ext: str):
     except ValueError as e:
         return (str(e), 400)
     except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).exception("ArcGIS vector tile proxy error")
-        return (f"ArcGIS vector tile proxy error: {e}", 500)
+        return _http_500("ArcGIS vector tile proxy error", exc=e)
 
 
 @app.get("/api/arcgis/res/<path:spec>")
@@ -1789,10 +1881,7 @@ def arcgis_sprite_resource(spec: str):
     except ValueError as e:
         return (str(e), 400)
     except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).exception("ArcGIS sprite proxy error")
-        return (f"ArcGIS sprite proxy error: {e}", 500)
+        return _http_500("ArcGIS sprite proxy error", exc=e)
 
 
 @app.get("/api/arcgis/glyphs/<enc>/<path:fontstack>/<range_id>.pbf")
@@ -1813,10 +1902,7 @@ def arcgis_glyphs(enc: str, fontstack: str, range_id: str):
     except ValueError as e:
         return (str(e), 400)
     except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).exception("ArcGIS glyphs proxy error")
-        return (f"ArcGIS glyphs proxy error: {e}", 500)
+        return _http_500("ArcGIS glyphs proxy error", exc=e)
 
 
 @app.get("/api/arcgis/tilejson")
@@ -1842,10 +1928,7 @@ def arcgis_tilejson():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).exception("ArcGIS TileJSON proxy error")
-        return jsonify({"error": f"ArcGIS TileJSON proxy error: {e}"}), 500
+        return _json_500("ArcGIS TileJSON proxy error", exc=e)
 
 
 @app.get("/tiles/arcgis/<int:z>/<int:x>/<int:y>.<ext>")
@@ -2016,9 +2099,7 @@ def arcgis_tile(z: int, x: int, y: int, ext: str):
             return send_file(output, mimetype="image/png")
 
     except Exception as e:
-        import traceback
-
-        return (f"ArcGIS proxy error: {e}\n{traceback.format_exc()}", 500)
+        return _http_500("ArcGIS proxy error", exc=e)
 
 
 @app.route("/api/arcgis/style/<path:style_name>", methods=["GET"])
@@ -2293,7 +2374,7 @@ def openaip_tile(z: int, x: int, y: int):
         content_type = resp.headers.get("Content-Type", "image/png")
         return send_file(io.BytesIO(resp.content), mimetype=content_type)
     except Exception as e:
-        return (f"OpenAIP proxy error: {e}", 500)
+        return _http_500("OpenAIP proxy error", exc=e)
 
 
 @app.get("/tiles/gbsouth/<int:z>/<int:x>/<int:y>.png")
@@ -2317,7 +2398,7 @@ def gbsouth_tile(z: int, x: int, y: int):
     try:
         return send_file(str(tile_path), mimetype="image/png")
     except Exception as e:
-        return (f"Error serving tile: {str(e)}", 500)
+        return _http_500("Error serving tile", exc=e)
 
 
 # --- Auth and admin APIs -----------------------------------------------------
@@ -2878,7 +2959,7 @@ def admin_stats():
         stats = get_all_export_stats()
         return {"stats": stats}
     except Exception as e:
-        return ({"error": f"Failed to get stats: {str(e)}"}, 500)
+        return _json_500("Failed to get stats", exc=e)
 
 
 @app.get("/admin/users/<int:user_id>/stats")
@@ -2895,7 +2976,7 @@ def admin_user_stats(user_id: int):
         stats = get_user_export_stats(user_id)
         return {"user": user, "stats": stats}
     except Exception as e:
-        return ({"error": f"Failed to get user stats: {str(e)}"}, 500)
+        return _json_500("Failed to get user stats", exc=e)
 
 
 @app.get("/user/stats")
@@ -2941,7 +3022,7 @@ def user_stats():
         activity.enrich(user=user, viewed_own_stats=True)
         return {"stats": stats, "limits": limits_status}
     except Exception as e:
-        return ({"error": f"Failed to get stats: {str(e)}"}, 500)
+        return _json_500("Failed to get stats", exc=e)
 
 
 if __name__ == "__main__":

@@ -14,8 +14,9 @@ class Config:
     ARCGIS_API_KEY = os.getenv('ARCGIS_API_KEY', '')
     SHOM_REFERER = os.getenv('SHOM_REFERER', 'https://data.shom.fr/')
     
-    # CORS settings
-    CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*').split(',')
+    # CORS settings — comma-separated origins; never default to '*' in production
+    _cors_raw = os.getenv('CORS_ORIGINS', '*')
+    CORS_ORIGINS = [o.strip() for o in _cors_raw.split(',') if o.strip()]
     
     # Rate limiting
     RATELIMIT_STORAGE_URL = os.getenv('RATELIMIT_STORAGE_URL', 'memory://')
@@ -51,8 +52,9 @@ class ProductionConfig(Config):
     # Override with production values
     SECRET_KEY = os.getenv('SECRET_KEY')  # Must be set in production
     
-    # Stricter CORS in production
-    CORS_ORIGINS = os.getenv('CORS_ORIGINS', '').split(',') if os.getenv('CORS_ORIGINS') else []
+    # Stricter CORS in production (empty/missing → no wildcard)
+    _prod_cors = os.getenv('CORS_ORIGINS', '')
+    CORS_ORIGINS = [o.strip() for o in _prod_cors.split(',') if o.strip() and o.strip() != '*']
     
     # Enhanced security
     BCRYPT_ROUNDS = 14

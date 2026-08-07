@@ -1,0 +1,35 @@
+# Environment / secrets
+.env
+.env.*
+!.env*.template
+*.env
+
+# SQLite / local DBs
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Local data / exports
+server/data/
+exports/
+*.log
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
