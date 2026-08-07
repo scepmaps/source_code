@@ -63,6 +63,7 @@ from exporter import export_geotiff  # server-side tiles → mosaic → GeoTIFF
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from headless import render_headless_map  # Playwright path (browser-rendered bitmap)
+from kml_geojson import prepare_kml_export_layers
 from PIL import Image, ImageDraw, ImageFont
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine
@@ -260,6 +261,36 @@ def _download_name(out_crs: str, zoom: int, filename: str | None) -> str:
         return f"z{inverse_zoom}_export_{out_crs.replace(':','_')}_{ts}.tif"
 
 
+def _resolve_export_kml_layers(user: dict, data: dict) -> list:
+    """Load active user KML overlays requested for TIF export."""
+    raw_ids = data.get("kmlIds") or data.get("kml_ids") or []
+    if not isinstance(raw_ids, list) or not raw_ids:
+        return []
+    user_id = int(user["id"])
+    layers = []
+    seen = set()
+    for raw in raw_ids[:MAX_KML_PER_USER]:
+        try:
+            kml_id = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if kml_id in seen:
+            continue
+        seen.add(kml_id)
+        row = get_user_kml(user_id, kml_id)
+        if not row or not row.get("content"):
+            continue
+        layers.append(
+            {
+                "name": row.get("name") or f"KML #{kml_id}",
+                "content": row["content"],
+                "color": row.get("color") or "#4de2ff",
+                "opacity": row.get("opacity", 0.65),
+            }
+        )
+    return prepare_kml_export_layers(layers)
+
+
 def _export_headless_geotiff_bytes(
     bbox,
     zoom: int,
@@ -269,10 +300,18 @@ def _export_headless_geotiff_bytes(
     overlays: dict,
     out_crs: str = "EPSG:4326",
     show_attribution: bool = True,
+    kml_layers=None,
 ):
     """Shared headless export pipeline used by /export_headless and HGT map-underlay TIFF."""
     mosaic, exact_bbox = render_headless_map(
-        bbox, zoom, width, height, base, overlays, show_attribution=show_attribution
+        bbox,
+        zoom,
+        width,
+        height,
+        base,
+        overlays,
+        show_attribution=show_attribution,
+        kml_layers=kml_layers,
     )
 
     xmin, ymin, xmax, ymax = bbox_4326_to_3857(exact_bbox)
@@ -447,6 +486,10 @@ def export_headless():
         user, export_log_id = _require_auth_with_quota(request, base, overlays)
         logger.info(f"[Export] User authenticated: user_id={user.get('id')}, email={user.get('email')}")
 
+        kml_layers = _resolve_export_kml_layers(user, data)
+        if kml_layers:
+            logger.info(f"[Export] Including {len(kml_layers)} KML overlay(s) in headless render")
+
         # Activity — request params + resolved identity
         activity.enrich(
             user=user,
@@ -464,6 +507,7 @@ def export_headless():
             quality=quality,
             filename=filename,
             show_attribution=show_attribution,
+            kml_count=len(kml_layers),
         )
 
         logger.info(f"[Export] Step 1-3: Rendering + georeferencing via shared headless pipeline")
@@ -476,6 +520,7 @@ def export_headless():
             overlays=overlays,
             out_crs=out_crs,
             show_attribution=show_attribution,
+            kml_layers=kml_layers,
         )
     except PermissionError as pe:
         release_export_quota(export_log_id)

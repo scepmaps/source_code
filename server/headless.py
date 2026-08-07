@@ -99,6 +99,7 @@ HTML = """<!doctype html>
   const zoom = %ZOOM%;
   const base = "%BASE%";
   const overlays = %OVERLAYS%;
+  const KML_LAYERS = %KML_LAYERS%;  // [{name,color,opacity,geojson}, ...]
   const API_BASE = "%API_BASE%";  // Base URL for API endpoints (empty string or full URL)
 
   // Vector tile style URLs - these match the frontend config
@@ -399,6 +400,48 @@ HTML = """<!doctype html>
     })();
   }
 
+  // User KML overlays (same color/opacity as interactive map settings)
+  if (Array.isArray(KML_LAYERS) && KML_LAYERS.length) {
+    map.createPane('kmlPane');
+    map.getPane('kmlPane').style.zIndex = 470;
+    for (const layer of KML_LAYERS) {
+      const color = layer.color || '#4de2ff';
+      const opacity = (typeof layer.opacity === 'number') ? layer.opacity : 0.65;
+      const lineStyle = {
+        color,
+        weight: 2,
+        opacity: Math.max(0.25, Math.min(1, opacity + 0.2)),
+        fillColor: color,
+        fillOpacity: Math.max(0, Math.min(0.55, opacity * 0.35)),
+        pane: 'kmlPane'
+      };
+      const pointStyle = {
+        radius: 6,
+        color,
+        weight: 2,
+        fillColor: color,
+        fillOpacity: Math.max(0.35, Math.min(0.85, opacity * 0.85)),
+        opacity: lineStyle.opacity,
+        pane: 'kmlPane'
+      };
+      try {
+        L.geoJSON(layer.geojson || { type: 'FeatureCollection', features: [] }, {
+          pane: 'kmlPane',
+          style: (feature) => {
+            const t = feature?.geometry?.type || '';
+            if (t.includes('Line')) {
+              return { ...lineStyle, fillOpacity: 0 };
+            }
+            return lineStyle;
+          },
+          pointToLayer: (feature, latlng) => L.circleMarker(latlng, pointStyle)
+        }).addTo(map);
+      } catch (err) {
+        console.error('[KML] Failed to draw overlay:', layer.name, err);
+      }
+    }
+  }
+
   setTimeout(()=>{ window.__tilesLoaded = true; }, 15000); // hard cap
 </script>
 </body>
@@ -411,7 +454,14 @@ HTML = """<!doctype html>
 
 
 def render_headless_map(
-    bbox4326, zoom: int, width: int, height: int, base: str, overlays: Dict[str, bool], show_attribution: bool = True
+    bbox4326,
+    zoom: int,
+    width: int,
+    height: int,
+    base: str,
+    overlays: Dict[str, bool],
+    show_attribution: bool = True,
+    kml_layers=None,
 ):
     try:
         # Determine the pixel dimensions of the bbox at the given zoom. The viewport
@@ -470,12 +520,15 @@ def render_headless_map(
         # Default to localhost:5001 which is where the Flask server runs
         api_base = os.getenv("HEADLESS_API_BASE", "http://127.0.0.1:5001")
 
+        kml_json = json.dumps(kml_layers or []).replace("<", "\\u003c")
+
         html = (
             HTML.replace("%LAYER_URLS%", json.dumps(LAYER_URLS))
             .replace("%BBOX%", json.dumps(bbox4326))
             .replace("%ZOOM%", json.dumps(int(zoom)))
             .replace("%BASE%", base)
             .replace("%OVERLAYS%", json.dumps(overlays))
+            .replace("%KML_LAYERS%", kml_json)
             .replace("%LABEL_CSS%", label_css)
             .replace("%LABEL_JS%", label_js)
             .replace("%CSS%", LEAFLET_CSS)
