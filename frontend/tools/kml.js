@@ -188,15 +188,13 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
 
   function openPanel() {
     mountPanelNearButton();
-    document.querySelectorAll('#mapPickerPanel, #overlayPickerPanel, #moreToolDropdown, #drawPickerPanel').forEach((el) => {
+    document.querySelectorAll('#mapPickerPanel, #overlayPickerPanel, #moreToolDropdown').forEach((el) => {
       el.classList.remove('open');
     });
     document.getElementById('btnMaps')?.classList.remove('panel-open');
     document.getElementById('btnOverlays')?.classList.remove('panel-open');
     document.getElementById('btnMaps')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnOverlays')?.setAttribute('aria-expanded', 'false');
-    document.getElementById('btnDraw')?.classList.remove('panel-open', 'map-tool-btn--active');
-    document.getElementById('btnDraw')?.setAttribute('aria-expanded', 'false');
 
     panelEl.classList.add('open');
     btnEl?.classList.add('panel-open', 'map-tool-btn--active');

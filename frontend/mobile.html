@@ -19,9 +19,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
-    <link rel="stylesheet" href="tools/tools.css?v=20260807m">
+    <link rel="stylesheet" href="tools/tools.css?v=20260807n">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css?v=20260807i">
+    <link rel="stylesheet" href="settings/settings.css?v=20260807n">
     <link rel="stylesheet" href="mobile/mobile.css?v=20260806y">
     <script type="module">
       // Escape hatch: force desktop with ?desktop / stay with ?mobile
@@ -318,6 +318,50 @@
             <div id="settingsKmlList" class="settings-kml-list"></div>
           </div>
 
+          <div id="settingsDrawSection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <h4>Drawing</h4>
+            <p style="color: var(--muted); font-size: 13px; margin: 0 0 8px;">
+              Color palette and measurement labels for the desktop draw tool. Changes apply immediately.
+            </p>
+            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Color palette</label>
+            <div id="settingsDrawPalette" class="settings-draw-palette" aria-label="Draw color palette"></div>
+            <div class="settings-draw-row">
+              <label class="settings-kml-outline-toggle">
+                <span>Show measurements</span>
+                <span class="settings-switch">
+                  <input type="checkbox" id="settingsDrawShowMeasurements" />
+                  <span class="settings-switch-slider" aria-hidden="true"></span>
+                </span>
+              </label>
+              <label class="settings-kml-outline-toggle">
+                <span>Show lengths</span>
+                <span class="settings-switch">
+                  <input type="checkbox" id="settingsDrawShowLength" />
+                  <span class="settings-switch-slider" aria-hidden="true"></span>
+                </span>
+              </label>
+              <label class="settings-kml-outline-toggle">
+                <span>Show areas</span>
+                <span class="settings-switch">
+                  <input type="checkbox" id="settingsDrawShowArea" />
+                  <span class="settings-switch-slider" aria-hidden="true"></span>
+                </span>
+              </label>
+              <label class="settings-kml-outline-toggle">
+                <span>Show coordinates</span>
+                <span class="settings-switch">
+                  <input type="checkbox" id="settingsDrawShowCoordinates" />
+                  <span class="settings-switch-slider" aria-hidden="true"></span>
+                </span>
+              </label>
+            </div>
+            <div class="settings-draw-stroke-row">
+              <label for="settingsDrawStrokeWeight" style="font-size: 13px; min-width: 90px;">Stroke weight</label>
+              <input type="range" id="settingsDrawStrokeWeight" min="1" max="6" step="0.25" value="2.25" />
+              <span id="settingsDrawStrokeVal" class="settings-draw-stroke-val">2.25</span>
+            </div>
+          </div>
+
           <!-- Export settings omitted on mobile -->
           <div class="mobile-hide-export" hidden aria-hidden="true">
             <select id="settingsSystem"><option value="UAS">UAS</option></select>
@@ -376,6 +420,6 @@
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
     <script src="particles.js"></script>
-    <script type="module" src="app.js?v=20260807m"></script>
+    <script type="module" src="app.js?v=20260807n"></script>
   </body>
 </html>

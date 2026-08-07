@@ -110,6 +110,9 @@ export const icons = {
   freehand: svg(
     '<path d="M4 20c2-2 3.5-4.5 5-6 1.8-1.8 3.2-2.2 5-1 1.5 1 2.5 3 4 4 1.2.8 2.5 1 4 0"/><path d="M4 16c1.5-1 2.8-2.5 4-3.5"/>'
   ),
+  arrow: svg(
+    '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>'
+  ),
 };
 
 export function iconHtml(key) {

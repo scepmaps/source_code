@@ -1,5 +1,5 @@
-import { iconHtml } from './icons.js?v=20260807m';
-import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260807m';
+import { iconHtml } from './icons.js?v=20260807n';
+import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260807n';
 
 export function createToolbarController(opts) {
   const {
@@ -80,7 +80,8 @@ export function createToolbarController(opts) {
   }
 
   function closeAllPanels(exceptId = null) {
-    ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown', 'kmlPickerPanel', 'drawPickerPanel'].forEach((id) => {
+    // Draw panel is sticky — only closed via its own button toggle or Esc.
+    ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown', 'kmlPickerPanel'].forEach((id) => {
       if (id === exceptId) return;
       const el = document.getElementById(id);
       el?.classList.remove('open');
@@ -95,11 +96,9 @@ export function createToolbarController(opts) {
     document.getElementById('btnMaps')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnOverlays')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnKml')?.setAttribute('aria-expanded', 'false');
-    document.getElementById('btnDraw')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnMaps')?.classList.remove('panel-open');
     document.getElementById('btnOverlays')?.classList.remove('panel-open');
     document.getElementById('btnKml')?.classList.remove('panel-open', 'map-tool-btn--active');
-    document.getElementById('btnDraw')?.classList.remove('panel-open', 'map-tool-btn--active');
     const anyOpen = !!document.querySelector(
       '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open, #kmlPickerPanel.open, #drawPickerPanel.open'
     );

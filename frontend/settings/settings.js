@@ -26,6 +26,7 @@ export function initSettingsController(opts) {
     updateDensityOpacity,
     updateDensityBorderColors,
     kmlController,
+    drawController,
   } = opts;
   const settingsModal = document.getElementById('userSettingsModal');
   const settingsBody = settingsModal.querySelector('.stats-modal-body');
@@ -414,9 +415,60 @@ export function initSettingsController(opts) {
     if (redOutlineCb) redOutlineCb.checked = !!kmlController?.getRedOutline?.();
     const showNamesCb = document.getElementById('settingsKmlShowNames');
     if (showNamesCb) showNamesCb.checked = !!kmlController?.getShowNames?.();
+    loadDrawSettingsIntoForm();
     await refreshKmlSettings({ preserveDrafts: false });
     markSettingsClean();
   };
+
+  function loadDrawSettingsIntoForm() {
+    const section = document.getElementById('settingsDrawSection');
+    if (!section || !drawController?.getSettings) return;
+    const s = drawController.getSettings();
+    const paletteHost = document.getElementById('settingsDrawPalette');
+    if (paletteHost) {
+      paletteHost.innerHTML = '';
+      (s.palette || []).forEach((color, idx) => {
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.value = color;
+        input.dataset.paletteIndex = String(idx);
+        input.title = `Palette color ${idx + 1}`;
+        input.addEventListener('input', () => applyDrawSettingsFromForm());
+        paletteHost.appendChild(input);
+      });
+    }
+    const setCb = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.checked = !!val;
+    };
+    setCb('settingsDrawShowMeasurements', s.showMeasurements);
+    setCb('settingsDrawShowLength', s.showLength);
+    setCb('settingsDrawShowArea', s.showArea);
+    setCb('settingsDrawShowCoordinates', s.showCoordinates);
+    const stroke = document.getElementById('settingsDrawStrokeWeight');
+    const strokeVal = document.getElementById('settingsDrawStrokeVal');
+    if (stroke) stroke.value = String(s.strokeWeight ?? 2.25);
+    if (strokeVal) strokeVal.textContent = String(s.strokeWeight ?? 2.25);
+  }
+
+  function applyDrawSettingsFromForm() {
+    if (!drawController?.applySettings) return;
+    const paletteHost = document.getElementById('settingsDrawPalette');
+    const palette = paletteHost
+      ? [...paletteHost.querySelectorAll('input[type="color"]')].map((el) => el.value)
+      : undefined;
+    const stroke = document.getElementById('settingsDrawStrokeWeight');
+    const strokeVal = document.getElementById('settingsDrawStrokeVal');
+    if (stroke && strokeVal) strokeVal.textContent = stroke.value;
+    drawController.applySettings({
+      palette,
+      showMeasurements: !!document.getElementById('settingsDrawShowMeasurements')?.checked,
+      showLength: !!document.getElementById('settingsDrawShowLength')?.checked,
+      showArea: !!document.getElementById('settingsDrawShowArea')?.checked,
+      showCoordinates: !!document.getElementById('settingsDrawShowCoordinates')?.checked,
+      strokeWeight: stroke ? parseFloat(stroke.value) : 2.25,
+    });
+  }
 
   const closeSettingsModal = () => {
     kmlDrafts.clear();
@@ -565,6 +617,11 @@ export function initSettingsController(opts) {
       if (!kmlController?.setShowNames) return;
       kmlController.setShowNames(!!e.target.checked);
     });
+    bindIfExists('settingsDrawShowMeasurements', 'change', applyDrawSettingsFromForm);
+    bindIfExists('settingsDrawShowLength', 'change', applyDrawSettingsFromForm);
+    bindIfExists('settingsDrawShowArea', 'change', applyDrawSettingsFromForm);
+    bindIfExists('settingsDrawShowCoordinates', 'change', applyDrawSettingsFromForm);
+    bindIfExists('settingsDrawStrokeWeight', 'input', applyDrawSettingsFromForm);
     if (kmlController?.onChange) {
       kmlController.onChange(() => {
         if (document.getElementById('userSettingsModal')?.style.display === 'flex') {
