@@ -19,7 +19,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
-    <link rel="stylesheet" href="tools/tools.css?v=20260807n">
+    <link rel="stylesheet" href="tools/tools.css?v=20260807o">
     <link rel="stylesheet" href="zoom/zoom.css">
     <link rel="stylesheet" href="settings/settings.css?v=20260807n">
     <link rel="stylesheet" href="mobile/mobile.css?v=20260806y">
@@ -355,6 +355,16 @@
                 </span>
               </label>
             </div>
+            <div class="settings-draw-stroke-row" style="margin-top: 14px;">
+              <label for="settingsDrawUnits" style="font-size: 13px; min-width: 90px;">Draw units</label>
+              <select id="settingsDrawUnits" style="flex: 1 1 auto; max-width: 160px;">
+                <option value="m">Meters (m)</option>
+                <option value="km">Kilometers (km)</option>
+                <option value="ft">Feet (ft)</option>
+                <option value="mi">Miles (mi)</option>
+                <option value="nm">Nautical miles (nm)</option>
+              </select>
+            </div>
             <div class="settings-draw-stroke-row">
               <label for="settingsDrawStrokeWeight" style="font-size: 13px; min-width: 90px;">Stroke weight</label>
               <input type="range" id="settingsDrawStrokeWeight" min="1" max="6" step="0.25" value="2.25" />
@@ -420,6 +430,6 @@
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
     <script src="particles.js"></script>
-    <script type="module" src="app.js?v=20260807n"></script>
+    <script type="module" src="app.js?v=20260807o"></script>
   </body>
 </html>

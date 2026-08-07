@@ -17,7 +17,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css?v=20260806m">
     <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
-    <link rel="stylesheet" href="tools/tools.css?v=20260807n">
+    <link rel="stylesheet" href="tools/tools.css?v=20260807o">
     <link rel="stylesheet" href="zoom/zoom.css">
     <link rel="stylesheet" href="settings/settings.css?v=20260807n">
     <script type="module">
@@ -331,7 +331,7 @@
             <label style="display: block; margin-bottom: 4px; font-size: 13px;">Color palette</label>
             <div id="settingsDrawPalette" class="settings-draw-palette" aria-label="Draw color palette"></div>
             <div class="settings-draw-row">
-              <label class="settings-kml-outline-toggle" title="Show length, area, and coordinate labels on drawn shapes">
+              <label class="settings-kml-outline-toggle" title="Show length and area labels on drawn shapes">
                 <span>Show measurements</span>
                 <span class="settings-switch">
                   <input type="checkbox" id="settingsDrawShowMeasurements" />
@@ -352,13 +352,23 @@
                   <span class="settings-switch-slider" aria-hidden="true"></span>
                 </span>
               </label>
-              <label class="settings-kml-outline-toggle" title="Show latitude / longitude on shapes">
+              <label class="settings-kml-outline-toggle" title="Show latitude / longitude on shapes (independent of measurements)">
                 <span>Show coordinates</span>
                 <span class="settings-switch">
                   <input type="checkbox" id="settingsDrawShowCoordinates" />
                   <span class="settings-switch-slider" aria-hidden="true"></span>
                 </span>
               </label>
+            </div>
+            <div class="settings-draw-stroke-row" style="margin-top: 14px;">
+              <label for="settingsDrawUnits" style="font-size: 13px; min-width: 90px;">Draw units</label>
+              <select id="settingsDrawUnits" style="flex: 1 1 auto; max-width: 160px;">
+                <option value="m">Meters (m)</option>
+                <option value="km">Kilometers (km)</option>
+                <option value="ft">Feet (ft)</option>
+                <option value="mi">Miles (mi)</option>
+                <option value="nm">Nautical miles (nm)</option>
+              </select>
             </div>
             <div class="settings-draw-stroke-row">
               <label for="settingsDrawStrokeWeight" style="font-size: 13px; min-width: 90px;">Stroke weight</label>
@@ -446,6 +456,6 @@
     <!-- Interactive Mapping Grid System -->
     <script src="particles.js"></script>
 
-    <script type="module" src="app.js?v=20260807n"></script>
+    <script type="module" src="app.js?v=20260807o"></script>
   </body>
 </html>

@@ -445,6 +445,8 @@ export function initSettingsController(opts) {
     setCb('settingsDrawShowLength', s.showLength);
     setCb('settingsDrawShowArea', s.showArea);
     setCb('settingsDrawShowCoordinates', s.showCoordinates);
+    const unitsEl = document.getElementById('settingsDrawUnits');
+    if (unitsEl) unitsEl.value = s.units || 'm';
     const stroke = document.getElementById('settingsDrawStrokeWeight');
     const strokeVal = document.getElementById('settingsDrawStrokeVal');
     if (stroke) stroke.value = String(s.strokeWeight ?? 2.25);
@@ -467,6 +469,7 @@ export function initSettingsController(opts) {
       showArea: !!document.getElementById('settingsDrawShowArea')?.checked,
       showCoordinates: !!document.getElementById('settingsDrawShowCoordinates')?.checked,
       strokeWeight: stroke ? parseFloat(stroke.value) : 2.25,
+      units: document.getElementById('settingsDrawUnits')?.value || 'm',
     });
   }
 
@@ -622,6 +625,7 @@ export function initSettingsController(opts) {
     bindIfExists('settingsDrawShowArea', 'change', applyDrawSettingsFromForm);
     bindIfExists('settingsDrawShowCoordinates', 'change', applyDrawSettingsFromForm);
     bindIfExists('settingsDrawStrokeWeight', 'input', applyDrawSettingsFromForm);
+    bindIfExists('settingsDrawUnits', 'change', applyDrawSettingsFromForm);
     if (kmlController?.onChange) {
       kmlController.onChange(() => {
         if (document.getElementById('userSettingsModal')?.style.display === 'flex') {

@@ -1,11 +1,11 @@
 import { LAYERS } from './config.js?v=20260806k';
 import { createToolbarController } from './toolbar/toolbar.js?v=20260806h';
-import { initSettingsController } from './settings/settings.js?v=20260807n';
+import { initSettingsController } from './settings/settings.js?v=20260807o';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
-import { initMapToolControls } from './tools/tools.js?v=20260807n';
+import { initMapToolControls } from './tools/tools.js?v=20260807o';
 import { initKmlOverlays } from './tools/kml.js?v=20260807i';
-import { initDrawTool } from './tools/draw.js?v=20260807n';
-import { iconHtml } from './toolbar/icons.js?v=20260807n';
+import { initDrawTool } from './tools/draw.js?v=20260807o';
+import { iconHtml } from './toolbar/icons.js?v=20260807o';
 import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260805c';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
 import { absolutizeMapStyleUrls, makeArcgisTransformRequest } from './map-style.js?v=20260805c';
@@ -2735,7 +2735,6 @@ const drawController = initDrawTool({
   isMobile: isMobileApp,
   enableMapCursor,
   onActivate: suppressConflictingToolsForDraw,
-  getUnits: () => rulerUnits,
 });
 
 const controls = initMapToolControls({

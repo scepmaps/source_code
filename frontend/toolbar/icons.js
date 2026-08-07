@@ -113,6 +113,9 @@ export const icons = {
   arrow: svg(
     '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>'
   ),
+  eraser: svg(
+    '<path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>'
+  ),
 };
 
 export function iconHtml(key) {

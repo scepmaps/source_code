@@ -5,10 +5,19 @@
  * - Freehand draws while the mouse button is held.
  */
 
-import { iconHtml } from '../toolbar/icons.js?v=20260807n';
+import { iconHtml } from '../toolbar/icons.js?v=20260807o';
 
 const SETTINGS_KEY = 'scepmaps_draw_settings';
 const DEFAULT_PALETTE = [
+  '#000000',
+  '#ffffff',
+  '#e03131',
+  '#1c7ed6',
+  '#2f9e44',
+  '#f08c00',
+  '#7048e8',
+];
+const LEGACY_PALETTE = [
   '#4de2ff',
   '#ffd166',
   '#ff8c42',
@@ -17,6 +26,7 @@ const DEFAULT_PALETTE = [
   '#c084fc',
   '#ffffff',
 ];
+const FILL_OPACITY = 0.22;
 
 const MODES = [
   { id: 'freehand', label: 'Draw', icon: 'freehand' },
@@ -26,20 +36,27 @@ const MODES = [
   { id: 'polygon', label: 'Polygon', icon: 'polygon' },
   { id: 'rectangle', label: 'Rectangle', icon: 'box' },
   { id: 'circle', label: 'Circle', icon: 'circle' },
+  { id: 'eraser', label: 'Eraser', icon: 'eraser' },
 ];
 
 const POLYGON_MAX_POINTS = 4;
+const DRAW_UNITS = ['m', 'km', 'ft', 'mi', 'nm'];
 
 function defaultSettings() {
   return {
     palette: [...DEFAULT_PALETTE],
-    defaultColor: DEFAULT_PALETTE[0],
+    defaultColor: DEFAULT_PALETTE[2], // red
     showMeasurements: true,
     showCoordinates: true,
     showLength: true,
     showArea: true,
     strokeWeight: 2.25,
+    units: 'm',
   };
+}
+
+function samePalette(a, b) {
+  return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((c, i) => c.toLowerCase() === b[i].toLowerCase());
 }
 
 function loadSettings() {
@@ -49,19 +66,28 @@ function loadSettings() {
     if (!raw) return base;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return base;
-    const palette = Array.isArray(parsed.palette)
-      ? parsed.palette.filter((c) => typeof c === 'string' && /^#?[0-9a-fA-F]{6}$/.test(c.replace('#', ''))).map((c) => (c.startsWith('#') ? c : `#${c}`))
+    let palette = Array.isArray(parsed.palette)
+      ? parsed.palette
+          .filter((c) => typeof c === 'string' && /^#?[0-9a-fA-F]{6}$/.test(c.replace('#', '')))
+          .map((c) => (c.startsWith('#') ? c : `#${c}`))
       : base.palette;
+    // Migrate old cyan-heavy default palette to mainstream colors.
+    if (samePalette(palette, LEGACY_PALETTE)) palette = [...DEFAULT_PALETTE];
+    const units = DRAW_UNITS.includes(parsed.units) ? parsed.units : base.units;
     return {
       ...base,
       ...parsed,
       palette: palette.length ? palette.slice(0, 12) : base.palette,
-      defaultColor: typeof parsed.defaultColor === 'string' ? parsed.defaultColor : base.defaultColor,
+      defaultColor:
+        typeof parsed.defaultColor === 'string' && !samePalette(parsed.palette, LEGACY_PALETTE)
+          ? parsed.defaultColor
+          : base.defaultColor,
       strokeWeight: Number.isFinite(Number(parsed.strokeWeight)) ? Number(parsed.strokeWeight) : base.strokeWeight,
       showMeasurements: parsed.showMeasurements !== false,
       showCoordinates: parsed.showCoordinates !== false,
       showLength: parsed.showLength !== false,
       showArea: parsed.showArea !== false,
+      units,
     };
   } catch (_) {
     return base;
@@ -87,8 +113,9 @@ function formatMeters(meters, units = 'm') {
       return `${(meters * 0.000621371).toFixed(2)} mi`;
     case 'nm':
       return `${(meters * 0.000539957).toFixed(2)} nm`;
+    case 'm':
     default:
-      return meters >= 1000 ? `${(meters / 1000).toFixed(2)} km` : `${meters.toFixed(0)} m`;
+      return `${meters.toFixed(0)} m`;
   }
 }
 
@@ -131,7 +158,6 @@ export function initDrawTool({
   onActivate = null,
   onDeactivate = null,
   enableMapCursor = null,
-  getUnits = () => 'm',
 } = {}) {
   if (isMobile || !map) {
     return {
@@ -151,11 +177,15 @@ export function initDrawTool({
   }
 
   let settings = loadSettings();
+  if (!map.getPane('drawPane')) {
+    map.createPane('drawPane');
+    map.getPane('drawPane').style.zIndex = 650;
+  }
   const drawn = L.featureGroup().addTo(map);
   let btnEl = null;
   let panelEl = null;
   let menuEl = null;
-  let drawColor = settings.defaultColor || settings.palette[0] || DEFAULT_PALETTE[0];
+  let drawColor = settings.defaultColor || settings.palette[0] || DEFAULT_PALETTE[2];
   let activeMode = null;
   let drafting = null;
   let preview = null;
@@ -174,16 +204,32 @@ export function initDrawTool({
     return Number(settings.strokeWeight) || 2.25;
   }
 
+  function drawUnits() {
+    return DRAW_UNITS.includes(settings.units) ? settings.units : 'm';
+  }
+
+  function fillOpacity() {
+    return FILL_OPACITY;
+  }
+
   function pathStyle(extra = {}, color = drawColor) {
     return {
       color,
       weight: strokeWeight(),
       opacity: 0.95,
       fillColor: color,
-      fillOpacity: 0, // see-through fills
-      pane: 'selectionPane',
+      fillOpacity: fillOpacity(),
+      pane: 'drawPane',
       ...extra,
     };
+  }
+
+  function syncShapePointerEvents() {
+    const pane = map.getPane('drawPane');
+    if (!pane) return;
+    // While placing geometry, let clicks fall through existing shapes onto the map.
+    const placing = !!drafting || (activeMode && activeMode !== 'eraser');
+    pane.style.pointerEvents = placing ? 'none' : 'auto';
   }
 
   function layerColor(layer) {
@@ -235,8 +281,8 @@ export function initDrawTool({
       color: drawColor,
       weight: 1.5,
       fillColor: drawColor,
-      fillOpacity: 0,
-      pane: 'selectionPane',
+      fillOpacity: fillOpacity(),
+      pane: 'drawPane',
       interactive: false,
     }).addTo(map);
     vertexMarkers.push(m);
@@ -261,7 +307,7 @@ export function initDrawTool({
     return L.marker(latlng, {
       interactive: false,
       keyboard: false,
-      pane: 'selectionPane',
+      pane: 'drawPane',
       icon: L.divIcon({
         className: 'draw-measure-label',
         html: `<span>${text}</span>`,
@@ -272,37 +318,43 @@ export function initDrawTool({
 
   function refreshMeasureLabels(layer) {
     clearMeasureLabels(layer);
-    if (!layer || !settings.showMeasurements) return;
+    if (!layer) return;
 
-    const units = typeof getUnits === 'function' ? getUnits() : 'm';
+    const showMeas = !!settings.showMeasurements;
+    const showCoords = !!settings.showCoordinates;
+    if (!showMeas && !showCoords) return;
+
+    const units = drawUnits();
     const labels = L.layerGroup();
     const kind = layer._scepDrawKind;
 
     if (kind === 'point' || layer instanceof L.CircleMarker) {
       const ll = layer.getLatLng?.();
-      if (ll && settings.showCoordinates) {
+      if (ll && showCoords) {
         labels.addLayer(measureLabel(ll, `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`));
       }
     } else if (kind === 'arrow') {
       const from = layer._scepFrom;
       const to = layer._scepTo;
       if (from && to) {
-        if (settings.showLength) {
+        if (showMeas && settings.showLength) {
           const mid = L.latLng((from.lat + to.lat) / 2, (from.lng + to.lng) / 2);
           labels.addLayer(measureLabel(mid, formatMeters(map.distance(from, to), units)));
         }
-        if (settings.showCoordinates) {
+        if (showCoords) {
           labels.addLayer(measureLabel(to, `${to.lat.toFixed(5)}, ${to.lng.toFixed(5)}`));
         }
       }
     } else if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
       const c = layer.getLatLng();
       const r = layer.getRadius();
-      const parts = [];
-      if (settings.showLength) parts.push(`r ${formatMeters(r, units)}`);
-      if (settings.showArea) parts.push(formatAreaSqMeters(Math.PI * r * r, units));
-      if (parts.length) labels.addLayer(measureLabel(c, parts.join(' · ')));
-      if (settings.showCoordinates) {
+      if (showMeas) {
+        const parts = [];
+        if (settings.showLength) parts.push(`r ${formatMeters(r, units)}`);
+        if (settings.showArea) parts.push(formatAreaSqMeters(Math.PI * r * r, units));
+        if (parts.length) labels.addLayer(measureLabel(c, parts.join(' · ')));
+      }
+      if (showCoords) {
         labels.addLayer(
           measureLabel(
             L.latLng(c.lat - (r / 111320) * 0.15, c.lng),
@@ -313,27 +365,26 @@ export function initDrawTool({
     } else if (layer instanceof L.Polygon) {
       const latlngs = layer.getLatLngs()?.[0] || layer.getLatLngs() || [];
       const ring = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
-      if (settings.showArea && ring.length >= 3) {
+      if (showMeas && settings.showArea && ring.length >= 3) {
         const center = layer.getBounds?.().getCenter?.() || ring[0];
         labels.addLayer(measureLabel(center, formatAreaSqMeters(ringAreaSqMeters(ring), units)));
       }
-      if (settings.showLength && ring.length >= 2) {
+      if (showMeas && settings.showLength && ring.length >= 2) {
         const closed = ring.concat([ring[0]]);
-        const mid = ring[0];
-        labels.addLayer(measureLabel(mid, formatMeters(pathLength(map, closed), units)));
+        labels.addLayer(measureLabel(ring[0], formatMeters(pathLength(map, closed), units)));
       }
-      if (settings.showCoordinates && ring[0]) {
+      if (showCoords && ring[0]) {
         labels.addLayer(
           measureLabel(ring[0], `${ring[0].lat.toFixed(5)}, ${ring[0].lng.toFixed(5)}`)
         );
       }
     } else if (layer instanceof L.Polyline) {
       const latlngs = layer.getLatLngs() || [];
-      if (settings.showLength && latlngs.length >= 2) {
+      if (showMeas && settings.showLength && latlngs.length >= 2) {
         const mid = latlngs[Math.floor(latlngs.length / 2)];
         labels.addLayer(measureLabel(mid, formatMeters(pathLength(map, latlngs), units)));
       }
-      if (settings.showCoordinates && latlngs[0]) {
+      if (showCoords && latlngs[0]) {
         const last = latlngs[latlngs.length - 1];
         labels.addLayer(measureLabel(last, `${last.lat.toFixed(5)}, ${last.lng.toFixed(5)}`));
       }
@@ -368,11 +419,17 @@ export function initDrawTool({
     if (!layer) return;
     const c = layerColor(layer);
     const kind = layer._scepDrawKind;
+    const fill = fillOpacity();
 
     if (kind === 'arrow' && layer.eachLayer) {
       layer.eachLayer((child) => {
         if (child instanceof L.Polygon) {
-          child.setStyle(pathStyle({ fillOpacity: 0, weight: selected ? strokeWeight() + 0.5 : strokeWeight() }, c));
+          child.setStyle(
+            pathStyle(
+              { fillOpacity: fill, weight: selected ? strokeWeight() + 0.5 : strokeWeight() },
+              c
+            )
+          );
         } else {
           styleLineLike(child, c, selected);
         }
@@ -385,14 +442,23 @@ export function initDrawTool({
         color: c,
         weight: selected ? 2.5 : 1.75,
         fillColor: c,
-        fillOpacity: 0,
+        fillOpacity: selected ? Math.min(0.45, fill + 0.15) : fill,
         radius: selected ? 7 : 6,
       });
       return;
     }
 
     if (layer instanceof L.Polyline) {
-      styleLineLike(layer, c, selected);
+      const isFilled = layer instanceof L.Polygon;
+      layer.setStyle?.(
+        pathStyle(
+          {
+            fillOpacity: isFilled ? fill : 0,
+            weight: selected ? strokeWeight() + 0.75 : strokeWeight(),
+          },
+          c
+        )
+      );
     }
   }
 
@@ -402,6 +468,17 @@ export function initDrawTool({
     }
     selectedLayer = layer || null;
     if (selectedLayer) applyLayerStyle(selectedLayer, true);
+  }
+
+  function eraseLayer(layer) {
+    if (!layer) return;
+    clearMeasureLabels(layer);
+    if (selectedLayer === layer) selectedLayer = null;
+    try {
+      drawn.removeLayer(layer);
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   function arrowHeadLatLngs(from, to) {
@@ -422,7 +499,7 @@ export function initDrawTool({
 
   function createArrow(from, to, color = drawColor) {
     const line = L.polyline([from, to], pathStyle({ fillOpacity: 0 }, color));
-    const head = L.polygon(arrowHeadLatLngs(from, to), pathStyle({ fillOpacity: 0 }, color));
+    const head = L.polygon(arrowHeadLatLngs(from, to), pathStyle({ fillOpacity: fillOpacity() }, color));
     const group = L.featureGroup([line, head]);
     group._scepDrawKind = 'arrow';
     group._scepFrom = from;
@@ -434,6 +511,10 @@ export function initDrawTool({
   function bindLayerSelect(layer) {
     const handler = (e) => {
       L.DomEvent.stopPropagation(e);
+      if (activeMode === 'eraser') {
+        eraseLayer(layer);
+        return;
+      }
       selectLayer(layer);
     };
     if (layer.eachLayer) {
@@ -456,6 +537,7 @@ export function initDrawTool({
     refreshMeasureLabels(layer);
     refreshPanelActive();
     setCursor(!!activeMode || isOpen());
+    syncShapePointerEvents();
   }
 
   function setDraftInteractions(on) {
@@ -483,6 +565,7 @@ export function initDrawTool({
     setDraftInteractions(false);
     restoreMapDragging();
     setCursor(!!activeMode || isOpen());
+    syncShapePointerEvents();
     return true;
   }
 
@@ -543,7 +626,7 @@ export function initDrawTool({
         cancelDraft();
         return;
       }
-      commitLayer(L.polyline(points, pathStyle({ fillOpacity: 0 })), 'line');
+      commitLayer(L.polyline([points[0], points[1]], pathStyle({ fillOpacity: 0 })), 'line');
       return;
     }
     if (mode === 'arrow') {
@@ -582,6 +665,7 @@ export function initDrawTool({
     refreshPanelActive();
     notifyActivate();
     setCursor(true);
+    syncShapePointerEvents();
 
     if (mode === 'point') {
       const marker = L.circleMarker(latlng, {
@@ -589,32 +673,38 @@ export function initDrawTool({
         color: drawColor,
         weight: 1.75,
         fillColor: drawColor,
-        fillOpacity: 0,
-        pane: 'selectionPane',
+        fillOpacity: fillOpacity(),
+        pane: 'drawPane',
       });
       marker._scepDrawKind = 'point';
       commitLayer(marker, 'point');
       return;
     }
 
-    if (mode === 'freehand') return;
-
-    if (mode === 'line' || mode === 'polygon') {
-      drafting = { mode, points: [latlng] };
-      addVertexMarker(latlng);
-      setDraftInteractions(true);
+    if (mode === 'freehand' || mode === 'eraser') {
+      syncShapePointerEvents();
       return;
     }
 
-    if (mode === 'arrow' || mode === 'rectangle') {
+    if (mode === 'polygon') {
       drafting = { mode, points: [latlng] };
       addVertexMarker(latlng);
+      setDraftInteractions(true);
+      syncShapePointerEvents();
+      return;
+    }
+
+    if (mode === 'line' || mode === 'arrow' || mode === 'rectangle') {
+      drafting = { mode, points: [latlng] };
+      addVertexMarker(latlng);
+      syncShapePointerEvents();
       return;
     }
 
     if (mode === 'circle') {
       drafting = { mode, center: latlng, points: [] };
       addVertexMarker(latlng);
+      syncShapePointerEvents();
     }
   }
 
@@ -622,17 +712,17 @@ export function initDrawTool({
     if (!drafting) return;
     const { mode } = drafting;
 
-    if (mode === 'line' || mode === 'polygon') {
+    if (mode === 'polygon') {
       drafting.points.push(latlng);
       addVertexMarker(latlng);
       updatePreview(latlng);
-      if (mode === 'polygon' && drafting.points.length >= POLYGON_MAX_POINTS) {
+      if (drafting.points.length >= POLYGON_MAX_POINTS) {
         finishDraft();
       }
       return;
     }
 
-    if (mode === 'arrow' || mode === 'rectangle') {
+    if (mode === 'line' || mode === 'arrow' || mode === 'rectangle') {
       drafting.points = [drafting.points[0], latlng];
       finishDraft();
       return;
@@ -672,7 +762,7 @@ export function initDrawTool({
       if (!preview) {
         preview = L.featureGroup([
           L.polyline([points[0], to], pathStyle({ dashArray: '6,6', opacity: 0.75, fillOpacity: 0 })),
-          L.polygon(head, pathStyle({ dashArray: '6,6', opacity: 0.75, fillOpacity: 0 })),
+          L.polygon(head, pathStyle({ dashArray: '6,6', opacity: 0.75, fillOpacity: fillOpacity() })),
         ]).addTo(map);
       } else {
         const layers = preview.getLayers();
@@ -686,7 +776,7 @@ export function initDrawTool({
       const latlngs = points.concat([latlng]);
       if (latlngs.length < 2) return;
       if (!preview) {
-        preview = L.polygon(latlngs, pathStyle({ dashArray: '6,6', opacity: 0.7, fillOpacity: 0 })).addTo(map);
+        preview = L.polygon(latlngs, pathStyle({ dashArray: '6,6', opacity: 0.7 })).addTo(map);
       } else preview.setLatLngs(latlngs);
       return;
     }
@@ -694,7 +784,7 @@ export function initDrawTool({
     if (mode === 'rectangle' && points[0]) {
       const bounds = L.latLngBounds(points[0], latlng);
       if (!preview) {
-        preview = L.rectangle(bounds, pathStyle({ dashArray: '6,6', opacity: 0.7, fillOpacity: 0 })).addTo(map);
+        preview = L.rectangle(bounds, pathStyle({ dashArray: '6,6', opacity: 0.7 })).addTo(map);
       } else preview.setBounds(bounds);
       return;
     }
@@ -702,7 +792,7 @@ export function initDrawTool({
     if (mode === 'circle' && center) {
       const radius = map.distance(center, latlng);
       if (!preview) {
-        preview = L.circle(center, { ...pathStyle({ dashArray: '6,6', opacity: 0.7, fillOpacity: 0 }), radius }).addTo(map);
+        preview = L.circle(center, { ...pathStyle({ dashArray: '6,6', opacity: 0.7 }), radius }).addTo(map);
       } else {
         preview.setLatLng(center);
         preview.setRadius(radius);
@@ -744,6 +834,7 @@ export function initDrawTool({
           activeMode = null;
           setCursor(isOpen());
           refreshPanelActive();
+          syncShapePointerEvents();
           return;
         }
         cancelDraft();
@@ -751,6 +842,7 @@ export function initDrawTool({
         notifyActivate();
         setCursor(true);
         refreshPanelActive();
+        syncShapePointerEvents();
       });
     });
 
@@ -792,7 +884,7 @@ export function initDrawTool({
         <div class="draw-color-row" aria-label="Draw color">${colorSwatchesHtml()}</div>
         <button type="button" class="draw-panel-clear" id="drawClearBtn" title="Clear drawings">Clear</button>
       </div>
-      <div class="draw-panel-hint">Hold-click to freehand. Right-click the map to add a shape. Polygon closes at 4 points.</div>
+      <div class="draw-panel-hint">Line / arrow = 2 clicks. Hold-click for freehand. Eraser deletes shapes. Right-click adds a shape.</div>
     `;
 
     panelEl.addEventListener('click', (e) => e.stopPropagation());
@@ -841,6 +933,7 @@ export function initDrawTool({
       setCursor(false);
       notifyDeactivate();
     }
+    syncShapePointerEvents();
   }
 
   function openPanel() {
@@ -863,6 +956,7 @@ export function initDrawTool({
     setCursor(true);
     refreshPanelActive();
     refreshColorActive();
+    syncShapePointerEvents();
   }
 
   function togglePanel() {
@@ -896,11 +990,12 @@ export function initDrawTool({
         closeMapMenu();
         suppressMapClickUntil = Date.now() + 250;
         if (!ll || !mode) return;
-        if (mode === 'freehand') {
-          activeMode = 'freehand';
+        if (mode === 'freehand' || mode === 'eraser') {
+          activeMode = mode;
           refreshPanelActive();
           notifyActivate();
           setCursor(true);
+          syncShapePointerEvents();
           return;
         }
         startModeAt(mode, ll);
@@ -952,6 +1047,7 @@ export function initDrawTool({
     if (Date.now() < suppressMapClickUntil) return;
     if (!isArmed() && !isOpen()) return;
     if (activeMode === 'freehand' && !drafting) return;
+    if (activeMode === 'eraser') return;
 
     if (drafting) {
       if (drafting.mode === 'freehand') return;
@@ -978,7 +1074,7 @@ export function initDrawTool({
 
   function onMapDblClick(e) {
     if (!drafting) return;
-    if (drafting.mode === 'line' || drafting.mode === 'polygon') {
+    if (drafting.mode === 'polygon') {
       stopMapGesture(e);
       if (drafting.points.length > 1) {
         drafting.points.pop();
@@ -1074,6 +1170,7 @@ export function initDrawTool({
     closeMapMenu();
     refreshPanelActive();
     setCursor(isOpen());
+    syncShapePointerEvents();
     if (!isOpen()) notifyDeactivate();
   }
 
@@ -1090,6 +1187,7 @@ export function initDrawTool({
       activeMode = null;
       refreshPanelActive();
       setCursor(isOpen());
+      syncShapePointerEvents();
       if (!isOpen()) notifyDeactivate();
       return true;
     }
@@ -1105,8 +1203,11 @@ export function initDrawTool({
     if (Array.isArray(next?.palette) && next.palette.length) {
       settings.palette = next.palette;
     }
+    if (next?.units && DRAW_UNITS.includes(next.units)) {
+      settings.units = next.units;
+    }
     saveSettings(settings);
-    if (settings.defaultColor) drawColor = settings.defaultColor;
+    if (settings.defaultColor && palette().includes(settings.defaultColor)) drawColor = settings.defaultColor;
     else if (!palette().includes(drawColor)) drawColor = palette()[0];
     rebuildPanelColors();
     refreshColorActive();

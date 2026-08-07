@@ -1,5 +1,5 @@
-import { iconHtml } from './icons.js?v=20260807n';
-import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260807n';
+import { iconHtml } from './icons.js?v=20260807o';
+import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260807o';
 
 export function createToolbarController(opts) {
   const {
