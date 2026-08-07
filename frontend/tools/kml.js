@@ -7,7 +7,7 @@ import {
   pathStyleFromFeature,
   pointStyleFromFeature,
   summarizeStats,
-} from './kml-parse.js?v=20260807c';
+} from './kml-parse.js?v=20260807d';
 
 const DEFAULT_COLOR = '#4de2ff';
 const DEFAULT_OPACITY = 0.65;
@@ -347,52 +347,86 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
   function popupHtml(feature) {
     const props = feature?.properties || {};
     const name = props.name || props.Name || '';
-    const folder = props._folder || '';
-    const desc = props.description || props.Description || '';
-    const meta = [];
-    if (props.geometryKind || props.geometryType) meta.push(props.geometryKind || props.geometryType);
-    if (props.areaKm2 != null) meta.push(`${props.areaKm2} km²`);
-    if (props.perimeterKm != null) meta.push(`peri ${props.perimeterKm} km`);
-    if (props.lengthKm != null) meta.push(`${props.lengthKm} km`);
-    else if (props.lengthM != null && props.lengthM < 1000) meta.push(`${Math.round(props.lengthM)} m`);
-    if (props.vertexCount != null) meta.push(`${props.vertexCount} verts`);
-    if (props.altitudes?.values?.length) {
-      const vals = props.altitudes.values;
-      meta.push(vals.length === 1 ? `alt ${vals[0]}` : `alt ${vals[0]}–${vals[vals.length - 1]}`);
-    }
-    if (props.altitudeMode) meta.push(String(props.altitudeMode));
-    if (props.schemaUrl) meta.push(`schema ${String(props.schemaUrl).replace(/^#/, '')}`);
-    if (props.layer) meta.push(`layer ${props.layer}`);
-    if (props.visibility === false) meta.push('hidden');
+    if (!name) return null;
+    return `<strong>${escapeHtml(name)}</strong>`;
+  }
 
-    if (!name && !desc && !folder && !meta.length) return null;
-    const bits = [];
-    if (name) bits.push(`<strong>${escapeHtml(name)}</strong>`);
-    if (folder) {
-      bits.push(`<div style="opacity:.7;font-size:11px;margin-top:2px">${escapeHtml(folder)}</div>`);
-    }
-    if (meta.length) {
-      bits.push(
-        `<div style="opacity:.75;font-size:11px;margin-top:4px;line-height:1.35">${escapeHtml(meta.join(' · '))}</div>`
-      );
-    }
-    if (props.provenance?.projectId) {
-      bits.push(
-        `<div style="opacity:.7;font-size:11px;margin-top:3px">${escapeHtml(props.provenance.projectId)}</div>`
-      );
-    }
-    if (desc) {
-      const plain = stripHtml(String(desc)).slice(0, 500);
-      if (plain) bits.push(`<div style="margin-top:4px">${escapeHtml(plain)}</div>`);
-    }
-    return bits.join('') || null;
+  /** Largest polygons underneath, smallest on top; lines above polys; points on top. */
+  function sortFeaturesForStacking(features) {
+    const rank = (feature) => {
+      const t = feature?.geometry?.type || '';
+      if (t === 'Point' || t === 'MultiPoint') return 3;
+      if (t.includes('Line')) return 2;
+      if (t.includes('Polygon') || t === 'GeometryCollection') return 1;
+      return 0;
+    };
+    const area = (feature) => {
+      const a = Number(feature?.properties?.areaM2 ?? feature?.properties?.areaKm2);
+      if (Number.isFinite(a) && a > 0) {
+        return feature.properties.areaM2 != null ? a : a * 1e6;
+      }
+      // Fallback: bbox area so unknown polygons still stack sensibly.
+      try {
+        const b = L.geoJSON(feature).getBounds?.();
+        if (b?.isValid?.()) {
+          return Math.abs((b.getEast() - b.getWest()) * (b.getNorth() - b.getSouth()));
+        }
+      } catch (_) {
+        /* ignore */
+      }
+      return Number.POSITIVE_INFINITY;
+    };
+    return (features || []).slice().sort((a, b) => {
+      const ra = rank(a);
+      const rb = rank(b);
+      if (ra !== rb) return ra - rb;
+      if (ra === 1) return area(b) - area(a); // larger polygon first → drawn under smaller
+      return 0;
+    });
+  }
+
+  function bringSmallestPolygonsToFront(geoLayer) {
+    const layers = [];
+    geoLayer.eachLayer((layer) => {
+      const t = layer.feature?.geometry?.type || '';
+      if (!t.includes('Polygon') && t !== 'GeometryCollection') return;
+      const props = layer.feature?.properties || {};
+      let a = Number(props.areaM2);
+      if (!Number.isFinite(a) || a <= 0) {
+        a = Number(props.areaKm2);
+        if (Number.isFinite(a) && a > 0) a *= 1e6;
+        else a = Number.POSITIVE_INFINITY;
+      }
+      layers.push({ layer, area: a });
+    });
+    layers
+      .sort((a, b) => b.area - a.area) // large first, then bringToFront smaller ones
+      .forEach(({ layer }) => {
+        if (typeof layer.bringToFront === 'function') layer.bringToFront();
+      });
+    // Lines / points above all polygons
+    geoLayer.eachLayer((layer) => {
+      const t = layer.feature?.geometry?.type || '';
+      if (t.includes('Line') && typeof layer.bringToFront === 'function') layer.bringToFront();
+    });
+    geoLayer.eachLayer((layer) => {
+      const t = layer.feature?.geometry?.type || '';
+      if ((t === 'Point' || t === 'MultiPoint') && typeof layer.bringToFront === 'function') {
+        layer.bringToFront();
+      }
+    });
   }
 
   function buildLayer(parsed, item) {
     const fallback = { color: item?.color || DEFAULT_COLOR, opacity: item?.opacity ?? DEFAULT_OPACITY };
     const group = L.featureGroup();
 
-    const geoLayer = L.geoJSON(parsed.geojson || { type: 'FeatureCollection', features: [] }, {
+    const sorted = {
+      type: 'FeatureCollection',
+      features: sortFeaturesForStacking(parsed.geojson?.features || []),
+    };
+
+    const geoLayer = L.geoJSON(sorted, {
       style: (feature) => pathStyleFromFeature(feature, fallback),
       pointToLayer: (feature, latlng) => {
         const ps = pointStyleFromFeature(feature, fallback);
@@ -413,6 +447,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
         if (html) layer.bindPopup(html);
       },
     });
+    bringSmallestPolygonsToFront(geoLayer);
     group.addLayer(geoLayer);
 
     for (const overlay of parsed.groundOverlays || []) {
