@@ -81,6 +81,32 @@ app = Flask(__name__, static_folder="../frontend", static_url_path="")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 CORS(app)
 
+# Cap export raster dimensions (per side). Also used to bound headless device_scale_factor.
+try:
+    MAX_EXPORT_SIZE = max(256, int(os.getenv("MAX_EXPORT_SIZE", "4096")))
+except ValueError:
+    MAX_EXPORT_SIZE = 4096
+try:
+    MAX_EXPORT_DEVICE_SCALE = max(1.0, float(os.getenv("MAX_EXPORT_DEVICE_SCALE", "4")))
+except ValueError:
+    MAX_EXPORT_DEVICE_SCALE = 4.0
+
+
+def _parse_export_dimensions(data) -> tuple[int, int]:
+    """Parse and enforce width/height caps for /export and /export_headless."""
+    try:
+        width = int(data["width"])
+        height = int(data["height"])
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError("width and height must be positive integers") from e
+    if width <= 0 or height <= 0:
+        raise ValueError("width and height must be positive integers")
+    if width > MAX_EXPORT_SIZE or height > MAX_EXPORT_SIZE:
+        raise ValueError(
+            f"Export dimensions {width}x{height} exceed limit of {MAX_EXPORT_SIZE}px per side"
+        )
+    return width, height
+
 
 @app.before_request
 def _activity_start():
@@ -223,8 +249,7 @@ def export_endpoint():
         data = request.get_json(force=True)
         bbox = data["bbox"]  # [w,s,e,n] in EPSG:4326
         zoom = int(data["zoom"])
-        width = int(data["width"])
-        height = int(data["height"])
+        width, height = _parse_export_dimensions(data)
         base = data.get("base", "esri")  # typically 'esri' here
         overlays = data.get("overlays", {})
         system = data.get("system")
@@ -284,6 +309,8 @@ def export_endpoint():
         message = str(pe) or "Unauthorized"
         status = 401 if message == "Unauthorized" else 403
         return (message, status)
+    except ValueError as ve:
+        return (str(ve), 400)
     except Exception as e:
         logger.error(f"[Export] ========== Tile-based Export Failed ==========")
         logger.error(f"[Export] Error: {e}", exc_info=True)
@@ -306,8 +333,7 @@ def export_headless():
         data = request.get_json(force=True)
         bbox = data["bbox"]  # [w,s,e,n] in EPSG:4326
         zoom = int(data["zoom"])
-        width = int(data["width"])
-        height = int(data["height"])
+        width, height = _parse_export_dimensions(data)
         base = data.get("base", "osm")  # 'osm' or 'esri'
         overlays = data.get("overlays", {})
         system = data.get("system")
@@ -358,6 +384,8 @@ def export_headless():
         message = str(pe) or "Unauthorized"
         status = 401 if message == "Unauthorized" else 403
         return (message, status)
+    except ValueError as ve:
+        return (str(ve), 400)
     except Exception as e:
         logger.error(f"[Export] Error in export_headless preparation: {e}", exc_info=True)
         activity.enrich(error_message=str(e)[:300])
@@ -516,6 +544,11 @@ def _build_hgt_map_with_grid_png_bytes(
     west, south, east, north, _, _, _, _, tiles_w, tiles_h = _hgt_tile_extent_from_requested_tiles(requested_tiles)
     width = max(256, tiles_w * _HGT_TIFF_PIXELS_PER_TILE)
     height = max(256, tiles_h * _HGT_TIFF_PIXELS_PER_TILE)
+    if width > MAX_EXPORT_SIZE or height > MAX_EXPORT_SIZE:
+        raise ValueError(
+            f"HGT map underlay {width}x{height} exceeds export limit of {MAX_EXPORT_SIZE}px per side "
+            f"(reduce selection / tile count)"
+        )
     # Avoid OSM fallback here: OSM can return policy-warning tiles for automated bulk export usage.
     # Keep exports on configured providers only.
     allowed_bases = {"dark", "esri", "topo", "navigation", "night", "ocean", "shom", "ukho", "gbsouth"}
@@ -2648,19 +2681,30 @@ def update_preferences():
     return {"user": updated_user, "message": "Preferences updated successfully"}
 
 
+def _is_loopback_addr(addr: str | None) -> bool:
+    if not addr:
+        return False
+    # gunicorn/nginx talk over IPv4 loopback in this container; accept IPv6 too.
+    return addr == "127.0.0.1" or addr == "::1" or addr.startswith("127.")
+
+
 def _require_user(req):
     """Return the authenticated user dict or None. Used to gate map-tile proxy routes.
 
     Auth rules:
-    - Requests arriving WITHOUT X-Real-IP are direct hits on port 5001, which is
-      only reachable from inside the container (e.g. the headless Playwright export).
-      These bypass JWT auth — external clients can never reach :5001 directly.
-    - All other requests (forwarded through nginx) must carry a valid JWT as either
-      a Bearer header (fetch/MapLibre transformRequest) or a '?t=' query param
-      (Leaflet <img> raster tiles, which cannot send custom headers).
+    - Loopback callers without proxy headers (Playwright headless / server-side exporter
+      hitting 127.0.0.1:5001) are treated as an internal service user. gunicorn is bound to
+      127.0.0.1 only (supervisord.conf), so this is not reachable from other containers or
+      the host network — and we still require loopback here so a future 0.0.0.0 bind cannot
+      reopen an anonymous bypass.
+    - All other requests (nginx → gunicorn always sets X-Real-IP / X-Forwarded-For) must
+      carry a valid JWT as Bearer or '?t=' (Leaflet <img> tiles cannot send headers).
     """
-    if not req.headers.get("X-Real-IP") and not req.headers.get("X-Forwarded-For"):
-        return {"id": 0, "email": "internal"}
+    has_proxy_headers = bool(req.headers.get("X-Real-IP") or req.headers.get("X-Forwarded-For"))
+    if not has_proxy_headers:
+        if _is_loopback_addr(getattr(req, "remote_addr", None)):
+            return {"id": 0, "email": "internal"}
+        return None
 
     token = extract_bearer_token(req) or req.args.get("t")
     if not token:

@@ -13,6 +13,15 @@ from tilers import pixel_bounds_for_bbox, pixel_to_lonlat
 
 load_dotenv(dotenv_path=Path(__file__).with_name(".env"))  # load source_code/server/.env
 
+try:
+    MAX_EXPORT_SIZE = max(256, int(os.getenv("MAX_EXPORT_SIZE", "4096")))
+except ValueError:
+    MAX_EXPORT_SIZE = 4096
+try:
+    MAX_EXPORT_DEVICE_SCALE = max(1.0, float(os.getenv("MAX_EXPORT_DEVICE_SCALE", "4")))
+except ValueError:
+    MAX_EXPORT_DEVICE_SCALE = 4.0
+
 OPENAIP_KEY = os.getenv("OPENAIP_KEY")
 # Option A: use backend proxy (recommended to hide key):
 #   add the /tiles/openaip route as we discussed
@@ -414,10 +423,21 @@ def render_headless_map(
 
         if view_w <= 0 or view_h <= 0:
             raise ValueError(f"Invalid viewport dimensions: {view_w}x{view_h}")
+        if view_w > MAX_EXPORT_SIZE or view_h > MAX_EXPORT_SIZE:
+            raise ValueError(
+                f"Headless viewport {view_w}x{view_h} exceeds limit of {MAX_EXPORT_SIZE}px per side "
+                f"(zoom in or shrink the export area)"
+            )
+        if width > MAX_EXPORT_SIZE or height > MAX_EXPORT_SIZE:
+            raise ValueError(
+                f"Export dimensions {width}x{height} exceed limit of {MAX_EXPORT_SIZE}px per side"
+            )
 
         # Use higher scale factor for better quality exports
         # This ensures the browser renders at higher resolution than the viewport
         scale = max(2.0, width / view_w) if view_w else 2.0
+        # Cap scale so Playwright cannot allocate enormous bitmaps (width×height×scale²).
+        scale = min(scale, MAX_EXPORT_DEVICE_SCALE)
 
         # Scale attribution from FINAL TIFF dimensions (export box result), not from render oversampling.
         # This keeps tiny export boxes discreet instead of inflating the text.
