@@ -7,7 +7,7 @@ import {
   pathStyleFromFeature,
   pointStyleFromFeature,
   summarizeStats,
-} from './kml-parse.js?v=20260807a';
+} from './kml-parse.js?v=20260807c';
 
 const DEFAULT_COLOR = '#4de2ff';
 const DEFAULT_OPACITY = 0.65;
@@ -349,11 +349,37 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     const name = props.name || props.Name || '';
     const folder = props._folder || '';
     const desc = props.description || props.Description || '';
-    if (!name && !desc && !folder) return null;
+    const meta = [];
+    if (props.geometryKind || props.geometryType) meta.push(props.geometryKind || props.geometryType);
+    if (props.areaKm2 != null) meta.push(`${props.areaKm2} km²`);
+    if (props.perimeterKm != null) meta.push(`peri ${props.perimeterKm} km`);
+    if (props.lengthKm != null) meta.push(`${props.lengthKm} km`);
+    else if (props.lengthM != null && props.lengthM < 1000) meta.push(`${Math.round(props.lengthM)} m`);
+    if (props.vertexCount != null) meta.push(`${props.vertexCount} verts`);
+    if (props.altitudes?.values?.length) {
+      const vals = props.altitudes.values;
+      meta.push(vals.length === 1 ? `alt ${vals[0]}` : `alt ${vals[0]}–${vals[vals.length - 1]}`);
+    }
+    if (props.altitudeMode) meta.push(String(props.altitudeMode));
+    if (props.schemaUrl) meta.push(`schema ${String(props.schemaUrl).replace(/^#/, '')}`);
+    if (props.layer) meta.push(`layer ${props.layer}`);
+    if (props.visibility === false) meta.push('hidden');
+
+    if (!name && !desc && !folder && !meta.length) return null;
     const bits = [];
     if (name) bits.push(`<strong>${escapeHtml(name)}</strong>`);
     if (folder) {
       bits.push(`<div style="opacity:.7;font-size:11px;margin-top:2px">${escapeHtml(folder)}</div>`);
+    }
+    if (meta.length) {
+      bits.push(
+        `<div style="opacity:.75;font-size:11px;margin-top:4px;line-height:1.35">${escapeHtml(meta.join(' · '))}</div>`
+      );
+    }
+    if (props.provenance?.projectId) {
+      bits.push(
+        `<div style="opacity:.7;font-size:11px;margin-top:3px">${escapeHtml(props.provenance.projectId)}</div>`
+      );
     }
     if (desc) {
       const plain = stripHtml(String(desc)).slice(0, 500);
@@ -412,6 +438,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     }
 
     group._kmlStats = parsed.stats || null;
+    group._kmlInventory = parsed.inventory || null;
     return group;
   }
 
@@ -493,7 +520,10 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
         }
       }
       activeLayers.set(kmlId, layer);
-      if (merged && parsed.stats) merged.parse_summary = summarizeStats(parsed.stats);
+      if (merged && (parsed.stats || parsed.inventory)) {
+        merged.parse_summary = summarizeStats(parsed.stats, parsed.inventory);
+        merged.inventory = parsed.inventory || null;
+      }
       if (persist) {
         try {
           await api(`/api/kml/${kmlId}`, {
