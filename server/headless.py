@@ -400,42 +400,98 @@ HTML = """<!doctype html>
     })();
   }
 
-  // User KML overlays (same color/opacity as interactive map settings)
+  // User KML overlays — match interactive map styling (honor KML stroke/fill when present)
   if (Array.isArray(KML_LAYERS) && KML_LAYERS.length) {
     map.createPane('kmlPane');
     map.getPane('kmlPane').style.zIndex = 470;
-    for (const layer of KML_LAYERS) {
-      const color = layer.color || '#4de2ff';
-      const opacity = (typeof layer.opacity === 'number') ? layer.opacity : 0.65;
-      const lineStyle = {
-        color,
-        weight: 2,
-        opacity: Math.max(0.25, Math.min(1, opacity + 0.2)),
-        fillColor: color,
-        fillOpacity: Math.max(0, Math.min(0.55, opacity * 0.35)),
+
+    function clamp01(n, fallback) {
+      const v = Number(n);
+      if (!Number.isFinite(v)) return fallback;
+      return Math.max(0, Math.min(1, v));
+    }
+    function propOf(props, keys) {
+      for (const key of keys) {
+        if (props && props[key] != null && props[key] !== '') return props[key];
+      }
+      return undefined;
+    }
+    // Mirrors frontend pathStyleFromFeature / pointStyleFromFeature
+    function pathStyleFromFeature(feature, fallback) {
+      const props = feature?.properties || {};
+      const fbColor = fallback.color || '#4de2ff';
+      const fbOpacity = clamp01(fallback.opacity, 0.65);
+      const stroke = propOf(props, ['stroke', 'stroke-color', 'line']) || fbColor;
+      const fill = propOf(props, ['fill', 'fill-color']) || stroke || fbColor;
+      const strokeOpacity = clamp01(
+        propOf(props, ['stroke-opacity', 'strokeOpacity']),
+        Math.max(0.25, Math.min(1, fbOpacity + 0.2))
+      );
+      const fillOpacity = clamp01(
+        propOf(props, ['fill-opacity', 'fillOpacity']),
+        Math.max(0, Math.min(0.55, fbOpacity * 0.35))
+      );
+      const weight = Number(propOf(props, ['stroke-width', 'strokeWidth']));
+      const t = feature?.geometry?.type || '';
+      return {
+        color: stroke,
+        weight: Number.isFinite(weight) && weight > 0 ? Math.max(1, Math.min(12, weight)) : 2,
+        opacity: strokeOpacity,
+        fillColor: fill,
+        fillOpacity: t.includes('Line') ? 0 : fillOpacity,
         pane: 'kmlPane'
       };
-      const pointStyle = {
-        radius: 6,
-        color,
+    }
+    function pointStyleFromFeature(feature, fallback) {
+      const props = feature?.properties || {};
+      const path = pathStyleFromFeature(feature, fallback);
+      const scale = Number(propOf(props, ['icon-scale', 'iconScale', 'scale']));
+      const radius = Number.isFinite(scale) && scale > 0 ? Math.max(4, Math.min(18, 6 * scale)) : 6;
+      return {
+        radius,
+        color: path.color,
         weight: 2,
-        fillColor: color,
-        fillOpacity: Math.max(0.35, Math.min(0.85, opacity * 0.85)),
-        opacity: lineStyle.opacity,
+        fillColor: propOf(props, ['icon-color', 'fill', 'fill-color']) || path.fillColor || path.color,
+        fillOpacity: clamp01(
+          propOf(props, ['icon-opacity', 'fill-opacity', 'fillOpacity']),
+          Math.max(0.35, path.fillOpacity || 0.7)
+        ),
+        opacity: path.opacity,
         pane: 'kmlPane'
+      };
+    }
+
+    for (const layer of KML_LAYERS) {
+      const fallback = {
+        color: layer.color || '#4de2ff',
+        opacity: (typeof layer.opacity === 'number') ? layer.opacity : 0.65
       };
       try {
-        L.geoJSON(layer.geojson || { type: 'FeatureCollection', features: [] }, {
+        const geoLayer = L.geoJSON(layer.geojson || { type: 'FeatureCollection', features: [] }, {
           pane: 'kmlPane',
-          style: (feature) => {
-            const t = feature?.geometry?.type || '';
-            if (t.includes('Line')) {
-              return { ...lineStyle, fillOpacity: 0 };
-            }
-            return lineStyle;
-          },
-          pointToLayer: (feature, latlng) => L.circleMarker(latlng, pointStyle)
+          style: (feature) => pathStyleFromFeature(feature, fallback),
+          pointToLayer: (feature, latlng) => L.circleMarker(latlng, pointStyleFromFeature(feature, fallback))
         }).addTo(map);
+
+        // Match map stacking: largest polygons under, smallest / lines / points on top
+        const polyLayers = [];
+        geoLayer.eachLayer((sub) => {
+          const t = sub.feature?.geometry?.type || '';
+          if (!t.includes('Polygon') && t !== 'GeometryCollection') return;
+          const a = Number(sub.feature?.properties?._sortArea);
+          polyLayers.push({ layer: sub, area: Number.isFinite(a) ? a : Number.POSITIVE_INFINITY });
+        });
+        polyLayers
+          .sort((a, b) => b.area - a.area)
+          .forEach(({ layer: sub }) => { if (sub.bringToFront) sub.bringToFront(); });
+        geoLayer.eachLayer((sub) => {
+          const t = sub.feature?.geometry?.type || '';
+          if (t.includes('Line') && sub.bringToFront) sub.bringToFront();
+        });
+        geoLayer.eachLayer((sub) => {
+          const t = sub.feature?.geometry?.type || '';
+          if ((t === 'Point' || t === 'MultiPoint') && sub.bringToFront) sub.bringToFront();
+        });
       } catch (err) {
         console.error('[KML] Failed to draw overlay:', layer.name, err);
       }
