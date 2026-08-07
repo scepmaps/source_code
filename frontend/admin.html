@@ -476,11 +476,11 @@
         // Clear all checkboxes first
         document.querySelectorAll('#baseMaps input, #overlays input').forEach(cb => cb.checked = false);
 
-        // Set base maps
+        // Set base maps (match by .value — never interpolate into a selector string)
         const bases = user.allowed_bases || ['osm', 'dark', 'esri', 'topo', 'navigation', 'night', 'ocean', 'shom', 'ukho', 'gbsouth'];
-        bases.forEach(base => {
-          const cb = document.querySelector(`#baseMaps input[value="${base}"]`);
-          if (cb) cb.checked = true;
+        const baseSet = new Set(bases);
+        document.querySelectorAll('#baseMaps input').forEach((cb) => {
+          cb.checked = baseSet.has(cb.value);
         });
 
         // Set overlays
@@ -488,30 +488,26 @@
         const overlays = user.allowed_overlays;
         if (overlays === null || overlays === undefined) {
           // Unrestricted: check all overlays by default
-          ['seamarks', 'openaip', 'density', 'label', 'history'].forEach(overlay => {
-            const cb = document.querySelector(`#overlays input[value="${overlay}"]`);
-            if (cb) cb.checked = true;
+          document.querySelectorAll('#overlays input:not([data-scope="tool"])').forEach((cb) => {
+            cb.checked = true;
           });
         } else if (Array.isArray(overlays)) {
-          // Explicit list (could be empty [] or have items)
-          overlays.forEach(overlay => {
-            const cb = document.querySelector(`#overlays input[value="${overlay}"]`);
-            if (cb) cb.checked = true;
+          const overlaySet = new Set(overlays);
+          document.querySelectorAll('#overlays input:not([data-scope="tool"])').forEach((cb) => {
+            cb.checked = overlaySet.has(cb.value);
           });
         }
 
         // Set tools
         const tools = user.allowed_tools;
         if (tools === null || tools === undefined) {
-          // Unrestricted defaults
-          ['hgt'].forEach(tool => {
-            const cb = document.querySelector(`#overlays input[data-scope="tool"][value="${tool}"]`);
-            if (cb) cb.checked = true;
+          document.querySelectorAll('#overlays input[data-scope="tool"]').forEach((cb) => {
+            cb.checked = true;
           });
         } else if (Array.isArray(tools)) {
-          tools.forEach(tool => {
-            const cb = document.querySelector(`#overlays input[data-scope="tool"][value="${tool}"]`);
-            if (cb) cb.checked = true;
+          const toolSet = new Set(tools);
+          document.querySelectorAll('#overlays input[data-scope="tool"]').forEach((cb) => {
+            cb.checked = toolSet.has(cb.value);
           });
         }
 
@@ -611,68 +607,125 @@
         }
       };
 
-      // Rendering
+      // Rendering — build the table with DOM APIs so email/name cannot XSS the admin UI.
+      const DEFAULT_BASES = ['osm', 'dark', 'esri', 'topo', 'navigation', 'night', 'ocean', 'shom', 'ukho', 'gbsouth'];
+      const DEFAULT_OVERLAYS = ['seamarks', 'openaip', 'density', 'label', 'history'];
+      const DEFAULT_TOOLS = ['hgt'];
+
+      const makePermissionTags = (items, labelFn = (v) => String(v)) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'permission-tags';
+        (items || []).forEach((item) => {
+          const tag = document.createElement('span');
+          tag.className = 'permission-tag';
+          tag.textContent = labelFn(item);
+          wrap.appendChild(tag);
+        });
+        return wrap;
+      };
+
+      const makeActionButton = (label, { danger = false } = {}) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = danger ? 'btn danger' : 'btn';
+        btn.style.padding = '4px 8px';
+        btn.style.fontSize = '12px';
+        btn.textContent = label;
+        return btn;
+      };
+
       const renderUsers = (users) => {
         const tbody = document.getElementById('usersTableBody');
+        tbody.replaceChildren();
 
         if (!users.length) {
-          tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No users found</td></tr>';
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 6;
+          td.className = 'empty-state';
+          td.textContent = 'No users found';
+          tr.appendChild(td);
+          tbody.appendChild(tr);
           return;
         }
 
-        tbody.innerHTML = users.map(user => `
-          <tr>
-            <td>
-              <div><strong>${user.email}</strong></div>
-              <div style="font-size: 12px; color: var(--muted);">${user.name || 'No name'}</div>
-            </td>
-            <td>
-              <span class="user-badge ${user.is_admin ? 'admin' : 'user'}">
-                ${user.is_admin ? '👑 Admin' : '👤 User'}
-              </span>
-            </td>
-            <td>
-              <div class="permission-tags">
-                ${(user.allowed_bases || ['osm', 'dark', 'esri', 'topo', 'navigation', 'night', 'ocean', 'shom', 'ukho', 'gbsouth']).map(base =>
-                  `<span class="permission-tag">${base.toUpperCase()}</span>`
-                ).join('')}
-              </div>
-              <div class="permission-tags" style="margin-top: 4px;">
-                ${(user.allowed_overlays || ['seamarks', 'openaip', 'density', 'label', 'history']).map(overlay =>
-                  `<span class="permission-tag">${overlay}</span>`
-                ).join('')}
-              </div>
-              <div class="permission-tags" style="margin-top: 4px;">
-                ${(user.allowed_tools || ['hgt']).map(tool =>
-                  `<span class="permission-tag">${tool}</span>`
-                ).join('')}
-              </div>
-            </td>
-            <td style="font-size: 12px;">
-              D: ${user.limit_day === -1 ? '∞' : user.limit_day}<br>
-              W: ${user.limit_week === -1 ? '∞' : user.limit_week}<br>
-              M: ${user.limit_month === -1 ? '∞' : user.limit_month}
-            </td>
-            <td style="font-size: 12px;">
-              ${user.count_day || 0}/${user.count_week || 0}/${user.count_month || 0}<br>
-              <span style="color: var(--muted);">Total: ${user.count_total || 0}</span>
-            </td>
-            <td>
-              <button class="btn" style="padding: 4px 8px; font-size: 12px;" onclick="populateForm(${JSON.stringify(user).replace(/"/g, '&quot;')})">
-                ✏️ Edit
-              </button>
-              <button class="btn" style="padding: 4px 8px; font-size: 12px;" onclick="showUserStats(${user.id}, '${user.email}')">
-                📊 Stats
-              </button>
-              <button class="btn" style="padding: 4px 8px; font-size: 12px;" onclick="resetUserOnboarding(${user.id}, '${user.email.replace(/'/g, "\\'")}')">
-                🧭 Reset Tutorial
-              </button>
-              <button class="btn danger" style="padding: 4px 8px; font-size: 12px;" onclick="deleteUser(${user.id})">
-                🗑️ Delete
-              </button>
-            </td>
-          </tr>
-        `).join('');
+        users.forEach((user) => {
+          const tr = document.createElement('tr');
+
+          // Identity
+          const tdId = document.createElement('td');
+          const emailStrong = document.createElement('strong');
+          emailStrong.textContent = user.email || '';
+          const emailLine = document.createElement('div');
+          emailLine.appendChild(emailStrong);
+          const nameLine = document.createElement('div');
+          nameLine.style.fontSize = '12px';
+          nameLine.style.color = 'var(--muted)';
+          nameLine.textContent = user.name || 'No name';
+          tdId.appendChild(emailLine);
+          tdId.appendChild(nameLine);
+          tr.appendChild(tdId);
+
+          // Role
+          const tdRole = document.createElement('td');
+          const badge = document.createElement('span');
+          badge.className = `user-badge ${user.is_admin ? 'admin' : 'user'}`;
+          badge.textContent = user.is_admin ? '👑 Admin' : '👤 User';
+          tdRole.appendChild(badge);
+          tr.appendChild(tdRole);
+
+          // Permissions
+          const tdPerms = document.createElement('td');
+          const bases = user.allowed_bases || DEFAULT_BASES;
+          const overlays = user.allowed_overlays || DEFAULT_OVERLAYS;
+          const tools = user.allowed_tools || DEFAULT_TOOLS;
+          tdPerms.appendChild(makePermissionTags(bases, (b) => String(b).toUpperCase()));
+          const overlayTags = makePermissionTags(overlays);
+          overlayTags.style.marginTop = '4px';
+          tdPerms.appendChild(overlayTags);
+          const toolTags = makePermissionTags(tools);
+          toolTags.style.marginTop = '4px';
+          tdPerms.appendChild(toolTags);
+          tr.appendChild(tdPerms);
+
+          // Limits
+          const tdLimits = document.createElement('td');
+          tdLimits.style.fontSize = '12px';
+          tdLimits.appendChild(document.createTextNode(`D: ${user.limit_day === -1 ? '∞' : user.limit_day}`));
+          tdLimits.appendChild(document.createElement('br'));
+          tdLimits.appendChild(document.createTextNode(`W: ${user.limit_week === -1 ? '∞' : user.limit_week}`));
+          tdLimits.appendChild(document.createElement('br'));
+          tdLimits.appendChild(document.createTextNode(`M: ${user.limit_month === -1 ? '∞' : user.limit_month}`));
+          tr.appendChild(tdLimits);
+
+          // Counts
+          const tdCounts = document.createElement('td');
+          tdCounts.style.fontSize = '12px';
+          tdCounts.appendChild(
+            document.createTextNode(`${user.count_day || 0}/${user.count_week || 0}/${user.count_month || 0}`)
+          );
+          tdCounts.appendChild(document.createElement('br'));
+          const totalSpan = document.createElement('span');
+          totalSpan.style.color = 'var(--muted)';
+          totalSpan.textContent = `Total: ${user.count_total || 0}`;
+          tdCounts.appendChild(totalSpan);
+          tr.appendChild(tdCounts);
+
+          // Actions — listeners close over the user object; no inline handlers / stringified JSON
+          const tdActions = document.createElement('td');
+          const editBtn = makeActionButton('✏️ Edit');
+          editBtn.addEventListener('click', () => populateForm(user));
+          const statsBtn = makeActionButton('📊 Stats');
+          statsBtn.addEventListener('click', () => showUserStats(user.id, user.email || ''));
+          const resetBtn = makeActionButton('🧭 Reset Tutorial');
+          resetBtn.addEventListener('click', () => resetUserOnboarding(user.id, user.email || ''));
+          const delBtn = makeActionButton('🗑️ Delete', { danger: true });
+          delBtn.addEventListener('click', () => deleteUser(user.id));
+          tdActions.append(editBtn, statsBtn, resetBtn, delBtn);
+          tr.appendChild(tdActions);
+
+          tbody.appendChild(tr);
+        });
       };
 
       const updateStats = (users) => {
@@ -715,37 +768,74 @@
 
       const renderSystemAnalytics = (stats) => {
         const container = document.getElementById('systemAnalytics');
+        container.replaceChildren();
 
-        const maxCount = Math.max(...Object.values(stats.popular_bases || {}));
+        const maxCount = Math.max(0, ...Object.values(stats.popular_bases || {}));
 
-        container.innerHTML = `
-          <div class="analytics-section">
-            <h4>🏆 Most Active Users (This Month)</h4>
-            <div class="top-users-list">
-              ${stats.top_users?.map(user => `
-                <div class="top-user-item">
-                  <span>${user.email}</span>
-                  <span>${user.exports} exports</span>
-                </div>
-              `).join('') || '<div class="empty-state">No data</div>'}
-            </div>
-          </div>
+        // Top users
+        const topSection = document.createElement('div');
+        topSection.className = 'analytics-section';
+        const topTitle = document.createElement('h4');
+        topTitle.textContent = '🏆 Most Active Users (This Month)';
+        topSection.appendChild(topTitle);
+        const topList = document.createElement('div');
+        topList.className = 'top-users-list';
+        if (stats.top_users?.length) {
+          stats.top_users.forEach((user) => {
+            const item = document.createElement('div');
+            item.className = 'top-user-item';
+            const emailSpan = document.createElement('span');
+            emailSpan.textContent = user.email || '';
+            const exportsSpan = document.createElement('span');
+            exportsSpan.textContent = `${user.exports} exports`;
+            item.append(emailSpan, exportsSpan);
+            topList.appendChild(item);
+          });
+        } else {
+          const empty = document.createElement('div');
+          empty.className = 'empty-state';
+          empty.textContent = 'No data';
+          topList.appendChild(empty);
+        }
+        topSection.appendChild(topList);
+        container.appendChild(topSection);
 
-          <div class="analytics-section">
-            <h4>🗺️ Popular Base Maps (This Month)</h4>
-            <div class="usage-chart">
-              ${Object.entries(stats.popular_bases || {}).map(([base, count]) => `
-                <div class="usage-bar">
-                  <div class="usage-label">${base.toUpperCase()}</div>
-                  <div class="usage-bar-fill">
-                    <div class="usage-bar-progress" style="width: ${maxCount ? (count / maxCount) * 100 : 0}%"></div>
-                  </div>
-                  <div class="usage-count">${count}</div>
-                </div>
-              `).join('') || '<div class="empty-state">No data</div>'}
-            </div>
-          </div>
-        `;
+        // Popular bases
+        const baseSection = document.createElement('div');
+        baseSection.className = 'analytics-section';
+        const baseTitle = document.createElement('h4');
+        baseTitle.textContent = '🗺️ Popular Base Maps (This Month)';
+        baseSection.appendChild(baseTitle);
+        const chart = document.createElement('div');
+        chart.className = 'usage-chart';
+        const entries = Object.entries(stats.popular_bases || {});
+        if (entries.length) {
+          entries.forEach(([base, count]) => {
+            const bar = document.createElement('div');
+            bar.className = 'usage-bar';
+            const label = document.createElement('div');
+            label.className = 'usage-label';
+            label.textContent = String(base).toUpperCase();
+            const fill = document.createElement('div');
+            fill.className = 'usage-bar-fill';
+            const progress = document.createElement('div');
+            progress.className = 'usage-bar-progress';
+            progress.style.width = `${maxCount ? (count / maxCount) * 100 : 0}%`;
+            fill.appendChild(progress);
+            const countEl = document.createElement('div');
+            countEl.className = 'usage-count';
+            countEl.textContent = String(count);
+            bar.append(label, fill, countEl);
+            chart.appendChild(bar);
+          });
+        } else {
+          const empty = document.createElement('div');
+          empty.className = 'empty-state';
+          empty.textContent = 'No data';
+          chart.appendChild(empty);
+        }
+        baseSection.appendChild(chart);
+        container.appendChild(baseSection);
       };
 
       const showUserStats = async (userId, email) => {
@@ -760,10 +850,12 @@
           const data = await res.json();
           renderUserStatsModal(data.user, data.stats);
         } catch (error) {
-          document.getElementById('modalContent').innerHTML = `<div class="alert error">Error: ${error.message}</div>`;
+          const errBox = document.createElement('div');
+          errBox.className = 'alert error';
+          errBox.textContent = `Error: ${error.message || 'Failed to load user stats'}`;
+          document.getElementById('modalContent').replaceChildren(errBox);
         }
       };
-
       const renderUserStatsModal = (user, stats) => {
         const getProgressColor = (used, limit) => {
           if (limit === -1) return 'var(--accent)';

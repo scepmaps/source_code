@@ -10,8 +10,15 @@ DB_PATH = Path(os.getenv("USERS_DB_PATH", default_db_path))
 
 
 def _get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    # timeout + busy_timeout let concurrent gunicorn workers wait on write locks
+    # instead of raising "database is locked" during quota reservations.
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.Error:
+        pass
     return conn
 
 
@@ -562,7 +569,83 @@ def log_export(user_id: int, base: str, overlays):
         (user_id, int(time.time()), base, json.dumps(overlays or {})),
     )
     conn.commit()
+    log_id = cur.lastrowid
     conn.close()
+    return log_id
+
+
+def reserve_export_quota(
+    user_id: int,
+    limit_day: int,
+    limit_week: int,
+    limit_month: int,
+    base: str,
+    overlays,
+) -> int:
+    """Atomically check daily/weekly/monthly quotas and insert an export_logs row.
+
+    Uses BEGIN IMMEDIATE so concurrent gunicorn workers serialize on the same DB
+    and cannot all pass a check-then-act race. Returns the new export_logs.id.
+    Raises PermissionError with the same messages as the old pre-check.
+    """
+    now = int(time.time())
+    day = now - 86400
+    week = now - 7 * 86400
+    month = now - 30 * 86400
+
+    conn = _get_conn()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        cur = conn.cursor()
+
+        def _count_since(since_epoch: int) -> int:
+            cur.execute(
+                "SELECT COUNT(*) AS c FROM export_logs WHERE user_id = ? AND ts >= ?",
+                (user_id, since_epoch),
+            )
+            row = cur.fetchone()
+            return int(row[0] if row else 0)
+
+        if limit_day >= 0 and _count_since(day) >= limit_day:
+            conn.rollback()
+            raise PermissionError("Daily export limit reached")
+        if limit_week >= 0 and _count_since(week) >= limit_week:
+            conn.rollback()
+            raise PermissionError("Weekly export limit reached")
+        if limit_month >= 0 and _count_since(month) >= limit_month:
+            conn.rollback()
+            raise PermissionError("Monthly export limit reached")
+
+        cur.execute(
+            "INSERT INTO export_logs (user_id, ts, base, overlays) VALUES (?, ?, ?, ?)",
+            (user_id, now, base, json.dumps(overlays or {})),
+        )
+        log_id = cur.lastrowid
+        conn.commit()
+        return int(log_id)
+    except PermissionError:
+        raise
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        conn.close()
+
+
+def release_export_quota(log_id: int | None) -> None:
+    """Remove a reserved export_logs row after a failed export (restore quota)."""
+    if not log_id:
+        return
+    conn = _get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM export_logs WHERE id = ?", (int(log_id),))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def count_exports_since(user_id: int, since_epoch: int) -> int:

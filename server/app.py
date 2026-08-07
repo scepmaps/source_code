@@ -32,9 +32,10 @@ from db import (
     init_db,
     list_user_kml,
     list_users,
-    log_export,
     MAX_KML_BYTES,
     MAX_KML_PER_USER,
+    release_export_quota,
+    reserve_export_quota,
     update_user,
     update_user_kml,
 )
@@ -244,6 +245,7 @@ def export_endpoint():
     import logging
 
     logger = logging.getLogger(__name__)
+    export_log_id = None
 
     try:
         data = request.get_json(force=True)
@@ -262,7 +264,7 @@ def export_endpoint():
             f"[Export] Request Parameters: bbox={bbox}, zoom={zoom}, width={width}, height={height}, base={base}, overlays={overlays}, system={system}, quality={quality}, out_crs={out_crs}, filename={filename}"
         )
 
-        user = _require_auth_with_quota(request, base, overlays)
+        user, export_log_id = _require_auth_with_quota(request, base, overlays)
         logger.info(f"[Export] User authenticated: user_id={user.get('id')}, email={user.get('email')}")
 
         # Activity — request params + resolved identity (before heavy work starts)
@@ -290,11 +292,6 @@ def export_endpoint():
         # Activity — output size (only reachable on success)
         activity.enrich(bytes_produced=len(result_bytes))
 
-        try:
-            log_export(user["id"], base, overlays)
-            logger.info(f"[Export] Export logged for user_id={user['id']}")
-        except Exception as e:
-            logger.warning(f"[Export] Failed to log export: {e}")  # Log but don't fail the export
         buf = io.BytesIO(result_bytes)
         buf.seek(0)
 
@@ -306,12 +303,15 @@ def export_endpoint():
             download_name=_download_name(out_crs, zoom, filename),
         )
     except PermissionError as pe:
+        release_export_quota(export_log_id)
         message = str(pe) or "Unauthorized"
         status = 401 if message == "Unauthorized" else 403
         return (message, status)
     except ValueError as ve:
+        release_export_quota(export_log_id)
         return (str(ve), 400)
     except Exception as e:
+        release_export_quota(export_log_id)
         logger.error(f"[Export] ========== Tile-based Export Failed ==========")
         logger.error(f"[Export] Error: {e}", exc_info=True)
         activity.enrich(error_message=str(e)[:300])
@@ -328,6 +328,11 @@ def export_headless():
     import logging
 
     logger = logging.getLogger(__name__)
+    export_log_id = None
+    user = None
+    out_crs = "EPSG:4326"
+    zoom = 0
+    filename = None
 
     try:
         data = request.get_json(force=True)
@@ -347,7 +352,7 @@ def export_headless():
             f"[Export] Request Parameters: bbox={bbox}, zoom={zoom}, width={width}, height={height}, base={base}, overlays={overlays}, system={system}, quality={quality}, out_crs={out_crs}, filename={filename}, show_attribution={show_attribution}"
         )
 
-        user = _require_auth_with_quota(request, base, overlays)
+        user, export_log_id = _require_auth_with_quota(request, base, overlays)
         logger.info(f"[Export] User authenticated: user_id={user.get('id')}, email={user.get('email')}")
 
         # Activity — request params + resolved identity
@@ -381,12 +386,15 @@ def export_headless():
             show_attribution=show_attribution,
         )
     except PermissionError as pe:
+        release_export_quota(export_log_id)
         message = str(pe) or "Unauthorized"
         status = 401 if message == "Unauthorized" else 403
         return (message, status)
     except ValueError as ve:
+        release_export_quota(export_log_id)
         return (str(ve), 400)
     except Exception as e:
+        release_export_quota(export_log_id)
         logger.error(f"[Export] Error in export_headless preparation: {e}", exc_info=True)
         activity.enrich(error_message=str(e)[:300])
         return (f"Export preparation failed: {str(e)}", 500)
@@ -401,14 +409,10 @@ def export_headless():
             as_attachment=True,
             download_name=_download_name(out_crs, zoom, filename),
         )
-        try:
-            log_export(user["id"], base, overlays)
-            logger.info(f"[Export] Export logged for user_id={user['id']}")
-        except Exception as e:
-            logger.warning(f"[Export] Failed to log export: {e}")
         logger.info(f"[Export] ========== Headless Export Completed Successfully ==========")
         return result
     except Exception as e:
+        release_export_quota(export_log_id)
         logger.error(f"[Export] ========== Headless Export Failed ==========")
         logger.error(f"[Export] Error: {e}", exc_info=True)
         activity.enrich(error_message=str(e)[:300])
@@ -743,22 +747,17 @@ def _require_hgt_auth_base(req):
     return user
 
 
-def _require_hgt_auth_with_quota(req):
+def _require_hgt_auth_with_quota(req, base: str = "hgt", overlays=None):
     user = _require_hgt_auth_base(req)
-
-    # Reuse same quota windows as other export endpoints.
-    now = int(__import__("time").time())
-    day = now - 86400
-    week = now - 7 * 86400
-    month = now - 30 * 86400
-    if user["limit_day"] >= 0 and count_exports_since(user["id"], day) >= user["limit_day"]:
-        raise PermissionError("Daily export limit reached")
-    if user["limit_week"] >= 0 and count_exports_since(user["id"], week) >= user["limit_week"]:
-        raise PermissionError("Weekly export limit reached")
-    if user["limit_month"] >= 0 and count_exports_since(user["id"], month) >= user["limit_month"]:
-        raise PermissionError("Monthly export limit reached")
-
-    return user
+    log_id = reserve_export_quota(
+        user["id"],
+        user["limit_day"],
+        user["limit_week"],
+        user["limit_month"],
+        base,
+        overlays if overlays is not None else {"hgt": True},
+    )
+    return user, log_id
 
 
 def _hgt_prepare_export(data, logger):
@@ -920,10 +919,11 @@ def export_hgt():
     import logging
 
     logger = logging.getLogger(__name__)
+    export_log_id = None
 
     try:
         try:
-            user = _require_hgt_auth_with_quota(request)
+            user, export_log_id = _require_hgt_auth_with_quota(request, base="hgt", overlays={"hgt": True})
         except PermissionError as pe:
             message = str(pe) or "Unauthorized"
             status = 401 if message == "Unauthorized" else 403
@@ -932,6 +932,7 @@ def export_hgt():
         data = request.get_json(force=True) or {}
         ctx, err = _hgt_prepare_export(data, logger)
         if err:
+            release_export_quota(export_log_id)
             body, status = err
             return (body, status)
 
@@ -1006,10 +1007,6 @@ def export_hgt():
         )
         if not hgt_dir_available:
             logger.warning("[HGT] Local HGT dataset directory unavailable, served synthetic-only where allowlisted")
-        try:
-            log_export(user["id"], "hgt", {"hgt": True})
-        except Exception as e:
-            logger.warning("[HGT] Failed to log export for user_id=%s: %s", user.get("id"), e)
         return send_file(
             zip_buf,
             mimetype="application/zip",
@@ -1017,6 +1014,7 @@ def export_hgt():
             download_name=f"{zip_base}_{time.strftime('%Y%m%d_%H%M%S', time.gmtime())}.zip",
         )
     except Exception as e:
+        release_export_quota(export_log_id)
         logger.exception("[HGT] Export failed")
         activity.enrich(error_message=str(e)[:300])
         return (f"HGT export failed: {str(e)}", 500)
@@ -1028,10 +1026,13 @@ def export_hgt_map_tiff():
     import logging
 
     logger = logging.getLogger(__name__)
+    export_log_id = None
 
     try:
         try:
-            user = _require_hgt_auth_base(request)
+            user, export_log_id = _require_hgt_auth_with_quota(
+                request, base="hgt_map", overlays={"hgt": True, "map_png": True}
+            )
         except PermissionError as pe:
             message = str(pe) or "Unauthorized"
             status = 401 if message == "Unauthorized" else 403
@@ -1040,6 +1041,7 @@ def export_hgt_map_tiff():
         data = request.get_json(force=True) or {}
         ctx, err = _hgt_prepare_export(data, logger)
         if err:
+            release_export_quota(export_log_id)
             body, status = err
             return (body, status)
 
@@ -1077,6 +1079,7 @@ def export_hgt_map_tiff():
                 system,
             )
         except Exception as e:
+            release_export_quota(export_log_id)
             logger.exception("[HGT] Map PNG build failed")
             activity.enrich(error_message=str(e)[:300])
             return (f"HGT map PNG failed: {str(e)}", 500)
@@ -1092,6 +1095,7 @@ def export_hgt_map_tiff():
             download_name=f"{zip_base}_map_with_hgt_grid_{png_ts}.png",
         )
     except Exception as e:
+        release_export_quota(export_log_id)
         logger.exception("[HGT] Map PNG export failed")
         activity.enrich(error_message=str(e)[:300])
         return (f"HGT map PNG export failed: {str(e)}", 500)
@@ -2360,18 +2364,16 @@ def _require_auth_with_quota(req, base: str, overlays):
                     if k not in overs:
                         raise PermissionError(f'Overlay "{k}" not permitted')
 
-    # Quotas
-    now = int(__import__("time").time())
-    day = now - 86400
-    week = now - 7 * 86400
-    month = now - 30 * 86400
-    if user["limit_day"] >= 0 and count_exports_since(user["id"], day) >= user["limit_day"]:
-        raise PermissionError("Daily export limit reached")
-    if user["limit_week"] >= 0 and count_exports_since(user["id"], week) >= user["limit_week"]:
-        raise PermissionError("Weekly export limit reached")
-    if user["limit_month"] >= 0 and count_exports_since(user["id"], month) >= user["limit_month"]:
-        raise PermissionError("Monthly export limit reached")
-    return user
+    # Quotas — atomic check + insert so concurrent workers cannot race past limits.
+    log_id = reserve_export_quota(
+        user["id"],
+        user["limit_day"],
+        user["limit_week"],
+        user["limit_month"],
+        base,
+        overlays,
+    )
+    return user, log_id
 
 
 @app.post("/auth/login")
