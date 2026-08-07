@@ -282,6 +282,16 @@
   pointer-events: none;
 }
 
+/* While placing a new shape, existing drawings must not capture clicks
+   (Leaflet path elements set their own pointer-events and override the pane). */
+.leaflet-drawPane-pane.draw-pane--passthrough,
+.leaflet-drawPane-pane.draw-pane--passthrough .leaflet-interactive,
+.leaflet-drawPane-pane.draw-pane--passthrough .leaflet-marker-icon,
+.leaflet-drawPane-pane.draw-pane--passthrough svg,
+.leaflet-drawPane-pane.draw-pane--passthrough path {
+  pointer-events: none !important;
+}
+
 /* Floating map click menu */
 .draw-map-menu {
   display: none;

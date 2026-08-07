@@ -5,7 +5,7 @@
  * - Freehand draws while the mouse button is held.
  */
 
-import { iconHtml } from '../toolbar/icons.js?v=20260807o';
+import { iconHtml } from '../toolbar/icons.js?v=20260807q';
 
 const SETTINGS_KEY = 'scepmaps_draw_settings';
 const DEFAULT_PALETTE = [
@@ -173,6 +173,7 @@ export function initDrawTool({
         if (Array.isArray(next.palette) && next.palette.length) merged.palette = next.palette;
         saveSettings(merged);
       },
+      getExportGeoJSON: () => ({ type: 'FeatureCollection', features: [] }),
     };
   }
 
@@ -220,6 +221,8 @@ export function initDrawTool({
       fillColor: color,
       fillOpacity: fillOpacity(),
       pane: 'drawPane',
+      // Hit-testing is toggled by syncShapePointerEvents (off while placing).
+      interactive: !(activeMode && activeMode !== 'eraser') && !drafting,
       ...extra,
     };
   }
@@ -227,9 +230,42 @@ export function initDrawTool({
   function syncShapePointerEvents() {
     const pane = map.getPane('drawPane');
     if (!pane) return;
-    // While placing geometry, let clicks fall through existing shapes onto the map.
+    // Hit-test existing drawings only for eraser (delete) or idle select.
+    // While a draw tool is active / drafting, clicks must pass through onto the map
+    // so new shapes can start on top of existing ones.
     const placing = !!drafting || (activeMode && activeMode !== 'eraser');
-    pane.style.pointerEvents = placing ? 'none' : 'auto';
+    pane.classList.toggle('draw-pane--passthrough', placing);
+    pane.style.pointerEvents = placing ? 'none' : '';
+    setAllShapesHitTest(!placing);
+  }
+
+  function setLayerHitTest(layer, enabled) {
+    if (!layer) return;
+    if (layer._scepDrawKind === 'arrow' && typeof layer.eachLayer === 'function') {
+      layer.eachLayer((child) => setLayerHitTest(child, enabled));
+      return;
+    }
+    // Skip measurement label groups
+    if (layer instanceof L.LayerGroup && !layer._scepDrawKind && !layer.getLatLngs && !layer.getLatLng) {
+      return;
+    }
+    if (layer.options) layer.options.interactive = !!enabled;
+    const el = layer.getElement?.() || layer._path || layer._icon;
+    if (!el) return;
+    if (enabled) {
+      L.DomUtil.addClass(el, 'leaflet-interactive');
+      el.style.pointerEvents = '';
+    } else {
+      L.DomUtil.removeClass(el, 'leaflet-interactive');
+      el.style.pointerEvents = 'none';
+    }
+  }
+
+  function setAllShapesHitTest(enabled) {
+    drawn.eachLayer((layer) => {
+      if (!layer._scepDrawColor && !layer._scepDrawKind) return;
+      setLayerHitTest(layer, enabled);
+    });
   }
 
   function layerColor(layer) {
@@ -509,7 +545,9 @@ export function initDrawTool({
   }
 
   function bindLayerSelect(layer) {
-    const handler = (e) => {
+    const onClick = (e) => {
+      // While placing, shapes should be non-interactive; if a click still lands here, don't block drawing.
+      if (drafting || (activeMode && activeMode !== 'eraser')) return;
       L.DomEvent.stopPropagation(e);
       if (activeMode === 'eraser') {
         eraseLayer(layer);
@@ -517,16 +555,33 @@ export function initDrawTool({
       }
       selectLayer(layer);
     };
-    if (layer.eachLayer) {
-      layer.eachLayer((child) => child.on('click', handler));
+    const onContext = (e) => {
+      if (!isOpen() && !activeMode) return;
+      if (drafting) return;
+      // Right-click on a shape still offers "add shape" when the draw panel is engaged.
+      L.DomEvent.stopPropagation(e);
+      L.DomEvent.preventDefault(e);
+      const oe = e.originalEvent;
+      const containerPoint = oe
+        ? map.mouseEventToContainerPoint(oe)
+        : map.latLngToContainerPoint(e.latlng);
+      openMapMenu(e.latlng, containerPoint);
+    };
+    const bind = (lyr) => {
+      lyr.on('click', onClick);
+      lyr.on('contextmenu', onContext);
+    };
+    if (layer.eachLayer && layer._scepDrawKind === 'arrow') {
+      layer.eachLayer(bind);
     } else {
-      layer.on('click', handler);
+      bind(layer);
     }
   }
 
   function commitLayer(layer, kind = null) {
     if (!layer) return;
     layer._scepDrawColor = drawColor;
+    layer._scepStrokeWeight = strokeWeight();
     if (kind) layer._scepDrawKind = kind;
     drawn.addLayer(layer);
     bindLayerSelect(layer);
@@ -1215,6 +1270,73 @@ export function initDrawTool({
     if (selectedLayer) applyLayerStyle(selectedLayer, true);
   }
 
+  function layerToExportFeatures(layer) {
+    if (!layer || (!layer._scepDrawColor && !layer._scepDrawKind)) return [];
+    const color = layer._scepDrawColor || drawColor;
+    const weight = Number(layer._scepStrokeWeight) || strokeWeight();
+    const kind = layer._scepDrawKind || 'shape';
+    const baseProps = {
+      kind,
+      color,
+      weight,
+      fillOpacity: FILL_OPACITY,
+      strokeOpacity: 0.95,
+    };
+
+    if (kind === 'arrow' && typeof layer.eachLayer === 'function') {
+      const out = [];
+      layer.eachLayer((child) => {
+        if (!child?.toGeoJSON) return;
+        const gj = child.toGeoJSON();
+        if (!gj) return;
+        const props = {
+          ...baseProps,
+          kind: child instanceof L.Polygon ? 'arrow-head' : 'arrow-shaft',
+          fillOpacity: child instanceof L.Polygon ? FILL_OPACITY : 0,
+        };
+        if (gj.type === 'FeatureCollection') {
+          gj.features.forEach((f) => out.push({ ...f, properties: { ...props, ...(f.properties || {}) } }));
+        } else {
+          out.push({ ...gj, properties: { ...props, ...(gj.properties || {}) } });
+        }
+      });
+      return out;
+    }
+
+    if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
+      const ll = layer.getLatLng();
+      return [
+        {
+          type: 'Feature',
+          properties: { ...baseProps, kind: 'circle', radius: layer.getRadius() },
+          geometry: { type: 'Point', coordinates: [ll.lng, ll.lat] },
+        },
+      ];
+    }
+
+    if (!layer.toGeoJSON) return [];
+    const gj = layer.toGeoJSON();
+    if (!gj) return [];
+    const props = { ...baseProps };
+    if (kind === 'line' || kind === 'freehand') props.fillOpacity = 0;
+    if (kind === 'point' || layer instanceof L.CircleMarker) props.kind = 'point';
+    if (gj.type === 'FeatureCollection') {
+      return (gj.features || []).map((f) => ({
+        ...f,
+        properties: { ...props, ...(f.properties || {}) },
+      }));
+    }
+    return [{ ...gj, properties: { ...props, ...(gj.properties || {}) } }];
+  }
+
+  function getExportGeoJSON() {
+    const features = [];
+    drawn.eachLayer((layer) => {
+      features.push(...layerToExportFeatures(layer));
+    });
+    return { type: 'FeatureCollection', features };
+  }
+
   return {
     bindButton(btn) {
       btnEl = btn;
@@ -1236,5 +1358,6 @@ export function initDrawTool({
     clearAll,
     getSettings: () => ({ ...settings, palette: [...palette()] }),
     applySettings,
+    getExportGeoJSON,
   };
 }

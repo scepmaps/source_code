@@ -2,10 +2,10 @@ import { LAYERS } from './config.js?v=20260806k';
 import { createToolbarController } from './toolbar/toolbar.js?v=20260806h';
 import { initSettingsController } from './settings/settings.js?v=20260807o';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
-import { initMapToolControls } from './tools/tools.js?v=20260807o';
+import { initMapToolControls } from './tools/tools.js?v=20260807q';
 import { initKmlOverlays } from './tools/kml.js?v=20260807i';
-import { initDrawTool } from './tools/draw.js?v=20260807o';
-import { iconHtml } from './toolbar/icons.js?v=20260807o';
+import { initDrawTool } from './tools/draw.js?v=20260807r';
+import { iconHtml } from './toolbar/icons.js?v=20260807q';
 import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260805c';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
 import { absolutizeMapStyleUrls, makeArcgisTransformRequest } from './map-style.js?v=20260805c';
@@ -3367,6 +3367,11 @@ async function performGeotiffExport({ forceView = false, button = exportBtn } = 
     .map((item) => Number(item.id))
     .filter((id) => Number.isFinite(id));
   const kmlRedOutline = !!(typeof kmlController?.getRedOutline === 'function' && kmlController.getRedOutline());
+  const drawings =
+    typeof drawController?.getExportGeoJSON === 'function'
+      ? drawController.getExportGeoJSON()
+      : { type: 'FeatureCollection', features: [] };
+  const drawingsCount = Array.isArray(drawings?.features) ? drawings.features.length : 0;
   const crs = undefined; // deprecated in favor of system
   const customName = filenameInput?.value?.trim() || '';
   if (!forceView && isHgtActive && hgtSelectionRect) {
@@ -3407,6 +3412,7 @@ async function performGeotiffExport({ forceView = false, button = exportBtn } = 
     overlays: overlays,
     kmlIds: kmlIds,
     kmlRedOutline: kmlRedOutline,
+    drawingsCount,
     customFilename: customName || '(none)',
     viewportSize: { width: viewW, height: viewH },
     exportMethod: 'headless',
@@ -3556,7 +3562,7 @@ async function performGeotiffExport({ forceView = false, button = exportBtn } = 
     const partName = customName ? (total>1 ? `${customName}_${partSuffix}` : customName) : (total>1 ? `export_${partSuffix}` : 'export');
     const endpoint = endpointBase;
     const showAttribution = document.getElementById('exportAttribution')?.checked ?? true;
-    const payload = { bbox: partBbox, zoom: usedZoom, width: partWidth, height: partHeight, base, overlays, kmlIds, kmlRedOutline, system, crs: outCrs, quality: exportQuality?.value || 'SD', filename: partName, showAttribution };
+    const payload = { bbox: partBbox, zoom: usedZoom, width: partWidth, height: partHeight, base, overlays, kmlIds, kmlRedOutline, drawings, system, crs: outCrs, quality: exportQuality?.value || 'SD', filename: partName, showAttribution };
 
     console.log(`[Export] Part ${i+1}/${total} Starting:`, {
       partNumber: i + 1,

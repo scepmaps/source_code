@@ -296,6 +296,49 @@ def _resolve_export_kml_layers(user: dict, data: dict) -> list:
     return prepared
 
 
+def _sanitize_export_drawings(data: dict) -> dict | None:
+    """Accept client-drawn GeoJSON for headless TIF burn-in (bounded size)."""
+    raw = data.get("drawings") or data.get("drawGeoJSON") or data.get("draw_geojson")
+    if not isinstance(raw, dict):
+        return None
+    if raw.get("type") != "FeatureCollection":
+        return None
+    features = raw.get("features")
+    if not isinstance(features, list) or not features:
+        return None
+    # Hard cap to avoid huge payloads / render cost
+    capped = features[:500]
+    cleaned = []
+    for feat in capped:
+        if not isinstance(feat, dict) or feat.get("type") != "Feature":
+            continue
+        geom = feat.get("geometry")
+        if not isinstance(geom, dict) or not geom.get("type") or geom.get("coordinates") is None:
+            continue
+        props = feat.get("properties") if isinstance(feat.get("properties"), dict) else {}
+        cleaned.append(
+            {
+                "type": "Feature",
+                "geometry": geom,
+                "properties": {
+                    "kind": props.get("kind") or "shape",
+                    "color": props.get("color") or "#e03131",
+                    "weight": props.get("weight") if isinstance(props.get("weight"), (int, float)) else 2.25,
+                    "fillOpacity": props.get("fillOpacity")
+                    if isinstance(props.get("fillOpacity"), (int, float))
+                    else 0.22,
+                    "strokeOpacity": props.get("strokeOpacity")
+                    if isinstance(props.get("strokeOpacity"), (int, float))
+                    else 0.95,
+                    "radius": props.get("radius") if isinstance(props.get("radius"), (int, float)) else None,
+                },
+            }
+        )
+    if not cleaned:
+        return None
+    return {"type": "FeatureCollection", "features": cleaned}
+
+
 def _export_headless_geotiff_bytes(
     bbox,
     zoom: int,
@@ -306,6 +349,7 @@ def _export_headless_geotiff_bytes(
     out_crs: str = "EPSG:4326",
     show_attribution: bool = True,
     kml_layers=None,
+    drawings=None,
 ):
     """Shared headless export pipeline used by /export_headless and HGT map-underlay TIFF."""
     mosaic, exact_bbox = render_headless_map(
@@ -317,6 +361,7 @@ def _export_headless_geotiff_bytes(
         overlays,
         show_attribution=show_attribution,
         kml_layers=kml_layers,
+        drawings=drawings,
     )
 
     xmin, ymin, xmax, ymax = bbox_4326_to_3857(exact_bbox)
@@ -494,6 +539,9 @@ def export_headless():
         kml_layers = _resolve_export_kml_layers(user, data)
         if kml_layers:
             logger.info(f"[Export] Including {len(kml_layers)} KML overlay(s) in headless render")
+        drawings = _sanitize_export_drawings(data)
+        if drawings:
+            logger.info(f"[Export] Including {len(drawings.get('features') or [])} drawing feature(s) in headless render")
 
         # Activity — request params + resolved identity
         activity.enrich(
@@ -513,6 +561,7 @@ def export_headless():
             filename=filename,
             show_attribution=show_attribution,
             kml_count=len(kml_layers),
+            drawings_count=len((drawings or {}).get("features") or []),
         )
 
         logger.info(f"[Export] Step 1-3: Rendering + georeferencing via shared headless pipeline")
@@ -526,6 +575,7 @@ def export_headless():
             out_crs=out_crs,
             show_attribution=show_attribution,
             kml_layers=kml_layers,
+            drawings=drawings,
         )
     except PermissionError as pe:
         release_export_quota(export_log_id)

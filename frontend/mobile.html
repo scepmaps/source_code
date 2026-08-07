@@ -19,9 +19,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
-    <link rel="stylesheet" href="tools/tools.css?v=20260807o">
+    <link rel="stylesheet" href="tools/tools.css?v=20260807q">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css?v=20260807n">
+    <link rel="stylesheet" href="settings/settings.css?v=20260807p">
     <link rel="stylesheet" href="mobile/mobile.css?v=20260806y">
     <script type="module">
       // Escape hatch: force desktop with ?desktop / stay with ?mobile
@@ -320,55 +320,55 @@
 
           <div id="settingsDrawSection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
             <h4>Drawing</h4>
-            <p style="color: var(--muted); font-size: 13px; margin: 0 0 8px;">
-              Color palette and measurement labels for the desktop draw tool. Changes apply immediately.
-            </p>
-            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Color palette</label>
+            <p style="color: var(--muted);">Palette, labels, and stroke for the desktop draw tool.</p>
+            <label class="settings-draw-palette-label" for="settingsDrawPalette">Color palette</label>
             <div id="settingsDrawPalette" class="settings-draw-palette" aria-label="Draw color palette"></div>
             <div class="settings-draw-row">
               <label class="settings-kml-outline-toggle">
-                <span>Show measurements</span>
+                <span>Measurements</span>
                 <span class="settings-switch">
                   <input type="checkbox" id="settingsDrawShowMeasurements" />
                   <span class="settings-switch-slider" aria-hidden="true"></span>
                 </span>
               </label>
               <label class="settings-kml-outline-toggle">
-                <span>Show lengths</span>
+                <span>Lengths</span>
                 <span class="settings-switch">
                   <input type="checkbox" id="settingsDrawShowLength" />
                   <span class="settings-switch-slider" aria-hidden="true"></span>
                 </span>
               </label>
               <label class="settings-kml-outline-toggle">
-                <span>Show areas</span>
+                <span>Areas</span>
                 <span class="settings-switch">
                   <input type="checkbox" id="settingsDrawShowArea" />
                   <span class="settings-switch-slider" aria-hidden="true"></span>
                 </span>
               </label>
               <label class="settings-kml-outline-toggle">
-                <span>Show coordinates</span>
+                <span>Coordinates</span>
                 <span class="settings-switch">
                   <input type="checkbox" id="settingsDrawShowCoordinates" />
                   <span class="settings-switch-slider" aria-hidden="true"></span>
                 </span>
               </label>
             </div>
-            <div class="settings-draw-stroke-row" style="margin-top: 14px;">
-              <label for="settingsDrawUnits" style="font-size: 13px; min-width: 90px;">Draw units</label>
-              <select id="settingsDrawUnits" style="flex: 1 1 auto; max-width: 160px;">
-                <option value="m">Meters (m)</option>
-                <option value="km">Kilometers (km)</option>
-                <option value="ft">Feet (ft)</option>
-                <option value="mi">Miles (mi)</option>
-                <option value="nm">Nautical miles (nm)</option>
-              </select>
-            </div>
-            <div class="settings-draw-stroke-row">
-              <label for="settingsDrawStrokeWeight" style="font-size: 13px; min-width: 90px;">Stroke weight</label>
-              <input type="range" id="settingsDrawStrokeWeight" min="1" max="6" step="0.25" value="2.25" />
-              <span id="settingsDrawStrokeVal" class="settings-draw-stroke-val">2.25</span>
+            <div class="settings-draw-controls">
+              <div class="settings-draw-stroke-row">
+                <label for="settingsDrawUnits">Units</label>
+                <select id="settingsDrawUnits">
+                  <option value="m">Meters</option>
+                  <option value="km">Kilometers</option>
+                  <option value="ft">Feet</option>
+                  <option value="mi">Miles</option>
+                  <option value="nm">Nautical mi</option>
+                </select>
+              </div>
+              <div class="settings-draw-stroke-row">
+                <label for="settingsDrawStrokeWeight">Stroke</label>
+                <input type="range" id="settingsDrawStrokeWeight" min="1" max="6" step="0.25" value="2.25" />
+                <span id="settingsDrawStrokeVal" class="settings-draw-stroke-val">2.25</span>
+              </div>
             </div>
           </div>
 
@@ -430,6 +430,6 @@
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
     <script src="particles.js"></script>
-    <script type="module" src="app.js?v=20260807o"></script>
+    <script type="module" src="app.js?v=20260807r"></script>
   </body>
 </html>

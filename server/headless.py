@@ -100,6 +100,7 @@ HTML = """<!doctype html>
   const base = "%BASE%";
   const overlays = %OVERLAYS%;
   const KML_LAYERS = %KML_LAYERS%;  // [{name,color,opacity,geojson}, ...]
+  const DRAW_FEATURES = %DRAW_FEATURES%;  // GeoJSON FeatureCollection of user drawings
   const API_BASE = "%API_BASE%";  // Base URL for API endpoints (empty string or full URL)
 
   // Vector tile style URLs - these match the frontend config
@@ -516,6 +517,67 @@ HTML = """<!doctype html>
     }
   }
 
+  // User drawings from the desktop draw tool
+  if (DRAW_FEATURES && Array.isArray(DRAW_FEATURES.features) && DRAW_FEATURES.features.length) {
+    map.createPane('drawExportPane');
+    map.getPane('drawExportPane').style.zIndex = 480;
+
+    function clampDraw01(n, fallback) {
+      const v = Number(n);
+      if (!Number.isFinite(v)) return fallback;
+      return Math.max(0, Math.min(1, v));
+    }
+
+    try {
+      L.geoJSON(DRAW_FEATURES, {
+        pane: 'drawExportPane',
+        style: (feature) => {
+          const p = feature?.properties || {};
+          const kind = p.kind || '';
+          const isLine = kind === 'line' || kind === 'freehand' || kind === 'arrow-shaft' ||
+            (feature?.geometry?.type || '').includes('Line');
+          const weight = Number(p.weight);
+          return {
+            color: p.color || '#e03131',
+            weight: Number.isFinite(weight) && weight > 0 ? Math.max(1, Math.min(12, weight)) : 2.25,
+            opacity: clampDraw01(p.strokeOpacity, 0.95),
+            fillColor: p.color || '#e03131',
+            fillOpacity: isLine ? 0 : clampDraw01(p.fillOpacity, 0.22),
+            lineCap: 'round',
+            lineJoin: 'round',
+            pane: 'drawExportPane'
+          };
+        },
+        pointToLayer: (feature, latlng) => {
+          const p = feature?.properties || {};
+          const kind = p.kind || '';
+          if (kind === 'circle' && Number.isFinite(Number(p.radius)) && Number(p.radius) > 0) {
+            return L.circle(latlng, {
+              radius: Number(p.radius),
+              color: p.color || '#e03131',
+              weight: Number.isFinite(Number(p.weight)) ? Number(p.weight) : 2.25,
+              opacity: clampDraw01(p.strokeOpacity, 0.95),
+              fillColor: p.color || '#e03131',
+              fillOpacity: clampDraw01(p.fillOpacity, 0.22),
+              pane: 'drawExportPane'
+            });
+          }
+          return L.circleMarker(latlng, {
+            radius: 6,
+            color: p.color || '#e03131',
+            weight: 1.75,
+            opacity: 0.95,
+            fillColor: p.color || '#e03131',
+            fillOpacity: clampDraw01(p.fillOpacity, 0.22),
+            pane: 'drawExportPane'
+          });
+        }
+      }).addTo(map);
+    } catch (err) {
+      console.error('[Draw] Failed to draw export shapes:', err);
+    }
+  }
+
   setTimeout(()=>{ window.__tilesLoaded = true; }, 15000); // hard cap
 </script>
 </body>
@@ -536,6 +598,7 @@ def render_headless_map(
     overlays: Dict[str, bool],
     show_attribution: bool = True,
     kml_layers=None,
+    drawings=None,
 ):
     try:
         # Determine the pixel dimensions of the bbox at the given zoom. The viewport
@@ -595,6 +658,9 @@ def render_headless_map(
         api_base = os.getenv("HEADLESS_API_BASE", "http://127.0.0.1:5001")
 
         kml_json = json.dumps(kml_layers or []).replace("<", "\\u003c")
+        draw_json = json.dumps(drawings or {"type": "FeatureCollection", "features": []}).replace(
+            "<", "\\u003c"
+        )
 
         html = (
             HTML.replace("%LAYER_URLS%", json.dumps(LAYER_URLS))
@@ -603,6 +669,7 @@ def render_headless_map(
             .replace("%BASE%", base)
             .replace("%OVERLAYS%", json.dumps(overlays))
             .replace("%KML_LAYERS%", kml_json)
+            .replace("%DRAW_FEATURES%", draw_json)
             .replace("%LABEL_CSS%", label_css)
             .replace("%LABEL_JS%", label_js)
             .replace("%CSS%", LEAFLET_CSS)
