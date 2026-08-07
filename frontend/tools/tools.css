@@ -181,12 +181,169 @@
   color: rgba(215, 227, 255, 0.5);
   padding: 2px 4px 0;
 }
-.kml-swatch {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+.kml-feature-label {
+  background: rgba(8, 14, 28, 0.78) !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  border-radius: 4px !important;
+  color: #f4f7ff !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  padding: 2px 6px !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  pointer-events: none !important;
+}
+.kml-feature-label::before {
+  display: none !important;
+}
+
+/* ---- Draw tool panel (desktop) ---- */
+.draw-panel {
+  min-width: 220px;
+  max-width: min(280px, calc(100vw - 24px));
+  padding: 10px 10px 8px !important;
+  gap: 8px;
+  display: none;
+  flex-direction: column;
+  align-items: stretch !important;
+  grid-template-columns: none !important;
+}
+.draw-panel.open {
+  display: flex !important;
+}
+.draw-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.draw-panel-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+.draw-panel-clear {
+  appearance: none;
+  border: 1px solid rgba(255, 77, 109, 0.35);
+  background: rgba(255, 77, 109, 0.12);
+  color: #ff8fa3;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.draw-panel-clear:hover {
+  background: rgba(255, 77, 109, 0.22);
+  color: #ff4d6d;
+}
+.draw-panel-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.draw-mode-btn {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(77, 226, 255, 0.12);
+  background: rgba(10, 18, 42, 0.45);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+.draw-mode-btn svg {
+  width: 16px;
+  height: 16px;
   flex: 0 0 auto;
-  display: inline-block;
+  opacity: 0.85;
+}
+.draw-mode-btn:hover {
+  border-color: rgba(77, 226, 255, 0.28);
+  background: rgba(77, 226, 255, 0.1);
+  color: var(--accent);
+}
+.draw-mode-btn.is-active {
+  border-color: rgba(77, 226, 255, 0.5);
+  background: rgba(77, 226, 255, 0.16);
+  color: var(--accent);
+}
+.draw-panel-hint {
+  font-size: 10px;
+  color: rgba(215, 227, 255, 0.5);
+  padding: 2px 4px 0;
+  line-height: 1.35;
+}
+
+/* Floating map click menu */
+.draw-map-menu {
+  display: none;
+  position: fixed;
+  z-index: 1200;
+  min-width: 160px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(77, 226, 255, 0.22);
+  background: linear-gradient(180deg, rgba(14, 23, 55, 0.97), rgba(10, 20, 47, 0.95));
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  pointer-events: auto;
+}
+.draw-map-menu.open {
+  display: block;
+}
+.draw-map-menu-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(215, 227, 255, 0.55);
+  padding: 2px 6px 6px;
+}
+.draw-map-menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.draw-map-menu-item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+.draw-map-menu-item svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+.draw-map-menu-item:hover {
+  background: rgba(77, 226, 255, 0.12);
+  color: var(--accent);
+}
+
+body.mobile-app #btnDraw,
+body.mobile-app #drawPickerPanel,
+body.mobile-app #drawMapMenu {
+  display: none !important;
 }
 

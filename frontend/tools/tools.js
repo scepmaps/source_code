@@ -4,6 +4,7 @@ export const TOOL_BTN_IDS = {
   ruler: 'btnRuler',
   box: 'btnBox',
   hgt: 'btnHgt',
+  draw: 'btnDraw',
   kml: 'btnKml',
 };
 
@@ -11,6 +12,7 @@ export const TOOL_LABELS = {
   ruler: 'Ruler',
   box: 'Selection Box',
   hgt: 'HGT',
+  draw: 'Draw',
   kml: 'KML',
 };
 
@@ -18,6 +20,7 @@ export const TOOL_ICONS = {
   ruler: iconHtml('ruler'),
   box: iconHtml('box'),
   hgt: '<span class="tool-hgt-label">HGT</span>',
+  draw: iconHtml('draw'),
   kml: iconHtml('kml'),
 };
 
@@ -76,6 +79,8 @@ export function initMapToolControls(opts) {
     onHgtClick,
     onHideInlineHgtButton,
     onKmlButtonReady,
+    onDrawButtonReady,
+    isMobileApp = false,
     onToolsReady,
   } = opts;
 
@@ -138,6 +143,18 @@ export function initMapToolControls(opts) {
     if (typeof onHgtButtonReady === 'function') onHgtButtonReady(hgtBtn);
   } else if (typeof onHideInlineHgtButton === 'function') {
     onHideInlineHgtButton();
+  }
+
+  if (!isMobileApp) {
+    const drawBtn = createToolButton({
+      id: TOOL_BTN_IDS.draw,
+      className: 'map-tool-btn--draw',
+      title: 'Draw',
+      html: iconHtml('draw'),
+      onClick: () => {},
+    });
+    insertBeforeMore(drawBtn);
+    if (typeof onDrawButtonReady === 'function') onDrawButtonReady(drawBtn);
   }
 
   const kmlBtn = createToolButton({

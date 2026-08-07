@@ -412,6 +412,8 @@ export function initSettingsController(opts) {
     document.getElementById('exportAttribution').checked = localStorage.getItem('scepmaps_export_attribution') !== 'false';
     const redOutlineCb = document.getElementById('settingsKmlRedOutline');
     if (redOutlineCb) redOutlineCb.checked = !!kmlController?.getRedOutline?.();
+    const showNamesCb = document.getElementById('settingsKmlShowNames');
+    if (showNamesCb) showNamesCb.checked = !!kmlController?.getShowNames?.();
     await refreshKmlSettings({ preserveDrafts: false });
     markSettingsClean();
   };
@@ -558,6 +560,10 @@ export function initSettingsController(opts) {
     bindIfExists('settingsKmlRedOutline', 'change', (e) => {
       if (!kmlController?.setRedOutline) return;
       kmlController.setRedOutline(!!e.target.checked);
+    });
+    bindIfExists('settingsKmlShowNames', 'change', (e) => {
+      if (!kmlController?.setShowNames) return;
+      kmlController.setShowNames(!!e.target.checked);
     });
     if (kmlController?.onChange) {
       kmlController.onChange(() => {

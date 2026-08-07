@@ -1,10 +1,11 @@
 import { LAYERS } from './config.js?v=20260806k';
 import { createToolbarController } from './toolbar/toolbar.js?v=20260806h';
-import { initSettingsController } from './settings/settings.js?v=20260807h';
+import { initSettingsController } from './settings/settings.js?v=20260807i';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
-import { initMapToolControls } from './tools/tools.js?v=20260806u';
-import { initKmlOverlays } from './tools/kml.js?v=20260807h';
-import { iconHtml } from './toolbar/icons.js?v=20260806p';
+import { initMapToolControls } from './tools/tools.js?v=20260807k';
+import { initKmlOverlays } from './tools/kml.js?v=20260807i';
+import { initDrawTool } from './tools/draw.js?v=20260807k';
+import { iconHtml } from './toolbar/icons.js?v=20260807k';
 import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260805c';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
 import { absolutizeMapStyleUrls, makeArcgisTransformRequest } from './map-style.js?v=20260805c';
@@ -2177,6 +2178,7 @@ function enableMapCursor(active){
 
 function createOrRemoveBox(){
   drawingBoxType = 'map';
+  drawController.deactivate();
   if (selectionRect){
     map.removeLayer(selectionRect); selectionRect = null; boxStart = null; isDrawingBox = false;
     map.dragging.enable();
@@ -2229,6 +2231,7 @@ function createOrRemoveBox(){
 
 function createOrRemoveHgtBox(){
   drawingBoxType = 'hgt';
+  drawController.deactivate();
   if (isHgtActive) {
     if (hgtSelectionRect) {
       map.removeLayer(hgtSelectionRect);
@@ -2691,13 +2694,58 @@ const kmlController = initKmlOverlays({
   API_BASE,
 });
 
+function suppressConflictingToolsForDraw() {
+  if (isRulerActive) {
+    deactivateRuler();
+  }
+  if (isDrawingBox) {
+    isDrawingBox = false;
+    boxStart = null;
+    pendingCorner = null;
+    map.dragging.enable();
+    map.boxZoom.enable();
+    map.doubleClickZoom.enable();
+    map.touchZoom.enable();
+    map.scrollWheelZoom.enable();
+    map.keyboard.enable();
+    if (drawingOverlay) {
+      drawingOverlay.style.display = 'none';
+      drawingOverlay.onmousedown = null;
+      drawingOverlay.onmousemove = null;
+      drawingOverlay.onmouseup = null;
+    }
+    refreshBoxButton();
+    refreshSelectionLabels();
+  }
+  if (isHgtActive) {
+    isHgtActive = false;
+    if (hgtSelectionRect) {
+      map.removeLayer(hgtSelectionRect);
+      hgtSelectionRect = null;
+    }
+    refreshHgtAvailabilityOverlay();
+    refreshHgtControlButton();
+    refreshSelectionLabels();
+  }
+  kmlController.closePanel?.();
+}
+
+const drawController = initDrawTool({
+  map,
+  isMobile: isMobileApp,
+  enableMapCursor,
+  onActivate: suppressConflictingToolsForDraw,
+});
+
 const controls = initMapToolControls({
   allowedTools,
+  isMobileApp,
   mountEl: document.getElementById('toolBtnGroup'),
   onRulerButtonReady: (btn) => {
     rulerControlBtn = btn;
   },
   onBoxClick: () => {
+    drawController.deactivate();
     drawingBoxType = 'map';
     createOrRemoveBox();
   },
@@ -2711,6 +2759,7 @@ const controls = initMapToolControls({
       deactivateRuler();
       return;
     }
+    drawController.deactivate();
     // Activate ruler - deactivate box drawing if active
     if (isDrawingBox) {
       isDrawingBox = false;
@@ -2740,6 +2789,7 @@ const controls = initMapToolControls({
     refreshHgtControlButton();
   },
   onHgtClick: () => {
+    drawController.deactivate();
     createOrRemoveHgtBox();
     refreshSelectionLabels();
     refreshHgtControlButton();
@@ -2747,6 +2797,9 @@ const controls = initMapToolControls({
   },
   onHideInlineHgtButton: () => {
     if (hgtBoxBtn) hgtBoxBtn.style.display = 'none';
+  },
+  onDrawButtonReady: (btn) => {
+    drawController.bindButton(btn);
   },
   onKmlButtonReady: (btn) => {
     kmlController.bindButton(btn);
@@ -2920,6 +2973,11 @@ function countHgtTilesForBbox(bbox) {
 }
 
 function cancelActiveToolOrSelection() {
+  // Draw tool: cancel menu / draft / mode / panel before other tools.
+  if (drawController?.cancel?.()) {
+    return true;
+  }
+
   // Ruler first — Esc should leave measure mode even with no points yet.
   if (isRulerActive) {
     deactivateRuler();

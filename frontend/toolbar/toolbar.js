@@ -1,5 +1,5 @@
-import { iconHtml } from './icons.js?v=20260806u';
-import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260806u';
+import { iconHtml } from './icons.js?v=20260807k';
+import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260807k';
 
 export function createToolbarController(opts) {
   const {
@@ -80,7 +80,7 @@ export function createToolbarController(opts) {
   }
 
   function closeAllPanels(exceptId = null) {
-    ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown', 'kmlPickerPanel'].forEach((id) => {
+    ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown', 'kmlPickerPanel', 'drawPickerPanel'].forEach((id) => {
       if (id === exceptId) return;
       const el = document.getElementById(id);
       el?.classList.remove('open');
@@ -95,11 +95,13 @@ export function createToolbarController(opts) {
     document.getElementById('btnMaps')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnOverlays')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnKml')?.setAttribute('aria-expanded', 'false');
+    document.getElementById('btnDraw')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnMaps')?.classList.remove('panel-open');
     document.getElementById('btnOverlays')?.classList.remove('panel-open');
     document.getElementById('btnKml')?.classList.remove('panel-open', 'map-tool-btn--active');
+    document.getElementById('btnDraw')?.classList.remove('panel-open', 'map-tool-btn--active');
     const anyOpen = !!document.querySelector(
-      '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open, #kmlPickerPanel.open'
+      '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open, #kmlPickerPanel.open, #drawPickerPanel.open'
     );
     setMobileSheetOpen(anyOpen);
   }
@@ -531,7 +533,7 @@ export function createToolbarController(opts) {
     const isRailUiTarget = (target) => {
       const el = target instanceof Element ? target : target?.parentElement;
       return !!el?.closest(
-        '#sideRail, #mobileSheetHost, #mapPickerPanel, #overlayPickerPanel, #moreToolDropdown, #mobileSheetBackdrop'
+        '#sideRail, #mobileSheetHost, #mapPickerPanel, #overlayPickerPanel, #moreToolDropdown, #kmlPickerPanel, #drawPickerPanel, #drawMapMenu, #mobileSheetBackdrop'
       );
     };
 
@@ -572,8 +574,9 @@ export function createToolbarController(opts) {
       updateSectionButtonStates();
     });
 
-    // Escape closes Maps / Overlays / More-tools panels (capture so it wins over
+    // Escape closes Maps / Overlays / More-tools / KML panels (capture so it wins over
     // the map's Escape → delete-selection handler in app.js).
+    // Draw panel Esc is handled in app.js (cancel draft → mode → panel).
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' && e.key !== 'Esc') return;
       const anyOpen = document.querySelector(

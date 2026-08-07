@@ -7,16 +7,25 @@ import {
   pathStyleFromFeature,
   pointStyleFromFeature,
   summarizeStats,
-} from './kml-parse.js?v=20260807h';
+} from './kml-parse.js?v=20260807i';
 
 const DEFAULT_COLOR = '#4de2ff';
 const DEFAULT_OPACITY = 0.65;
 const RED_OUTLINE_KEY = 'scepmaps_kml_red_outline';
 const RED_OUTLINE_COLOR = '#ff1f1f';
+const SHOW_NAMES_KEY = 'scepmaps_kml_show_names';
 
 function readRedOutlinePref() {
   try {
     return localStorage.getItem(RED_OUTLINE_KEY) === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+function readShowNamesPref() {
+  try {
+    return localStorage.getItem(SHOW_NAMES_KEY) === '1';
   } catch (_) {
     return false;
   }
@@ -48,6 +57,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
   let btnEl = null;
   let bootstrapped = false;
   let redOutline = readRedOutlinePref();
+  let showNames = readShowNamesPref();
   const listeners = new Set();
 
   function notify() {
@@ -178,13 +188,15 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
 
   function openPanel() {
     mountPanelNearButton();
-    document.querySelectorAll('#mapPickerPanel, #overlayPickerPanel, #moreToolDropdown').forEach((el) => {
+    document.querySelectorAll('#mapPickerPanel, #overlayPickerPanel, #moreToolDropdown, #drawPickerPanel').forEach((el) => {
       el.classList.remove('open');
     });
     document.getElementById('btnMaps')?.classList.remove('panel-open');
     document.getElementById('btnOverlays')?.classList.remove('panel-open');
     document.getElementById('btnMaps')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnOverlays')?.setAttribute('aria-expanded', 'false');
+    document.getElementById('btnDraw')?.classList.remove('panel-open', 'map-tool-btn--active');
+    document.getElementById('btnDraw')?.setAttribute('aria-expanded', 'false');
 
     panelEl.classList.add('open');
     btnEl?.classList.add('panel-open', 'map-tool-btn--active');
@@ -272,8 +284,8 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
       const fitBtn = document.createElement('button');
       fitBtn.type = 'button';
       fitBtn.className = 'kml-action';
-      fitBtn.title = 'Zoom to overlay';
-      fitBtn.textContent = 'Fit';
+      fitBtn.title = 'Recenter on overlay (keep zoom)';
+      fitBtn.textContent = 'Center';
       fitBtn.disabled = !active;
       fitBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -346,6 +358,48 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
 
   function getRedOutline() {
     return !!redOutline;
+  }
+
+  function setShowNames(on) {
+    showNames = !!on;
+    try {
+      localStorage.setItem(SHOW_NAMES_KEY, showNames ? '1' : '0');
+    } catch (_) {
+      /* ignore */
+    }
+    refreshActiveStyles();
+  }
+
+  function getShowNames() {
+    return !!showNames;
+  }
+
+  function featureLabelName(feature) {
+    const props = feature?.properties || {};
+    const name = props.name || props.Name || '';
+    return String(name || '').trim();
+  }
+
+  function attachFeatureLabel(layer, feature) {
+    if (!showNames || !layer) return;
+    const name = featureLabelName(feature);
+    if (!name) return;
+    const t = feature?.geometry?.type || '';
+    const isPoint = t === 'Point' || t === 'MultiPoint';
+    try {
+      layer.bindTooltip(escapeHtml(name), {
+        permanent: true,
+        sticky: false,
+        interactive: false,
+        direction: isPoint ? 'top' : 'center',
+        offset: isPoint ? [0, -8] : [0, 0],
+        className: 'kml-feature-label',
+        opacity: 1,
+      });
+      if (typeof layer.openTooltip === 'function') layer.openTooltip();
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   function popupHtml(feature) {
@@ -447,6 +501,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
       onEachFeature: (feature, layer) => {
         const html = popupHtml(feature);
         if (html) layer.bindPopup(html);
+        attachFeatureLabel(layer, feature);
       },
     });
     bringSmallestPolygonsToFront(geoLayer);
@@ -468,6 +523,19 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
           properties: { name: overlay.name, description: overlay.description },
         });
         if (html && typeof img.bindPopup === 'function') img.bindPopup(html);
+        if (showNames && overlay.name) {
+          try {
+            img.bindTooltip(escapeHtml(overlay.name), {
+              permanent: true,
+              direction: 'center',
+              className: 'kml-feature-label',
+              opacity: 1,
+            });
+            img.openTooltip(bounds.getCenter());
+          } catch (_) {
+            /* ignore */
+          }
+        }
         group.addLayer(img);
       } catch (_) {
         /* skip bad overlay */
@@ -578,53 +646,13 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     return setOverlayActive(id, on, { persist: true, fit: !!opts.fit, ...opts });
   }
 
-  function refreshMapTilesAfterViewChange() {
-    try {
-      map.invalidateSize({ animate: false });
-    } catch (_) {
-      /* ignore */
-    }
-    map.eachLayer((lyr) => {
-      try {
-        if (typeof lyr.redraw === 'function') lyr.redraw();
-      } catch (_) {
-        /* ignore */
-      }
-      try {
-        const gl = typeof lyr.getMaplibreMap === 'function' ? lyr.getMaplibreMap() : lyr._glMap;
-        if (gl) {
-          if (typeof gl.resize === 'function') gl.resize();
-          if (typeof gl.triggerRepaint === 'function') gl.triggerRepaint();
-        }
-      } catch (_) {
-        /* ignore */
-      }
-    });
-    // Tiny pan forces some tile pipelines to request the new zoom level.
-    try {
-      map.panBy([1, 0], { animate: false });
-      map.panBy([-1, 0], { animate: false });
-    } catch (_) {
-      /* ignore */
-    }
-  }
-
   function fitLayerToMap(layer) {
     if (!layer) return;
     try {
       const b = layer.getBounds?.();
       if (!b || !b.isValid()) return;
-      const maxZoom = Math.min(typeof map.getMaxZoom === 'function' ? map.getMaxZoom() : 18, 15);
-      map.once('moveend', () => {
-        // Defer one frame so Leaflet finishes the zoom before we poke tile/GL layers.
-        requestAnimationFrame(() => refreshMapTilesAfterViewChange());
-      });
-      map.fitBounds(b.pad(0.08), {
-        animate: true,
-        duration: 0.35,
-        maxZoom,
-        padding: [28, 28],
-      });
+      // Recenter only — keep current zoom so tiles / MapLibre stay stable.
+      map.panTo(b.getCenter(), { animate: true });
     } catch (_) {
       /* ignore */
     }
@@ -798,6 +826,8 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     fitOverlay,
     getRedOutline,
     setRedOutline,
+    getShowNames,
+    setShowNames,
     onChange(fn) {
       if (typeof fn === 'function') listeners.add(fn);
       return () => listeners.delete(fn);

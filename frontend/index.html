@@ -17,9 +17,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css?v=20260806m">
     <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
-    <link rel="stylesheet" href="tools/tools.css?v=20260806u">
+    <link rel="stylesheet" href="tools/tools.css?v=20260807k">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css?v=20260807h">
+    <link rel="stylesheet" href="settings/settings.css?v=20260807i">
     <script type="module">
       import { isMobileClient } from './mobile/device.js?v=20260806e';
       try {
@@ -313,6 +313,13 @@
                 <span class="settings-switch-slider" aria-hidden="true"></span>
               </span>
             </label>
+            <label class="settings-kml-outline-toggle" title="Show feature names on the map">
+              <span>Show names</span>
+              <span class="settings-switch">
+                <input type="checkbox" id="settingsKmlShowNames" />
+                <span class="settings-switch-slider" aria-hidden="true"></span>
+              </span>
+            </label>
             <div id="settingsKmlList" class="settings-kml-list"></div>
           </div>
 
@@ -395,6 +402,6 @@
     <!-- Interactive Mapping Grid System -->
     <script src="particles.js"></script>
 
-    <script type="module" src="app.js?v=20260807h"></script>
+    <script type="module" src="app.js?v=20260807k"></script>
   </body>
 </html>
