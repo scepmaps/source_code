@@ -1,32 +1,30 @@
 /**
  * Desktop-only map drawing tool.
- * - Toolbar icon expands into shape options (point / line / polygon / rectangle / circle).
- * - Left-click on the map opens a floating picker to start a shape at that location.
+ * - Toolbar icon expands into a maps-style grid of shape tools + quick colors.
+ * - Right-click on the map opens a floating picker to start a shape at that location.
+ * - Freehand mode draws while the mouse button is held.
  */
 
-import { iconHtml } from '../toolbar/icons.js?v=20260807k';
+import { iconHtml } from '../toolbar/icons.js?v=20260807m';
 
-const DRAW_COLOR = '#4de2ff';
-const DRAW_FILL = '#4de2ff';
+const COLOR_PRESETS = [
+  '#4de2ff',
+  '#ffd166',
+  '#ff8c42',
+  '#ff4d6d',
+  '#7dffa0',
+  '#c084fc',
+  '#ffffff',
+];
+
 const MODES = [
+  { id: 'freehand', label: 'Draw', icon: 'freehand' },
   { id: 'point', label: 'Point', icon: 'point' },
   { id: 'line', label: 'Line', icon: 'line' },
   { id: 'polygon', label: 'Polygon', icon: 'polygon' },
   { id: 'rectangle', label: 'Rectangle', icon: 'box' },
   { id: 'circle', label: 'Circle', icon: 'circle' },
 ];
-
-function pathStyle(extra = {}) {
-  return {
-    color: DRAW_COLOR,
-    weight: 2,
-    opacity: 0.95,
-    fillColor: DRAW_FILL,
-    fillOpacity: 0.18,
-    pane: 'selectionPane',
-    ...extra,
-  };
-}
 
 export function initDrawTool({
   map,
@@ -50,14 +48,32 @@ export function initDrawTool({
   let btnEl = null;
   let panelEl = null;
   let menuEl = null;
-  let activeMode = null; // panel-selected mode
-  let drafting = null; // in-progress shape state
+  let drawColor = COLOR_PRESETS[0];
+  let activeMode = null;
+  let drafting = null;
   let preview = null;
   let vertexMarkers = [];
   let selectedLayer = null;
   let menuLatLng = null;
   let suppressMapClickUntil = 0;
   let ignoreDocClickUntil = 0;
+  let mapDraggingWasEnabled = true;
+
+  function pathStyle(extra = {}, color = drawColor) {
+    return {
+      color,
+      weight: 2.25,
+      opacity: 0.95,
+      fillColor: color,
+      fillOpacity: 0.18,
+      pane: 'selectionPane',
+      ...extra,
+    };
+  }
+
+  function layerColor(layer) {
+    return layer?._scepDrawColor || drawColor;
+  }
 
   function setCursor(on) {
     if (typeof enableMapCursor === 'function') enableMapCursor(!!on);
@@ -103,7 +119,7 @@ export function initDrawTool({
       radius: 4,
       color: '#fff',
       weight: 1.5,
-      fillColor: DRAW_COLOR,
+      fillColor: drawColor,
       fillOpacity: 1,
       pane: 'selectionPane',
       interactive: false,
@@ -115,23 +131,62 @@ export function initDrawTool({
   function selectLayer(layer) {
     if (selectedLayer && selectedLayer !== layer) {
       try {
-        selectedLayer.setStyle?.(pathStyle());
+        const c = layerColor(selectedLayer);
+        if (selectedLayer instanceof L.CircleMarker) {
+          selectedLayer.setStyle({
+            color: '#fff',
+            weight: 1.5,
+            fillColor: c,
+            fillOpacity: 0.95,
+          });
+        } else {
+          selectedLayer.setStyle?.(
+            pathStyle(
+              selectedLayer instanceof L.Polyline && !(selectedLayer instanceof L.Polygon)
+                ? { fillOpacity: 0 }
+                : {},
+              c
+            )
+          );
+        }
       } catch (_) {
         /* ignore */
       }
     }
     selectedLayer = layer || null;
-    if (selectedLayer?.setStyle) {
-      try {
-        selectedLayer.setStyle(pathStyle({ weight: 3, fillOpacity: 0.28 }));
-      } catch (_) {
-        /* ignore */
+    if (!selectedLayer) return;
+    const c = layerColor(selectedLayer);
+    try {
+      if (selectedLayer instanceof L.CircleMarker) {
+        selectedLayer.setStyle({
+          color: '#fff',
+          weight: 2.5,
+          fillColor: c,
+          fillOpacity: 1,
+          radius: 7,
+        });
+      } else {
+        selectedLayer.setStyle?.(
+          pathStyle(
+            {
+              weight: 3,
+              fillOpacity:
+                selectedLayer instanceof L.Polyline && !(selectedLayer instanceof L.Polygon)
+                  ? 0
+                  : 0.28,
+            },
+            c
+          )
+        );
       }
+    } catch (_) {
+      /* ignore */
     }
   }
 
   function commitLayer(layer) {
     if (!layer) return;
+    layer._scepDrawColor = drawColor;
     drawn.addLayer(layer);
     layer.on('click', (e) => {
       L.DomEvent.stopPropagation(e);
@@ -141,7 +196,6 @@ export function initDrawTool({
     clearPreview();
     drafting = null;
     setDraftInteractions(false);
-    // Keep panel mode so user can draw another of the same type.
     refreshPanelActive();
     setCursor(!!activeMode || isOpen());
   }
@@ -155,10 +209,21 @@ export function initDrawTool({
     }
   }
 
+  function restoreMapDragging() {
+    if (mapDraggingWasEnabled) {
+      try {
+        map.dragging.enable();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
+
   function cancelDraft() {
     clearPreview();
     drafting = null;
     setDraftInteractions(false);
+    restoreMapDragging();
     setCursor(!!activeMode || isOpen());
     return true;
   }
@@ -181,9 +246,28 @@ export function initDrawTool({
     return true;
   }
 
+  function setDrawColor(color) {
+    if (!color) return;
+    drawColor = color;
+    refreshColorActive();
+    if (selectedLayer) {
+      const layer = selectedLayer;
+      selectedLayer = null;
+      selectLayer(layer);
+    }
+  }
+
   function finishDraft() {
     if (!drafting) return;
     const { mode, points, center } = drafting;
+    if (mode === 'freehand') {
+      if (points.length < 2) {
+        cancelDraft();
+        return;
+      }
+      commitLayer(L.polyline(points, pathStyle({ fillOpacity: 0, weight: 2.75, lineCap: 'round', lineJoin: 'round' })));
+      return;
+    }
     if (mode === 'line') {
       if (points.length < 2) {
         cancelDraft();
@@ -226,11 +310,16 @@ export function initDrawTool({
         radius: 6,
         color: '#fff',
         weight: 1.5,
-        fillColor: DRAW_COLOR,
+        fillColor: drawColor,
         fillOpacity: 0.95,
         pane: 'selectionPane',
       });
       commitLayer(marker);
+      return;
+    }
+
+    if (mode === 'freehand') {
+      // Freehand starts on mousedown, not a single click placement.
       return;
     }
 
@@ -280,10 +369,20 @@ export function initDrawTool({
     if (!drafting) return;
     const { mode, points, center } = drafting;
 
-    if (mode === 'line') {
-      const latlngs = points.concat([latlng]);
+    if (mode === 'freehand' || mode === 'line') {
+      const latlngs = mode === 'freehand' ? points : points.concat([latlng]);
       if (!preview) {
-        preview = L.polyline(latlngs, pathStyle({ dashArray: '6,6', opacity: 0.7, fillOpacity: 0 })).addTo(map);
+        preview = L.polyline(
+          latlngs,
+          pathStyle({
+            dashArray: mode === 'freehand' ? null : '6,6',
+            opacity: 0.75,
+            fillOpacity: 0,
+            weight: mode === 'freehand' ? 2.75 : 2.25,
+            lineCap: 'round',
+            lineJoin: 'round',
+          })
+        ).addTo(map);
       } else preview.setLatLngs(latlngs);
       return;
     }
@@ -316,6 +415,14 @@ export function initDrawTool({
     }
   }
 
+  function modeButtonHtml(m) {
+    return `
+      <button type="button" class="rail-panel-item draw-mode-btn" data-mode="${m.id}" title="${m.label}" aria-label="${m.label}" role="menuitem">
+        <span class="rail-panel-icon">${iconHtml(m.icon) || m.label}</span>
+        <span class="rail-panel-name">${m.label}</span>
+      </button>`;
+  }
+
   function ensurePanel() {
     if (panelEl) return panelEl;
     panelEl = document.createElement('div');
@@ -324,21 +431,18 @@ export function initDrawTool({
     panelEl.setAttribute('role', 'dialog');
     panelEl.setAttribute('aria-label', 'Drawing tools');
 
-    const modeButtons = MODES.map(
-      (m) => `
-      <button type="button" class="draw-mode-btn" data-mode="${m.id}" title="${m.label}" aria-label="${m.label}">
-        ${iconHtml(m.icon) || m.label}
-        <span>${m.label}</span>
-      </button>`
+    const colorSwatches = COLOR_PRESETS.map(
+      (c) =>
+        `<button type="button" class="draw-color-swatch" data-color="${c}" title="${c}" aria-label="Color ${c}" style="--swatch:${c}"></button>`
     ).join('');
 
     panelEl.innerHTML = `
-      <div class="draw-panel-header">
-        <span class="draw-panel-title">Draw</span>
+      ${MODES.map(modeButtonHtml).join('')}
+      <div class="draw-panel-footer">
+        <div class="draw-color-row" aria-label="Draw color">${colorSwatches}</div>
         <button type="button" class="draw-panel-clear" id="drawClearBtn" title="Clear drawings">Clear</button>
       </div>
-      <div class="draw-panel-modes">${modeButtons}</div>
-      <div class="draw-panel-hint">Pick a shape, or left-click the map to choose one.</div>
+      <div class="draw-panel-hint">Hold-click to freehand. Right-click the map to add a shape.</div>
     `;
 
     panelEl.querySelector('#drawClearBtn')?.addEventListener('click', (e) => {
@@ -366,14 +470,31 @@ export function initDrawTool({
       });
     });
 
+    panelEl.querySelectorAll('.draw-color-swatch').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDrawColor(btn.dataset.color);
+      });
+    });
+
     panelEl.addEventListener('click', (e) => e.stopPropagation());
+    refreshColorActive();
     return panelEl;
   }
 
   function refreshPanelActive() {
     if (!panelEl) return;
     panelEl.querySelectorAll('.draw-mode-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.mode === activeMode);
       btn.classList.toggle('is-active', btn.dataset.mode === activeMode);
+    });
+  }
+
+  function refreshColorActive() {
+    if (!panelEl) return;
+    panelEl.querySelectorAll('.draw-color-swatch').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.color === drawColor);
     });
   }
 
@@ -423,6 +544,7 @@ export function initDrawTool({
     notifyActivate();
     setCursor(true);
     refreshPanelActive();
+    refreshColorActive();
   }
 
   function togglePanel() {
@@ -455,10 +577,22 @@ export function initDrawTool({
         const ll = menuLatLng;
         closeMapMenu();
         suppressMapClickUntil = Date.now() + 250;
-        if (ll && mode) startModeAt(mode, ll);
+        if (!ll || !mode) return;
+        if (mode === 'freehand') {
+          activeMode = 'freehand';
+          refreshPanelActive();
+          notifyActivate();
+          setCursor(true);
+          return;
+        }
+        startModeAt(mode, ll);
       });
     });
     menuEl.addEventListener('click', (e) => e.stopPropagation());
+    menuEl.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
     document.body.appendChild(menuEl);
     return menuEl;
   }
@@ -476,9 +610,8 @@ export function initDrawTool({
     const x = mapRect.left + containerPoint.x;
     const y = mapRect.top + containerPoint.y;
     menuEl.style.left = `${Math.min(window.innerWidth - 180, Math.max(8, x))}px`;
-    menuEl.style.top = `${Math.min(window.innerHeight - 220, Math.max(8, y))}px`;
+    menuEl.style.top = `${Math.min(window.innerHeight - 260, Math.max(8, y))}px`;
     menuEl.classList.add('open');
-    // Same gesture opens the menu; ignore the bubbling document click that would close it.
     ignoreDocClickUntil = Date.now() + 350;
   }
 
@@ -494,16 +627,17 @@ export function initDrawTool({
         /* ignore */
       }
     }
-    // Prevent toolbar outside-click from closing the draw panel on the same gesture.
     ignoreDocClickUntil = Date.now() + 350;
   }
 
   function onMapClick(e) {
     if (Date.now() < suppressMapClickUntil) return;
-    // Only handle when draw tool is engaged (panel open, mode selected, or drafting).
     if (!isArmed() && !isOpen()) return;
+    // Freehand is hold-to-draw; ignore click placement.
+    if (activeMode === 'freehand' && !drafting) return;
 
     if (drafting) {
+      if (drafting.mode === 'freehand') return;
       stopMapGesture(e);
       continueDraftAt(e.latlng);
       return;
@@ -512,21 +646,23 @@ export function initDrawTool({
     if (activeMode) {
       stopMapGesture(e);
       startModeAt(activeMode, e.latlng);
+    }
+  }
+
+  function onMapContextMenu(e) {
+    if (!isOpen() && !activeMode && !drafting) return;
+    if (drafting) {
+      stopMapGesture(e);
       return;
     }
-
-    // Draw tool active (panel open) but no mode — show picker at click.
-    if (isOpen()) {
-      stopMapGesture(e);
-      openMapMenu(e.latlng, e.containerPoint);
-    }
+    stopMapGesture(e);
+    openMapMenu(e.latlng, e.containerPoint);
   }
 
   function onMapDblClick(e) {
     if (!drafting) return;
     if (drafting.mode === 'line' || drafting.mode === 'polygon') {
       stopMapGesture(e);
-      // Remove accidental extra vertex from the second click of the dblclick.
       if (drafting.points.length > 1) {
         drafting.points.pop();
         const last = vertexMarkers.pop();
@@ -538,7 +674,38 @@ export function initDrawTool({
 
   function onMapMouseMove(e) {
     if (!drafting) return;
+    if (drafting.mode === 'freehand') {
+      const last = drafting.points[drafting.points.length - 1];
+      if (last && map.distance(last, e.latlng) < 2) return;
+      drafting.points.push(e.latlng);
+      updatePreview(e.latlng);
+      return;
+    }
     updatePreview(e.latlng);
+  }
+
+  function onMapMouseDown(e) {
+    if (activeMode !== 'freehand') return;
+    if (e.originalEvent && e.originalEvent.button !== 0) return;
+    if (drafting) return;
+    stopMapGesture(e);
+    notifyActivate();
+    mapDraggingWasEnabled = map.dragging.enabled();
+    try {
+      map.dragging.disable();
+    } catch (_) {
+      /* ignore */
+    }
+    drafting = { mode: 'freehand', points: [e.latlng] };
+    setDraftInteractions(true);
+    updatePreview(e.latlng);
+  }
+
+  function onMapMouseUp(e) {
+    if (!drafting || drafting.mode !== 'freehand') return;
+    stopMapGesture(e);
+    finishDraft();
+    restoreMapDragging();
   }
 
   function onKeyDown(e) {
@@ -561,15 +728,31 @@ export function initDrawTool({
     }
     if (!panelEl?.classList.contains('open')) return;
     if (panelEl.contains(e.target) || btnEl?.contains(e.target)) return;
-    // Keep draw session if a mode is selected; only close the panel chrome.
     closePanel();
   }
 
+  function onDocContextMenu(e) {
+    if (menuEl?.classList.contains('open') && !menuEl.contains(e.target)) {
+      closeMapMenu();
+    }
+  }
+
   map.on('click', onMapClick);
+  map.on('contextmenu', onMapContextMenu);
   map.on('dblclick', onMapDblClick);
   map.on('mousemove', onMapMouseMove);
+  map.on('mousedown', onMapMouseDown);
+  map.on('mouseup', onMapMouseUp);
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('click', onDocClick);
+  document.addEventListener('contextmenu', onDocContextMenu);
+
+  // If the pointer is released outside the map while freehanding, still finish.
+  document.addEventListener('mouseup', (e) => {
+    if (!drafting || drafting.mode !== 'freehand') return;
+    finishDraft();
+    restoreMapDragging();
+  });
 
   function deactivate() {
     cancelDraft();

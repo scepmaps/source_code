@@ -198,31 +198,46 @@
   display: none !important;
 }
 
-/* ---- Draw tool panel (desktop) ---- */
+/* ---- Draw tool panel (desktop) — same grid language as Maps / Overlays ---- */
 .draw-panel {
-  min-width: 220px;
-  max-width: min(280px, calc(100vw - 24px));
-  padding: 10px 10px 8px !important;
-  gap: 8px;
-  display: none;
-  flex-direction: column;
-  align-items: stretch !important;
-  grid-template-columns: none !important;
+  width: min(300px, calc(100vw - 96px));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-.draw-panel.open {
-  display: flex !important;
-}
-.draw-panel-header {
+.draw-panel-footer {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding: 4px 2px 0;
+  border-top: 1px solid rgba(77, 226, 255, 0.12);
+  margin-top: 2px;
 }
-.draw-panel-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--text);
+.draw-color-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.draw-color-swatch {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  background: var(--swatch, #4de2ff);
+  cursor: pointer;
+  padding: 0;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25) inset;
+}
+.draw-color-swatch:hover {
+  transform: scale(1.12);
+}
+.draw-color-swatch.is-active {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(77, 226, 255, 0.65);
 }
 .draw-panel-clear {
   appearance: none;
@@ -234,52 +249,17 @@
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  flex: 0 0 auto;
 }
 .draw-panel-clear:hover {
   background: rgba(255, 77, 109, 0.22);
   color: #ff4d6d;
 }
-.draw-panel-modes {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.draw-mode-btn {
-  appearance: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(77, 226, 255, 0.12);
-  background: rgba(10, 18, 42, 0.45);
-  color: var(--text);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: left;
-}
-.draw-mode-btn svg {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-  opacity: 0.85;
-}
-.draw-mode-btn:hover {
-  border-color: rgba(77, 226, 255, 0.28);
-  background: rgba(77, 226, 255, 0.1);
-  color: var(--accent);
-}
-.draw-mode-btn.is-active {
-  border-color: rgba(77, 226, 255, 0.5);
-  background: rgba(77, 226, 255, 0.16);
-  color: var(--accent);
-}
 .draw-panel-hint {
+  grid-column: 1 / -1;
   font-size: 10px;
   color: rgba(215, 227, 255, 0.5);
-  padding: 2px 4px 0;
+  padding: 0 2px 2px;
   line-height: 1.35;
 }
 
