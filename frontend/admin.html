@@ -94,7 +94,10 @@
       }
 
       .stats {
-        display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;
+        display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px;
+      }
+      @media (max-width: 900px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
       }
       .stat-card {
         background: var(--card); border: 1px solid var(--stroke); border-radius: 8px;
@@ -102,6 +105,194 @@
       }
       .stat-number { font-size: 24px; font-weight: 600; color: var(--accent); }
       .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+      .access-requests-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        margin-top: 16px;
+      }
+      .access-request-card {
+        background: var(--bg-2);
+        border: 1px solid var(--stroke);
+        border-radius: 12px;
+        padding: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .ar-top {
+        padding: 16px 18px 14px;
+        border-bottom: 1px solid var(--stroke);
+        background: rgba(15, 26, 57, 0.55);
+      }
+      .ar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+      .ar-identity { min-width: 0; }
+      .ar-title {
+        font-weight: 600;
+        font-size: 16px;
+        line-height: 1.3;
+        word-break: break-word;
+      }
+      .ar-company {
+        font-size: 13px;
+        color: var(--accent);
+        font-weight: 500;
+        margin-top: 2px;
+      }
+      .ar-meta {
+        flex: 0 0 auto;
+        font-size: 12px;
+        color: var(--muted);
+        white-space: nowrap;
+        padding-top: 2px;
+      }
+      .ar-section-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 8px;
+      }
+      .feature-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .feature-tag {
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 500;
+        background: rgba(77, 226, 255, 0.12);
+        color: var(--accent);
+        border: 1px solid rgba(77, 226, 255, 0.25);
+      }
+      .ar-notes {
+        margin-top: 10px;
+        display: grid;
+        gap: 6px;
+      }
+      .ar-note {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+      .ar-note strong { color: var(--text); font-weight: 600; }
+
+      .ar-body {
+        padding: 16px 18px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .ar-fields {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+      @media (max-width: 900px) {
+        .ar-fields { grid-template-columns: 1fr 1fr; }
+      }
+      @media (max-width: 560px) {
+        .ar-fields { grid-template-columns: 1fr; }
+        .ar-header { flex-direction: column; gap: 4px; }
+        .ar-meta { white-space: normal; }
+      }
+      .access-request-card .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .access-request-card .form-group > label,
+      .access-request-card .ar-field-label {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .access-request-card input,
+      .access-request-card select {
+        width: 100%;
+        padding: 9px 11px;
+        font-size: 13px;
+      }
+      .password-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: stretch;
+      }
+      .password-row .btn {
+        padding: 0 12px;
+        min-width: 42px;
+        justify-content: center;
+      }
+      .ar-inline-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 38px;
+        padding: 0 2px;
+        font-size: 13px;
+        color: var(--text);
+        cursor: pointer;
+        user-select: none;
+      }
+      .ar-inline-check input {
+        width: auto;
+        margin: 0;
+        accent-color: var(--accent);
+      }
+      .ar-perms {
+        display: grid;
+        gap: 12px;
+      }
+      .access-request-card .checkbox-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 4px;
+        padding: 10px;
+        grid-template-columns: unset;
+      }
+      .access-request-card .checkbox-item {
+        flex: 0 0 auto;
+        font-size: 12px;
+        padding: 4px 8px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: rgba(11, 16, 32, 0.35);
+      }
+      .access-request-card .checkbox-item:has(input:checked) {
+        border-color: rgba(77, 226, 255, 0.35);
+        background: rgba(77, 226, 255, 0.08);
+      }
+      .ar-limits {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        max-width: 420px;
+      }
+      .ar-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding-top: 4px;
+        border-top: 1px solid var(--stroke);
+        margin-top: 2px;
+      }
+      .ar-actions .btn {
+        min-width: 120px;
+        justify-content: center;
+      }
 
       .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
       .form-actions { display: flex; gap: 12px; }
@@ -239,6 +430,10 @@
         <div class="stat-card">
           <div class="stat-number" id="totalExports">0</div>
           <div class="stat-label">Total Exports</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="pendingRequests">0</div>
+          <div class="stat-label">Pending Requests</div>
         </div>
       </div>
 
@@ -400,6 +595,17 @@
         <h3>📊 System Analytics</h3>
         <div id="systemAnalytics" class="analytics-grid">
           Loading analytics...
+        </div>
+      </div>
+
+      <!-- Access requests awaiting validation -->
+      <div class="card" style="margin-top: 24px;">
+        <h3>📬 Access Requests</h3>
+        <p style="margin: 0; color: var(--muted); font-size: 13px;">
+          Incoming requests are pre-filled from the form. Adjust permissions, set a password, then Validate to create the user.
+        </p>
+        <div id="accessRequestsGrid" class="access-requests-grid">
+          <div class="empty-state">Loading access requests...</div>
         </div>
       </div>
     </div>
@@ -735,6 +941,360 @@
         document.getElementById('totalExports').textContent = users.reduce((sum, u) => sum + (u.count_total || 0), 0);
       };
 
+      const BASE_MAP_OPTIONS = [
+        ['osm', 'OpenStreetMap'],
+        ['dark', 'OSM Dark'],
+        ['esri', 'Satellite'],
+        ['topo', 'Topographic'],
+        ['navigation', 'Navigation'],
+        ['night', 'Night'],
+        ['ocean', 'Ocean'],
+        ['shom', 'SHOM'],
+        ['ukho', 'UKHO'],
+        ['gbsouth', 'GB South'],
+      ];
+      const OVERLAY_OPTIONS = [
+        ['seamarks', 'Seamarks'],
+        ['openaip', 'Air Space'],
+        ['density', 'Density'],
+        ['label', 'Names'],
+        ['history', 'History'],
+      ];
+      const TOOL_OPTIONS = [
+        ['hgt', 'HGT'],
+      ];
+
+      const generatePassword = (length = 12) => {
+        const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@$%';
+        const bytes = new Uint8Array(length);
+        crypto.getRandomValues(bytes);
+        return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
+      };
+
+      const formatRequestDate = (ts) => {
+        if (!ts) return '';
+        try {
+          return new Date(Number(ts) * 1000).toLocaleString();
+        } catch (_) {
+          return String(ts);
+        }
+      };
+
+      const makeField = (labelText, control) => {
+        const group = document.createElement('div');
+        group.className = 'form-group';
+        const label = document.createElement('label');
+        label.className = 'ar-field-label';
+        label.textContent = labelText;
+        group.append(label, control);
+        return group;
+      };
+
+      const makeCheckboxGroup = (options, selected, namePrefix) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'checkbox-group';
+        const selectedSet = new Set(Array.isArray(selected) ? selected : []);
+        options.forEach(([value, label]) => {
+          const item = document.createElement('label');
+          item.className = 'checkbox-item';
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.value = value;
+          input.dataset.field = namePrefix;
+          input.checked = selectedSet.has(value);
+          item.appendChild(input);
+          item.appendChild(document.createTextNode(' ' + label));
+          wrap.appendChild(item);
+        });
+        return wrap;
+      };
+
+      const collectCardPayload = (card) => {
+        const checked = (field) =>
+          Array.from(card.querySelectorAll(`input[data-field="${field}"]:checked`)).map((el) => el.value);
+        const bases = checked('bases');
+        return {
+          name: card.querySelector('[data-role="name"]').value.trim(),
+          email: card.querySelector('[data-role="email"]').value.trim().toLowerCase(),
+          password: card.querySelector('[data-role="password"]').value,
+          is_admin: card.querySelector('[data-role="role"]').value === 'admin',
+          fun: card.querySelector('[data-role="fun"]').checked,
+          allowed_bases: bases.length ? bases : null,
+          allowed_overlays: checked('overlays'),
+          allowed_tools: checked('tools'),
+          limit_day: Number(card.querySelector('[data-role="limit-day"]').value || -1),
+          limit_week: Number(card.querySelector('[data-role="limit-week"]').value || -1),
+          limit_month: Number(card.querySelector('[data-role="limit-month"]').value || -1),
+        };
+      };
+
+      const renderAccessRequestCard = (req) => {
+        const card = document.createElement('div');
+        card.className = 'access-request-card';
+        card.dataset.id = String(req.id);
+
+        // --- Request summary (read-only) ---
+        const top = document.createElement('div');
+        top.className = 'ar-top';
+
+        const header = document.createElement('div');
+        header.className = 'ar-header';
+        const identity = document.createElement('div');
+        identity.className = 'ar-identity';
+        const title = document.createElement('div');
+        title.className = 'ar-title';
+        title.textContent = req.name || 'Unnamed requester';
+        const company = document.createElement('div');
+        company.className = 'ar-company';
+        company.textContent = req.company || '—';
+        identity.append(title, company);
+        const meta = document.createElement('div');
+        meta.className = 'ar-meta';
+        meta.textContent = formatRequestDate(req.created_at);
+        header.append(identity, meta);
+        top.appendChild(header);
+
+        const reqLabel = document.createElement('span');
+        reqLabel.className = 'ar-section-label';
+        reqLabel.textContent = 'Requested features';
+        top.appendChild(reqLabel);
+
+        const tags = document.createElement('div');
+        tags.className = 'feature-tags';
+        const featureList = (req.features && req.features.length) ? req.features : ['Custom request'];
+        featureList.forEach((f) => {
+          const tag = document.createElement('span');
+          tag.className = 'feature-tag';
+          tag.textContent = f;
+          tags.appendChild(tag);
+        });
+        top.appendChild(tags);
+
+        const other = (req.other_features || '').trim();
+        const message = (req.message || '').trim();
+        if (other || message) {
+          const notes = document.createElement('div');
+          notes.className = 'ar-notes';
+          if (other) {
+            const line = document.createElement('div');
+            line.className = 'ar-note';
+            const strong = document.createElement('strong');
+            strong.textContent = 'Other needs: ';
+            line.append(strong, document.createTextNode(other));
+            notes.appendChild(line);
+          }
+          if (message) {
+            const line = document.createElement('div');
+            line.className = 'ar-note';
+            const strong = document.createElement('strong');
+            strong.textContent = 'Message: ';
+            line.append(strong, document.createTextNode(message));
+            notes.appendChild(line);
+          }
+          top.appendChild(notes);
+        }
+        card.appendChild(top);
+
+        // --- Editable account setup ---
+        const body = document.createElement('div');
+        body.className = 'ar-body';
+
+        const createLabel = document.createElement('span');
+        createLabel.className = 'ar-section-label';
+        createLabel.textContent = 'Create user';
+        body.appendChild(createLabel);
+
+        const fields = document.createElement('div');
+        fields.className = 'ar-fields';
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.dataset.role = 'name';
+        nameInput.value = req.draft_name || req.name || '';
+        fields.appendChild(makeField('Name', nameInput));
+
+        const emailInput = document.createElement('input');
+        emailInput.type = 'email';
+        emailInput.dataset.role = 'email';
+        emailInput.value = req.draft_email || req.email || '';
+        fields.appendChild(makeField('Email', emailInput));
+
+        const pwRow = document.createElement('div');
+        pwRow.className = 'password-row';
+        const pwInput = document.createElement('input');
+        pwInput.type = 'text';
+        pwInput.dataset.role = 'password';
+        pwInput.value = generatePassword();
+        pwInput.autocomplete = 'new-password';
+        const genBtn = document.createElement('button');
+        genBtn.type = 'button';
+        genBtn.className = 'btn';
+        genBtn.textContent = '↻';
+        genBtn.title = 'Generate password';
+        genBtn.addEventListener('click', () => { pwInput.value = generatePassword(); });
+        pwRow.append(pwInput, genBtn);
+        fields.appendChild(makeField('Password', pwRow));
+
+        const roleSelect = document.createElement('select');
+        roleSelect.dataset.role = 'role';
+        roleSelect.innerHTML = '<option value="user">Regular User</option><option value="admin">Administrator</option>';
+        roleSelect.value = req.draft_is_admin ? 'admin' : 'user';
+        fields.appendChild(makeField('Role', roleSelect));
+
+        body.appendChild(fields);
+
+        const funLabel = document.createElement('label');
+        funLabel.className = 'ar-inline-check';
+        const funInput = document.createElement('input');
+        funInput.type = 'checkbox';
+        funInput.dataset.role = 'fun';
+        funInput.checked = !!req.draft_fun;
+        funLabel.append(funInput, document.createTextNode('Enable Fun mode (PAMERKUF branding)'));
+        body.appendChild(funLabel);
+
+        const perms = document.createElement('div');
+        perms.className = 'ar-perms';
+
+        const basesBlock = document.createElement('div');
+        basesBlock.className = 'form-group';
+        const basesLabel = document.createElement('span');
+        basesLabel.className = 'ar-field-label';
+        basesLabel.textContent = 'Base maps';
+        basesBlock.append(basesLabel, makeCheckboxGroup(BASE_MAP_OPTIONS, req.draft_allowed_bases || [], 'bases'));
+        perms.appendChild(basesBlock);
+
+        const overlaysBlock = document.createElement('div');
+        overlaysBlock.className = 'form-group';
+        const overlaysLabel = document.createElement('span');
+        overlaysLabel.className = 'ar-field-label';
+        overlaysLabel.textContent = 'Overlays & tools';
+        const overlayGroup = makeCheckboxGroup(OVERLAY_OPTIONS, req.draft_allowed_overlays || [], 'overlays');
+        const toolsGroup = makeCheckboxGroup(TOOL_OPTIONS, req.draft_allowed_tools || [], 'tools');
+        // Merge tool chips into the same row visually
+        Array.from(toolsGroup.children).forEach((child) => overlayGroup.appendChild(child));
+        overlaysBlock.append(overlaysLabel, overlayGroup);
+        perms.appendChild(overlaysBlock);
+        body.appendChild(perms);
+
+        const limitsBlock = document.createElement('div');
+        limitsBlock.className = 'form-group';
+        const limitsLabel = document.createElement('span');
+        limitsLabel.className = 'ar-field-label';
+        limitsLabel.textContent = 'Export limits (-1 = unlimited)';
+        const limitsRow = document.createElement('div');
+        limitsRow.className = 'ar-limits';
+        ;[
+          ['day', 'Daily'],
+          ['week', 'Weekly'],
+          ['month', 'Monthly'],
+        ].forEach(([key, label]) => {
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.min = '-1';
+          input.dataset.role = `limit-${key}`;
+          input.value = String(req[`draft_limit_${key}`] ?? -1);
+          limitsRow.appendChild(makeField(label, input));
+        });
+        limitsBlock.append(limitsLabel, limitsRow);
+        body.appendChild(limitsBlock);
+
+        const actions = document.createElement('div');
+        actions.className = 'ar-actions';
+        const dismissBtn = document.createElement('button');
+        dismissBtn.type = 'button';
+        dismissBtn.className = 'btn danger';
+        dismissBtn.textContent = 'Dismiss';
+        dismissBtn.addEventListener('click', () => dismissAccessRequest(req.id, req.email));
+        const validateBtn = document.createElement('button');
+        validateBtn.type = 'button';
+        validateBtn.className = 'btn success';
+        validateBtn.textContent = 'Validate';
+        validateBtn.addEventListener('click', () => validateAccessRequest(card, req.id));
+        actions.append(dismissBtn, validateBtn);
+        body.appendChild(actions);
+
+        card.appendChild(body);
+        return card;
+      };
+
+      const loadAccessRequests = async () => {
+        const grid = document.getElementById('accessRequestsGrid');
+        try {
+          const res = await fetch(`${API}/admin/access-requests?status=pending`, { headers: getAuthHeaders() });
+          if (!res.ok) {
+            if (res.status === 401) return logout();
+            throw new Error('Failed to load access requests');
+          }
+          const data = await res.json();
+          const items = data.requests || [];
+          document.getElementById('pendingRequests').textContent = data.pending_count ?? items.length;
+          grid.innerHTML = '';
+          if (!items.length) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = 'No pending access requests.';
+            grid.appendChild(empty);
+            return;
+          }
+          items.forEach((req) => grid.appendChild(renderAccessRequestCard(req)));
+        } catch (error) {
+          grid.innerHTML = '';
+          const empty = document.createElement('div');
+          empty.className = 'empty-state';
+          empty.textContent = 'Could not load access requests.';
+          grid.appendChild(empty);
+          console.error(error);
+        }
+      };
+
+      const validateAccessRequest = async (card, requestId) => {
+        const payload = collectCardPayload(card);
+        if (!payload.email || !payload.name) {
+          showAlert('Name and email are required', 'error');
+          return;
+        }
+        if (!payload.password || payload.password.length < 6) {
+          showAlert('Password must be at least 6 characters', 'error');
+          return;
+        }
+        if (!confirm(`Create user ${payload.email} from this access request?`)) return;
+        setLoading(true);
+        try {
+          const res = await fetch(`${API}/admin/access-requests/${requestId}/validate`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Failed to validate request');
+          showAlert(`User created: ${payload.email}`);
+          await Promise.all([loadAccessRequests(), loadUsers()]);
+        } catch (error) {
+          showAlert(error.message, 'error');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const dismissAccessRequest = async (requestId, email) => {
+        if (!confirm(`Dismiss access request for ${email || 'this user'}?`)) return;
+        setLoading(true);
+        try {
+          const res = await fetch(`${API}/admin/access-requests/${requestId}/dismiss`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Failed to dismiss request');
+          showAlert('Access request dismissed');
+          await loadAccessRequests();
+        } catch (error) {
+          showAlert(error.message, 'error');
+        } finally {
+          setLoading(false);
+        }
+      };
+
       // Event listeners
       document.getElementById('userForm').addEventListener('submit', (e) => {
         e.preventDefault();
@@ -1011,6 +1571,7 @@
           // User is authenticated and is admin, load data
           loadUsers();
           loadSystemAnalytics();
+          loadAccessRequests();
 
           // Sliding JWT refresh — Bearer token in localStorage only (no cookies)
           setInterval(async () => {
@@ -1040,6 +1601,7 @@
           // Try to load with cached credentials
           loadUsers();
           loadSystemAnalytics();
+          loadAccessRequests();
         }
       })();
     </script>

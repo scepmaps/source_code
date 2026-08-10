@@ -19,26 +19,33 @@ import requests
 from auth import extract_bearer_token, hash_password, mint_token_for_user, verify_password, verify_token
 from db import (
     count_exports_since,
+    count_pending_access_requests,
     count_user_kml,
+    create_access_request,
     create_user,
     create_user_kml,
     delete_user,
     delete_user_kml,
     ensure_default_admin,
+    get_access_request,
     get_all_export_stats,
     get_user_by_email,
     get_user_by_id,
     get_user_export_stats,
     get_user_kml,
     init_db,
+    list_access_requests,
     list_user_kml,
     list_users,
+    mark_access_request_approved,
+    mark_access_request_dismissed,
     MAX_KML_BYTES,
     MAX_KML_PER_USER,
     MAX_KML_STORAGE_BYTES,
     release_export_quota,
     reserve_export_quota,
     sum_user_kml_bytes,
+    update_access_request_draft,
     update_user,
     update_user_kml,
 )
@@ -2595,6 +2602,63 @@ _ALLOWED_ACCESS_FEATURES = frozenset(
     }
 )
 
+_FEATURE_PERMISSION_MAP = {
+    "Map export (GeoTIFF)": {"bases": ["osm", "dark", "esri"]},
+    "HGT elevation export": {"bases": ["osm", "dark"], "tools": ["hgt"]},
+    "Satellite / imagery basemaps": {"bases": ["esri", "osm", "dark"]},
+    "Topo / navigation basemaps": {
+        "bases": ["topo", "navigation", "night", "ocean", "osm", "dark"]
+    },
+    "Nautical charts (SHOM / UKHO)": {"bases": ["shom", "ukho", "osm", "dark"]},
+    "Aviation overlays (OpenAIP / GB South)": {
+        "bases": ["gbsouth", "osm", "dark"],
+        "overlays": ["openaip"],
+    },
+    "Seamarks / density / history overlays": {
+        "overlays": ["seamarks", "density", "history", "label"]
+    },
+    "Draw & KML tools": {},
+    "Mobile access": {},
+    "Admin / multi-user workspace": {"is_admin": True},
+}
+
+
+def _drafts_from_requested_features(features: list[str]) -> dict:
+    """Map requested feature labels → create_user permission drafts."""
+    bases: list[str] = []
+    overlays: list[str] = []
+    tools: list[str] = []
+    is_admin = False
+
+    for label in features or []:
+        mapping = _FEATURE_PERMISSION_MAP.get(label) or {}
+        for b in mapping.get("bases") or []:
+            if b not in bases:
+                bases.append(b)
+        for o in mapping.get("overlays") or []:
+            if o not in overlays:
+                overlays.append(o)
+        for t in mapping.get("tools") or []:
+            if t not in tools:
+                tools.append(t)
+        if mapping.get("is_admin"):
+            is_admin = True
+
+    # Conservative fallback when only free-text needs were provided.
+    if not bases:
+        bases = ["osm", "dark"]
+
+    # Keep OSM Dark next to OSM when OSM is present.
+    if "osm" in bases and "dark" not in bases:
+        bases.insert(bases.index("osm") + 1, "dark")
+
+    return {
+        "draft_is_admin": is_admin,
+        "draft_allowed_bases": bases,
+        "draft_allowed_overlays": overlays,
+        "draft_allowed_tools": tools,
+    }
+
 
 def _client_ip() -> str:
     # ProxyFix already folds X-Forwarded-For into request.remote_addr when trusted.
@@ -2687,9 +2751,27 @@ def request_access():
     if not access_request_limiter.allow(f"email:{email}:1h", limit=3, window_seconds=3600):
         return jsonify({"error": "Too many requests for this email. Please try again later."}), 429
 
-    if not smtp_configured():
-        logger.error("[request-access] SMTP is not configured")
-        return jsonify({"error": "Access requests are temporarily unavailable. Please try again later."}), 503
+    drafts = _drafts_from_requested_features(features)
+    try:
+        request_id = create_access_request(
+            name=name,
+            company=company,
+            email=email,
+            features=features,
+            other_features=other_features,
+            message=message,
+            ip=ip,
+            draft_name=name,
+            draft_email=email,
+            draft_is_admin=drafts["draft_is_admin"],
+            draft_fun=False,
+            draft_allowed_bases=drafts["draft_allowed_bases"],
+            draft_allowed_overlays=drafts["draft_allowed_overlays"],
+            draft_allowed_tools=drafts["draft_allowed_tools"],
+        )
+    except Exception:
+        logger.exception("[request-access] failed to persist access request")
+        return jsonify({"error": "Could not save your request. Please try again later."}), 500
 
     date_str = time.strftime("%Y-%m-%d", time.gmtime())
     subject = f"Access request {date_str}"
@@ -2698,24 +2780,38 @@ def request_access():
         f"New SCEPMAPS access request\n"
         f"===========================\n\n"
         f"Date (UTC): {time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())}\n"
-        f"IP: {ip}\n\n"
+        f"IP: {ip}\n"
+        f"Request ID: {request_id}\n\n"
         f"Name: {name}\n"
         f"Company: {company}\n"
         f"Professional email: {email}\n\n"
         f"Requested features:\n{feature_lines}\n\n"
         f"Other needs:\n{other_features or '(none)'}\n\n"
-        f"Message:\n{message or '(none)'}\n"
+        f"Message:\n{message or '(none)'}\n\n"
+        f"Review in Admin → Access requests.\n"
     )
 
-    try:
-        send_access_request_email(subject=subject, body_text=body, reply_to=email)
-    except ValueError:
-        return jsonify({"error": "Please provide a valid professional email address."}), 400
-    except RuntimeError:
-        return jsonify({"error": "Could not send your request. Please try again later."}), 502
+    email_ok = True
+    if smtp_configured():
+        try:
+            send_access_request_email(subject=subject, body_text=body, reply_to=email)
+        except Exception:
+            email_ok = False
+            logger.exception("[request-access] email failed after DB save id=%s", request_id)
+    else:
+        email_ok = False
+        logger.error("[request-access] SMTP not configured; request %s saved for admin review", request_id)
 
-    logger.info("[request-access] sent name=%r company=%r email=%s ip=%s", name, company, email, ip)
-    return jsonify({"ok": True, "message": "Request sent. We will contact you soon."})
+    logger.info(
+        "[request-access] saved id=%s name=%r company=%r email=%s ip=%s email_ok=%s",
+        request_id,
+        name,
+        company,
+        email,
+        ip,
+        email_ok,
+    )
+    return jsonify({"ok": True, "message": "Request sent. We will contact you soon.", "id": request_id})
 
 
 @app.get("/auth/me")
@@ -3266,6 +3362,172 @@ def admin_delete_user(user_id: int):
         return ({"error": "Unauthorized"}, 401)
     activity.enrich(user=admin, admin_action="delete_user", target_user_id=user_id)
     delete_user(user_id)
+    return {"ok": True}
+
+
+@app.get("/admin/access-requests")
+def admin_list_access_requests():
+    admin = _require_admin(request)
+    if not admin:
+        return ({"error": "Unauthorized"}, 401)
+    status = (request.args.get("status") or "pending").strip().lower()
+    if status in {"", "all"}:
+        status = None
+    elif status not in {"pending", "approved", "dismissed"}:
+        return ({"error": "Invalid status"}, 400)
+    activity.enrich(user=admin, admin_action="list_access_requests")
+    items = list_access_requests(status=status)
+    return {
+        "requests": items,
+        "pending_count": count_pending_access_requests(),
+    }
+
+
+@app.put("/admin/access-requests/<int:request_id>")
+def admin_update_access_request(request_id: int):
+    admin = _require_admin(request)
+    if not admin:
+        return ({"error": "Unauthorized"}, 401)
+    activity.enrich(user=admin, admin_action="update_access_request", target_user_id=request_id)
+    existing = get_access_request(request_id)
+    if not existing or existing.get("status") != "pending":
+        return ({"error": "Request not found"}, 404)
+
+    data = request.get_json(force=True) or {}
+    draft_name = sanitize_header(str(data.get("name") or data.get("draft_name") or existing["draft_name"]), 120)
+    draft_email = sanitize_header(str(data.get("email") or data.get("draft_email") or existing["draft_email"]), 254).lower()
+    if not draft_name or not draft_email or not is_valid_email(draft_email):
+        return ({"error": "Valid name and email are required"}, 400)
+
+    allowed_bases = data.get("allowed_bases", data.get("draft_allowed_bases", existing["draft_allowed_bases"]))
+    allowed_overlays = data.get("allowed_overlays", data.get("draft_allowed_overlays", existing["draft_allowed_overlays"]))
+    allowed_tools = data.get("allowed_tools", data.get("draft_allowed_tools", existing["draft_allowed_tools"]))
+    if allowed_bases is not None and not isinstance(allowed_bases, list):
+        return ({"error": "allowed_bases must be a list or null"}, 400)
+    if not isinstance(allowed_overlays, list):
+        allowed_overlays = []
+    if not isinstance(allowed_tools, list):
+        allowed_tools = []
+
+    updated = update_access_request_draft(
+        request_id,
+        draft_name=draft_name,
+        draft_email=draft_email,
+        draft_is_admin=bool(data.get("is_admin", data.get("draft_is_admin", existing["draft_is_admin"]))),
+        draft_fun=bool(data.get("fun", data.get("draft_fun", existing["draft_fun"]))),
+        draft_allowed_bases=allowed_bases,
+        draft_allowed_overlays=allowed_overlays,
+        draft_allowed_tools=allowed_tools,
+        draft_limit_day=int(data.get("limit_day", data.get("draft_limit_day", existing["draft_limit_day"]))),
+        draft_limit_week=int(data.get("limit_week", data.get("draft_limit_week", existing["draft_limit_week"]))),
+        draft_limit_month=int(data.get("limit_month", data.get("draft_limit_month", existing["draft_limit_month"]))),
+    )
+    if not updated:
+        return ({"error": "Request not found"}, 404)
+    return {"ok": True, "request": updated}
+
+
+@app.post("/admin/access-requests/<int:request_id>/validate")
+def admin_validate_access_request(request_id: int):
+    admin = _require_admin(request)
+    if not admin:
+        return ({"error": "Unauthorized"}, 401)
+    activity.enrich(user=admin, admin_action="validate_access_request", target_user_id=request_id)
+
+    existing = get_access_request(request_id)
+    if not existing or existing.get("status") != "pending":
+        return ({"error": "Request not found"}, 404)
+
+    data = request.get_json(force=True) or {}
+    password = str(data.get("password") or "")
+    if not password or len(password) < 6:
+        return ({"error": "Password must be at least 6 characters"}, 400)
+
+    name = sanitize_header(str(data.get("name") or existing["draft_name"] or existing["name"]), 120)
+    email = sanitize_header(str(data.get("email") or existing["draft_email"] or existing["email"]), 254).lower()
+    if not name or not email or not is_valid_email(email):
+        return ({"error": "Valid name and email are required"}, 400)
+
+    is_admin = bool(data.get("is_admin", existing["draft_is_admin"]))
+    fun = bool(data.get("fun", existing["draft_fun"]))
+
+    if "allowed_bases" in data:
+        allowed_bases = data.get("allowed_bases")
+    else:
+        allowed_bases = existing["draft_allowed_bases"]
+    if "allowed_overlays" in data:
+        allowed_overlays = data.get("allowed_overlays")
+    else:
+        allowed_overlays = existing["draft_allowed_overlays"]
+    if "allowed_tools" in data:
+        allowed_tools = data.get("allowed_tools")
+    else:
+        allowed_tools = existing["draft_allowed_tools"]
+
+    if allowed_bases is not None and not isinstance(allowed_bases, list):
+        return ({"error": "allowed_bases must be a list or null"}, 400)
+    if not isinstance(allowed_overlays, list):
+        allowed_overlays = []
+    if not isinstance(allowed_tools, list):
+        allowed_tools = []
+
+    limit_day = int(data.get("limit_day", existing["draft_limit_day"]))
+    limit_week = int(data.get("limit_week", existing["draft_limit_week"]))
+    limit_month = int(data.get("limit_month", existing["draft_limit_month"]))
+
+    # Persist draft so a failed create still keeps admin edits.
+    update_access_request_draft(
+        request_id,
+        draft_name=name,
+        draft_email=email,
+        draft_is_admin=is_admin,
+        draft_fun=fun,
+        draft_allowed_bases=allowed_bases,
+        draft_allowed_overlays=allowed_overlays,
+        draft_allowed_tools=allowed_tools,
+        draft_limit_day=limit_day,
+        draft_limit_week=limit_week,
+        draft_limit_month=limit_month,
+    )
+
+    try:
+        uid = create_user(
+            email,
+            name,
+            hash_password(password),
+            is_admin,
+            allowed_bases,
+            allowed_overlays,
+            allowed_tools,
+            limit_day,
+            limit_week,
+            limit_month,
+        )
+    except sqlite3.IntegrityError:
+        return ({"error": "Email already exists"}, 409)
+
+    if fun:
+        update_user(uid, fun=True)
+
+    if not mark_access_request_approved(request_id, admin_id=int(admin["id"]), created_user_id=uid):
+        # User was created; request may have raced. Still report success.
+        logger.warning("[access-request] user %s created but request %s status update failed", uid, request_id)
+
+    activity.enrich(target_email=email, target_new_id=uid, target_is_admin=is_admin)
+    return {"ok": True, "id": uid, "email": email}
+
+
+@app.post("/admin/access-requests/<int:request_id>/dismiss")
+def admin_dismiss_access_request(request_id: int):
+    admin = _require_admin(request)
+    if not admin:
+        return ({"error": "Unauthorized"}, 401)
+    activity.enrich(user=admin, admin_action="dismiss_access_request", target_user_id=request_id)
+    existing = get_access_request(request_id)
+    if not existing or existing.get("status") != "pending":
+        return ({"error": "Request not found"}, 404)
+    if not mark_access_request_dismissed(request_id, admin_id=int(admin["id"])):
+        return ({"error": "Request not found"}, 404)
     return {"ok": True}
 
 

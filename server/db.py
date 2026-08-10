@@ -199,6 +199,45 @@ def init_db():
             conn.commit()
         except Exception:
             pass
+
+    # Access requests from the public request-access form
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS access_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            name TEXT NOT NULL,
+            company TEXT NOT NULL,
+            email TEXT NOT NULL,
+            features TEXT NOT NULL DEFAULT '[]',
+            other_features TEXT,
+            message TEXT,
+            ip TEXT,
+            draft_name TEXT,
+            draft_email TEXT,
+            draft_is_admin INTEGER NOT NULL DEFAULT 0,
+            draft_fun INTEGER NOT NULL DEFAULT 0,
+            draft_allowed_bases TEXT,
+            draft_allowed_overlays TEXT,
+            draft_allowed_tools TEXT,
+            draft_limit_day INTEGER NOT NULL DEFAULT -1,
+            draft_limit_week INTEGER NOT NULL DEFAULT -1,
+            draft_limit_month INTEGER NOT NULL DEFAULT -1,
+            reviewed_at INTEGER,
+            reviewed_by INTEGER,
+            created_user_id INTEGER,
+            FOREIGN KEY(reviewed_by) REFERENCES users(id),
+            FOREIGN KEY(created_user_id) REFERENCES users(id)
+        )
+        """
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_access_requests_status ON access_requests(status)"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_access_requests_email ON access_requests(email)"
+    )
     conn.commit()
     conn.close()
 
@@ -997,3 +1036,212 @@ def delete_user_kml(user_id: int, kml_id: int) -> bool:
     conn.commit()
     conn.close()
     return deleted
+
+
+def _parse_json_list(raw):
+    if raw is None or raw == "":
+        return None
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else raw
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return value if isinstance(value, list) else None
+
+
+def access_request_from_row(row) -> dict:
+    if not row:
+        return None
+    return {
+        "id": row["id"],
+        "created_at": row["created_at"],
+        "status": row["status"],
+        "name": row["name"] or "",
+        "company": row["company"] or "",
+        "email": row["email"] or "",
+        "features": _parse_json_list(row["features"]) or [],
+        "other_features": row["other_features"] or "",
+        "message": row["message"] or "",
+        "ip": row["ip"] or "",
+        "draft_name": row["draft_name"] if row["draft_name"] is not None else (row["name"] or ""),
+        "draft_email": row["draft_email"] if row["draft_email"] is not None else (row["email"] or ""),
+        "draft_is_admin": bool(row["draft_is_admin"]),
+        "draft_fun": bool(row["draft_fun"]),
+        "draft_allowed_bases": _parse_json_list(row["draft_allowed_bases"]),
+        "draft_allowed_overlays": _parse_json_list(row["draft_allowed_overlays"]) or [],
+        "draft_allowed_tools": _parse_json_list(row["draft_allowed_tools"]) or [],
+        "draft_limit_day": int(row["draft_limit_day"] if row["draft_limit_day"] is not None else -1),
+        "draft_limit_week": int(row["draft_limit_week"] if row["draft_limit_week"] is not None else -1),
+        "draft_limit_month": int(row["draft_limit_month"] if row["draft_limit_month"] is not None else -1),
+        "reviewed_at": row["reviewed_at"],
+        "reviewed_by": row["reviewed_by"],
+        "created_user_id": row["created_user_id"],
+    }
+
+
+def create_access_request(
+    *,
+    name: str,
+    company: str,
+    email: str,
+    features: list,
+    other_features: str = "",
+    message: str = "",
+    ip: str = "",
+    draft_name: str | None = None,
+    draft_email: str | None = None,
+    draft_is_admin: bool = False,
+    draft_fun: bool = False,
+    draft_allowed_bases=None,
+    draft_allowed_overlays=None,
+    draft_allowed_tools=None,
+    draft_limit_day: int = -1,
+    draft_limit_week: int = -1,
+    draft_limit_month: int = -1,
+) -> int:
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO access_requests (
+            created_at, status, name, company, email, features, other_features, message, ip,
+            draft_name, draft_email, draft_is_admin, draft_fun,
+            draft_allowed_bases, draft_allowed_overlays, draft_allowed_tools,
+            draft_limit_day, draft_limit_week, draft_limit_month
+        ) VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            int(time.time()),
+            name,
+            company,
+            email,
+            json.dumps(features or []),
+            other_features or "",
+            message or "",
+            ip or "",
+            draft_name if draft_name is not None else name,
+            draft_email if draft_email is not None else email,
+            1 if draft_is_admin else 0,
+            1 if draft_fun else 0,
+            _json(draft_allowed_bases, []),
+            _json(draft_allowed_overlays if draft_allowed_overlays is not None else [], []),
+            _json(draft_allowed_tools if draft_allowed_tools is not None else [], []),
+            draft_limit_day,
+            draft_limit_week,
+            draft_limit_month,
+        ),
+    )
+    conn.commit()
+    request_id = cur.lastrowid
+    conn.close()
+    return request_id
+
+
+def list_access_requests(status: str | None = "pending"):
+    conn = _get_conn()
+    cur = conn.cursor()
+    if status:
+        cur.execute(
+            "SELECT * FROM access_requests WHERE status = ? ORDER BY created_at DESC",
+            (status,),
+        )
+    else:
+        cur.execute("SELECT * FROM access_requests ORDER BY created_at DESC")
+    rows = cur.fetchall()
+    conn.close()
+    return [access_request_from_row(r) for r in rows]
+
+
+def get_access_request(request_id: int):
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM access_requests WHERE id = ?", (request_id,))
+    row = cur.fetchone()
+    conn.close()
+    return access_request_from_row(row)
+
+
+def update_access_request_draft(request_id: int, **fields) -> dict | None:
+    allowed = {
+        "draft_name",
+        "draft_email",
+        "draft_is_admin",
+        "draft_fun",
+        "draft_allowed_bases",
+        "draft_allowed_overlays",
+        "draft_allowed_tools",
+        "draft_limit_day",
+        "draft_limit_week",
+        "draft_limit_month",
+    }
+    sets = []
+    params = []
+    for key, value in fields.items():
+        if key not in allowed:
+            continue
+        if key in {"draft_is_admin", "draft_fun"}:
+            sets.append(f"{key} = ?")
+            params.append(1 if value else 0)
+        elif key in {"draft_allowed_bases", "draft_allowed_overlays", "draft_allowed_tools"}:
+            sets.append(f"{key} = ?")
+            params.append(_json(value, []))
+        else:
+            sets.append(f"{key} = ?")
+            params.append(value)
+    if not sets:
+        return get_access_request(request_id)
+    params.append(request_id)
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE access_requests SET {', '.join(sets)} WHERE id = ? AND status = 'pending'",
+        params,
+    )
+    updated = cur.rowcount > 0
+    conn.commit()
+    conn.close()
+    if not updated:
+        return None
+    return get_access_request(request_id)
+
+
+def mark_access_request_approved(request_id: int, *, admin_id: int, created_user_id: int) -> bool:
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE access_requests
+        SET status = 'approved', reviewed_at = ?, reviewed_by = ?, created_user_id = ?
+        WHERE id = ? AND status = 'pending'
+        """,
+        (int(time.time()), admin_id, created_user_id, request_id),
+    )
+    ok = cur.rowcount > 0
+    conn.commit()
+    conn.close()
+    return ok
+
+
+def mark_access_request_dismissed(request_id: int, *, admin_id: int) -> bool:
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE access_requests
+        SET status = 'dismissed', reviewed_at = ?, reviewed_by = ?
+        WHERE id = ? AND status = 'pending'
+        """,
+        (int(time.time()), admin_id, request_id),
+    )
+    ok = cur.rowcount > 0
+    conn.commit()
+    conn.close()
+    return ok
+
+
+def count_pending_access_requests() -> int:
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM access_requests WHERE status = 'pending'")
+    n = int(cur.fetchone()[0] or 0)
+    conn.close()
+    return n
