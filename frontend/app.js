@@ -4,9 +4,9 @@ import { initSettingsController } from './settings/settings.js?v=20260807o';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
 import { initMapToolControls } from './tools/tools.js?v=20260807q';
 import { initKmlOverlays } from './tools/kml.js?v=20260807i';
-import { initDrawTool } from './tools/draw.js?v=20260807s';
+import { initDrawTool } from './tools/draw.js?v=20260807t';
 import { iconHtml } from './toolbar/icons.js?v=20260807q';
-import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260805c';
+import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260810a';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
 import { absolutizeMapStyleUrls, makeArcgisTransformRequest } from './map-style.js?v=20260805c';
 
@@ -3935,16 +3935,6 @@ initSettingsController({
 
 // Toolbar behavior moved to source_code/frontend/toolbar/toolbar.js
 
-function setupTourControlIds() {
-  // Keep optional selectors stable for onboarding without changing behavior.
-  const potentialSearchControl = document.querySelector(
-    '.leaflet-control-geocoder, .leaflet-control-locate, .leaflet-control-search, [data-control="search"]'
-  );
-  if (potentialSearchControl && !potentialSearchControl.id) {
-    potentialSearchControl.id = 'searchControl';
-  }
-}
-
 async function runOnboardingTour(options = {}) {
   const { showFailureNotice = false } = options;
   const started = await startOnboardingTour({
@@ -3953,6 +3943,7 @@ async function runOnboardingTour(options = {}) {
     allowedBases,
     allowedOverlays: allowedOver,
     allowedTools,
+    isMobile: isMobileApp,
     onFinished: () => {
       // Keep Leaflet stable after overlay teardown.
       map.invalidateSize();
@@ -3971,12 +3962,14 @@ helpTourBtn?.addEventListener('click', () => {
     document.body.classList.remove('settings-modal-open');
     settingsModal.style.display = 'none';
   }
-  runOnboardingTour({ showFailureNotice: true });
+  // Wait a tick so the modal fully closes and settingsBtn is hittable for the tour.
+  requestAnimationFrame(() => {
+    runOnboardingTour({ showFailureNotice: true });
+  });
 });
 
 // Start the tour once for first-time users after controls finish rendering.
 // Mobile has a different chrome; skip auto tour there (Help still works).
-setupTourControlIds();
 map.whenReady(() => {
   setTimeout(() => {
     if (isMobileApp) return;

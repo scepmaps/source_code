@@ -994,14 +994,37 @@ export function initDrawTool({
     return !!panelEl?.classList.contains('open');
   }
 
-  function closePanel() {
-    panelEl?.classList.remove('open');
-    btnEl?.classList.remove('panel-open', 'map-tool-btn--active');
-    btnEl?.setAttribute('aria-expanded', 'false');
-    if (!activeMode && !drafting) {
-      setCursor(false);
-      notifyDeactivate();
+  function setButtonTip(label) {
+    if (!btnEl) return;
+    btnEl.dataset.tip = label;
+    btnEl.setAttribute('aria-label', label);
+    btnEl.removeAttribute('title');
+  }
+
+  function refreshButtonState() {
+    if (!btnEl) return;
+    btnEl.classList.remove('panel-open', 'map-tool-btn--active', 'map-tool-btn--danger', 'map-tool-btn--armed');
+    if (isOpen()) {
+      // Red dismiss state — same pattern as ruler/box/HGT when click exits the tool.
+      btnEl.classList.add('panel-open', 'map-tool-btn--danger');
+      btnEl.setAttribute('aria-expanded', 'true');
+      setButtonTip('Close Draw');
+      return;
     }
+    btnEl.setAttribute('aria-expanded', 'false');
+    setButtonTip('Draw');
+  }
+
+  function closePanel() {
+    // Toolbar re-click / Esc exit: fully leave draw mode (panel + mode + cursor).
+    cancelDraft();
+    activeMode = null;
+    closeMapMenu();
+    panelEl?.classList.remove('open');
+    refreshPanelActive();
+    refreshButtonState();
+    setCursor(false);
+    notifyDeactivate();
     syncShapePointerEvents();
   }
 
@@ -1019,8 +1042,7 @@ export function initDrawTool({
     closeMapMenu();
 
     panelEl.classList.add('open');
-    btnEl?.classList.add('panel-open', 'map-tool-btn--active');
-    btnEl?.setAttribute('aria-expanded', 'true');
+    refreshButtonState();
     notifyActivate();
     setCursor(true);
     refreshPanelActive();

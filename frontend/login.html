@@ -175,6 +175,21 @@
         margin-bottom: 8px;
       }
 
+      .secondary-link {
+        display: block;
+        margin-top: 14px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+        text-decoration: none;
+        transition: color 0.2s ease;
+      }
+
+      .secondary-link:hover {
+        color: var(--accent);
+        text-decoration: underline;
+      }
+
       @keyframes logoGlow {
         0% { filter: drop-shadow(0 0 10px var(--accent)) brightness(1); }
         100% { filter: drop-shadow(0 0 20px var(--accent)) brightness(1.2); }
@@ -219,6 +234,7 @@
           <button type="button" class="password-toggle" id="passwordToggle" title="Show password">👁️</button>
         </div>
         <button id="loginBtn">Login</button>
+        <a class="secondary-link" href="request-access.html">Request access</a>
       </div>
     </div>
     <!-- Interactive Mapping Grid System -->

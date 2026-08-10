@@ -508,5 +508,14 @@ label{ font-size:13px; color:var(--muted); }
 }
 
 .scepmaps-tour-popover {
-  max-width: 320px;
+  max-width: 340px;
+  line-height: 1.45;
+}
+
+.scepmaps-tour-popover .driver-popover-title {
+  font-size: 15px;
+}
+
+.scepmaps-tour-popover .driver-popover-description {
+  font-size: 13px;
 }

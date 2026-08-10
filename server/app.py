@@ -64,10 +64,12 @@ from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from headless import render_headless_map  # Playwright path (browser-rendered bitmap)
 from kml_geojson import prepare_kml_export_layers
+from mail import is_valid_email, sanitize_header, send_access_request_email, smtp_configured
 from PIL import Image, ImageDraw, ImageFont
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine
 from rasterio.warp import Resampling, calculate_default_transform, reproject
+from rate_limit import access_request_limiter
 from utils import bbox_4326_to_3857
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -220,6 +222,11 @@ def index():
 @app.route("/login.html")
 def serve_login_page():
     return app.send_static_file("login.html")
+
+
+@app.route("/request-access.html")
+def serve_request_access_page():
+    return app.send_static_file("request-access.html")
 
 
 @app.route("/admin.html")
@@ -2571,6 +2578,144 @@ def login():
     activity.enrich(user=user, login_email=email, login_ok=True)
     token = mint_token_for_user(user)
     return {"token": token, "user": user}
+
+
+_ALLOWED_ACCESS_FEATURES = frozenset(
+    {
+        "Map export (GeoTIFF)",
+        "HGT elevation export",
+        "Satellite / imagery basemaps",
+        "Topo / navigation basemaps",
+        "Nautical charts (SHOM / UKHO)",
+        "Aviation overlays (OpenAIP / GB South)",
+        "Seamarks / density / history overlays",
+        "Draw & KML tools",
+        "Mobile access",
+        "Admin / multi-user workspace",
+    }
+)
+
+
+def _client_ip() -> str:
+    # ProxyFix already folds X-Forwarded-For into request.remote_addr when trusted.
+    return (request.remote_addr or "unknown").strip() or "unknown"
+
+
+def _origin_allowed_for_public_form() -> bool:
+    """Reject cross-site POSTs in production; allow missing Origin for same-origin navigations."""
+    if not _is_production():
+        return True
+    origin = (request.headers.get("Origin") or "").strip()
+    referer = (request.headers.get("Referer") or "").strip()
+    allowed = set(_parse_cors_origins())
+    if origin:
+        return origin in allowed
+    if referer:
+        return any(referer.startswith(o + "/") or referer == o for o in allowed)
+    # No Origin/Referer — treat as suspicious for this public endpoint.
+    return False
+
+
+@app.post("/auth/request-access")
+def request_access():
+    """
+    Public access-request form → fixed notify inbox only.
+    Not a mail relay: To/Cc/Bcc are never taken from the client.
+    """
+    if not _origin_allowed_for_public_form():
+        return jsonify({"error": "Forbidden"}), 403
+
+    if not request.is_json:
+        return jsonify({"error": "Expected JSON"}), 415
+
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid payload"}), 400
+
+    ip = _client_ip()
+    # Layered limits: short burst + hourly + daily (per IP), plus per-email hourly.
+    if not access_request_limiter.allow(f"ip:{ip}:10m", limit=3, window_seconds=600):
+        return jsonify({"error": "Too many requests. Please try again later."}), 429
+    if not access_request_limiter.allow(f"ip:{ip}:1h", limit=5, window_seconds=3600):
+        return jsonify({"error": "Too many requests. Please try again later."}), 429
+    if not access_request_limiter.allow(f"ip:{ip}:1d", limit=10, window_seconds=86400):
+        return jsonify({"error": "Daily request limit reached. Please try again tomorrow."}), 429
+
+    # Honeypot — bots that fill hidden fields get a fake success (no email).
+    honeypot = str(data.get("website") or data.get("company_url") or "").strip()
+    if honeypot:
+        logger.info("[request-access] honeypot triggered ip=%s", ip)
+        return jsonify({"ok": True, "message": "Request sent. We will contact you soon."})
+
+    # Reject instant automated posts (< 1.5s from page open).
+    try:
+        started_at = float(data.get("started_at") or 0)
+    except (TypeError, ValueError):
+        started_at = 0
+    if started_at > 0:
+        elapsed_ms = time.time() * 1000 - started_at
+        if elapsed_ms < 1500:
+            return jsonify({"error": "Please take a moment to complete the form."}), 400
+
+    name = sanitize_header(str(data.get("name") or ""), 120)
+    company = sanitize_header(str(data.get("company") or ""), 160)
+    email = sanitize_header(str(data.get("email") or ""), 254).lower()
+    # Body fields may keep newlines; strip control chars / NUL only.
+    other_features = "".join(
+        ch for ch in str(data.get("other_features") or "") if ch == "\n" or ord(ch) >= 32 or ch == "\t"
+    )[:1000].strip()
+    message = "".join(
+        ch for ch in str(data.get("message") or "") if ch == "\n" or ord(ch) >= 32 or ch == "\t"
+    )[:2000].strip()
+
+    raw_features = data.get("features") or []
+    if not isinstance(raw_features, list):
+        return jsonify({"error": "Invalid features"}), 400
+    features = []
+    for item in raw_features[:20]:
+        label = sanitize_header(str(item), 80)
+        if label in _ALLOWED_ACCESS_FEATURES and label not in features:
+            features.append(label)
+
+    if not name or not company or not email:
+        return jsonify({"error": "Name, company, and professional email are required."}), 400
+    if not is_valid_email(email):
+        return jsonify({"error": "Please provide a valid professional email address."}), 400
+    if not features and not other_features:
+        return jsonify({"error": "Select at least one feature or describe your needs."}), 400
+
+    if not access_request_limiter.allow(f"email:{email}:1h", limit=3, window_seconds=3600):
+        return jsonify({"error": "Too many requests for this email. Please try again later."}), 429
+
+    if not smtp_configured():
+        logger.error("[request-access] SMTP is not configured")
+        return jsonify({"error": "Access requests are temporarily unavailable. Please try again later."}), 503
+
+    date_str = time.strftime("%Y-%m-%d", time.gmtime())
+    subject = f"Access request {date_str}"
+    feature_lines = "\n".join(f"  - {f}" for f in features) if features else "  (none selected)"
+    body = (
+        f"New SCEPMAPS access request\n"
+        f"===========================\n\n"
+        f"Date (UTC): {time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())}\n"
+        f"IP: {ip}\n\n"
+        f"Name: {name}\n"
+        f"Company: {company}\n"
+        f"Professional email: {email}\n\n"
+        f"Requested features:\n{feature_lines}\n\n"
+        f"Other needs:\n{other_features or '(none)'}\n\n"
+        f"Message:\n{message or '(none)'}\n"
+    )
+
+    try:
+        send_access_request_email(subject=subject, body_text=body, reply_to=email)
+    except ValueError:
+        return jsonify({"error": "Please provide a valid professional email address."}), 400
+    except RuntimeError:
+        return jsonify({"error": "Could not send your request. Please try again later."}), 502
+
+    logger.info("[request-access] sent name=%r company=%r email=%s ip=%s", name, company, email, ip)
+    return jsonify({"ok": True, "message": "Request sent. We will contact you soon."})
 
 
 @app.get("/auth/me")
