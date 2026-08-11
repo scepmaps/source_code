@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
     <link rel="stylesheet" href="tools/tools.css?v=20260807q">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css?v=20260807p">
+    <link rel="stylesheet" href="settings/settings.css?v=20260810b">
     <script type="module">
       import { isMobileClient } from './mobile/device.js?v=20260806e';
       try {
@@ -207,6 +207,29 @@
             <button class="btn" id="logoutBtn" style="flex: 1;">
               🚪 Logout
             </button>
+          </div>
+
+          <div id="settingsPasswordSection" class="settings-password-section">
+            <h4>Change Password</h4>
+            <p class="settings-password-hint">Update the password you use to sign in.</p>
+            <div class="settings-password-grid">
+              <div>
+                <label for="settingsCurrentPassword">Current password</label>
+                <input id="settingsCurrentPassword" type="password" autocomplete="current-password" />
+              </div>
+              <div>
+                <label for="settingsNewPassword">New password</label>
+                <input id="settingsNewPassword" type="password" autocomplete="new-password" minlength="6" />
+              </div>
+              <div>
+                <label for="settingsConfirmPassword">Confirm new password</label>
+                <input id="settingsConfirmPassword" type="password" autocomplete="new-password" minlength="6" />
+              </div>
+            </div>
+            <div class="settings-password-actions">
+              <button type="button" class="btn" id="changePasswordBtn">Update password</button>
+              <span id="passwordChangeMessage" class="settings-password-message" hidden></span>
+            </div>
           </div>
 
           <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
@@ -456,6 +479,6 @@
     <!-- Interactive Mapping Grid System -->
     <script src="particles.js"></script>
 
-    <script type="module" src="app.js?v=20260810a"></script>
+    <script type="module" src="app.js?v=20260811d"></script>
   </body>
 </html>

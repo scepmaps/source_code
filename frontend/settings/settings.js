@@ -144,6 +144,8 @@ export function initSettingsController(opts) {
     const state = [];
     fields.forEach((el) => {
       if (!el.id) return;
+      // Password fields have their own Update button — ignore for preferences dirty state.
+      if (el.closest('#settingsPasswordSection')) return;
       if (el.type === 'button' || el.type === 'submit' || el.type === 'reset') return;
       if (el.type === 'checkbox' || el.type === 'radio') {
         state.push(`${el.id}:${el.checked}`);
@@ -162,6 +164,88 @@ export function initSettingsController(opts) {
   function markSettingsClean() {
     initialSettingsSnapshot = getSettingsSnapshot();
     refreshSaveButtonVisibility();
+  }
+
+  function clearPasswordFields() {
+    ['settingsCurrentPassword', 'settingsNewPassword', 'settingsConfirmPassword'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+  }
+
+  function setPasswordMessage(text, kind) {
+    const msg = document.getElementById('passwordChangeMessage');
+    if (!msg) return;
+    if (!text) {
+      msg.hidden = true;
+      msg.textContent = '';
+      msg.className = 'settings-password-message';
+      return;
+    }
+    msg.hidden = false;
+    msg.textContent = text;
+    msg.className = `settings-password-message ${kind === 'ok' ? 'is-ok' : 'is-err'}`;
+  }
+
+  async function changePassword() {
+    const currentEl = document.getElementById('settingsCurrentPassword');
+    const newEl = document.getElementById('settingsNewPassword');
+    const confirmEl = document.getElementById('settingsConfirmPassword');
+    const btn = document.getElementById('changePasswordBtn');
+    if (!currentEl || !newEl || !confirmEl || !btn) return;
+
+    const currentPassword = currentEl.value;
+    const newPassword = newEl.value;
+    const confirmPassword = confirmEl.value;
+    setPasswordMessage('');
+
+    if (!currentPassword || !newPassword) {
+      setPasswordMessage('Enter your current and new password.', 'err');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordMessage('New password must be at least 6 characters.', 'err');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage('New passwords do not match.', 'err');
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setPasswordMessage('New password must be different.', 'err');
+      return;
+    }
+
+    btn.disabled = true;
+    const previousLabel = btn.textContent;
+    btn.textContent = 'Updating…';
+    try {
+      const res = await fetch(`${API_BASE}/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + getToken(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+          confirm_password: confirmPassword,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPasswordMessage(data.error || 'Could not update password.', 'err');
+        return;
+      }
+      clearPasswordFields();
+      setPasswordMessage('Password updated.', 'ok');
+      setTimeout(() => setPasswordMessage(''), 4000);
+    } catch (_) {
+      setPasswordMessage('Network error. Please try again.', 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = previousLabel;
+    }
   }
 
   function hexToRgba(hex, opacity) {
@@ -340,6 +424,8 @@ export function initSettingsController(opts) {
   }
 
   const showUserSettings = async () => {
+    clearPasswordFields();
+    setPasswordMessage('');
     const user = userRef();
     const identity = document.getElementById('settingsUserIdentity');
     const nameEl = document.getElementById('settingsUserName');
@@ -475,6 +561,8 @@ export function initSettingsController(opts) {
 
   const closeSettingsModal = () => {
     kmlDrafts.clear();
+    clearPasswordFields();
+    setPasswordMessage('');
     document.body.classList.remove('settings-modal-open');
     document.getElementById('userSettingsModal').style.display = 'none';
     saveBtn.style.display = 'none';
@@ -601,6 +689,7 @@ export function initSettingsController(opts) {
     bindIfExists('settingsBtn', 'click', showUserSettings);
     bindIfExists('closeSettingsBtn', 'click', closeSettingsModal);
     bindIfExists('savePreferencesBtn', 'click', savePreferences);
+    bindIfExists('changePasswordBtn', 'click', changePassword);
     bindIfExists('setCurrentPositionBtn', 'click', setCurrentPosition);
     bindIfExists('useCurrentLayersBtn', 'click', useCurrentLayers);
     bindIfExists('settingsBase', 'change', (e) => {

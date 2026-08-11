@@ -1,5 +1,5 @@
 import { iconHtml } from './icons.js?v=20260807o';
-import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260807o';
+import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260811b';
 
 export function createToolbarController(opts) {
   const {
@@ -15,6 +15,7 @@ export function createToolbarController(opts) {
     updateLabelButtonVisibility,
     getIsNamesOverlayEnabled,
     setIsNamesOverlayEnabled,
+    onMapsPickerOpen,
   } = opts;
 
   const favMapOptions = {
@@ -508,6 +509,9 @@ export function createToolbarController(opts) {
       // Mobile: ignore the leftover click/tap that would immediately close the panel.
       if (isMobileApp()) ignoreOutsideClickUntil = Date.now() + 450;
       requestAnimationFrame(() => positionOpenPanel(panel));
+      if (panelId === 'mapPickerPanel' && typeof onMapsPickerOpen === 'function') {
+        onMapsPickerOpen();
+      }
     }
     updateSectionButtonStates();
   }

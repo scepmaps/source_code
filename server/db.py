@@ -170,6 +170,103 @@ def init_db():
     except Exception:
         pass
 
+    # Migration: tools ACL is hgt/draw/kml/density.
+    # - Move density from overlays → tools (preserve who already had it)
+    # - Keep draw/kml for users who previously always had them
+    # - Drop ruler/box from tools (always available in UI, not ACL)
+    try:
+        valid_tools = ("hgt", "draw", "kml", "density")
+        always_on_tools = ("draw", "kml")  # historically ungated
+        drop_tools = {"ruler", "box"}
+
+        cur.execute(
+            "SELECT id, is_admin, allowed_overlays, allowed_tools FROM users"
+        )
+        rows = cur.fetchall()
+        for row in rows:
+            # Parse overlays
+            raw_over = row["allowed_overlays"] or ""
+            if raw_over == "":
+                overlays = None
+            else:
+                try:
+                    overlays = json.loads(raw_over)
+                except (json.JSONDecodeError, TypeError):
+                    overlays = None
+                if not isinstance(overlays, list):
+                    overlays = None
+
+            # Parse tools
+            raw_tools = row["allowed_tools"] or ""
+            if raw_tools == "":
+                tools = None
+            else:
+                try:
+                    tools = json.loads(raw_tools)
+                except (json.JSONDecodeError, TypeError):
+                    tools = None
+                if not isinstance(tools, list):
+                    tools = None
+
+            is_admin = bool(row["is_admin"])
+
+            # Who previously had density (overlay ACL + admin unrestricted rule)
+            had_density = False
+            if isinstance(tools, list) and "density" in tools:
+                had_density = True
+            elif overlays is None:
+                had_density = is_admin
+            elif "density" in overlays:
+                had_density = True
+
+            new_overlays = overlays
+            if isinstance(overlays, list) and "density" in overlays:
+                new_overlays = [o for o in overlays if o != "density"]
+
+            new_tools = tools
+            if tools is None:
+                # Unrestricted tools stay unrestricted, with these exceptions:
+                # - admin with overlay whitelist that omitted density must not gain it
+                # - non-admin who had density via overlays needs an explicit tools flag
+                if is_admin and isinstance(overlays, list) and "density" not in overlays:
+                    new_tools = ["hgt", "draw", "kml"]
+                elif had_density and not is_admin:
+                    new_tools = ["hgt", "draw", "kml", "density"]
+            else:
+                cleaned = [
+                    t for t in tools
+                    if t in valid_tools or t in drop_tools or t in always_on_tools
+                ]
+                cleaned = [t for t in cleaned if t not in drop_tools]
+                # Preserve historically always-on tools
+                for t in always_on_tools:
+                    if t not in cleaned:
+                        cleaned.append(t)
+                if had_density and "density" not in cleaned:
+                    cleaned.append("density")
+                if not had_density and "density" in cleaned:
+                    cleaned = [t for t in cleaned if t != "density"]
+                # Keep only valid tool keys, stable order
+                ordered = [t for t in valid_tools if t in cleaned]
+                new_tools = ordered
+
+            # Persist only when something changed
+            over_sql = (
+                "" if new_overlays is None else json.dumps(new_overlays)
+            )
+            tools_sql = (
+                "" if new_tools is None else json.dumps(new_tools)
+            )
+            if over_sql != (raw_over or "") or tools_sql != (raw_tools or ""):
+                cur.execute(
+                    "UPDATE users SET allowed_overlays = ?, allowed_tools = ? WHERE id = ?",
+                    (over_sql, tools_sql, row["id"]),
+                )
+
+        conn.commit()
+    except Exception:
+        pass
+
     # User-imported KML overlays (content stored in DB, owned by user_id)
     cur.execute(
         """
@@ -238,6 +335,56 @@ def init_db():
     cur.execute(
         "CREATE INDEX IF NOT EXISTS idx_access_requests_email ON access_requests(email)"
     )
+
+    # Migration: pending access-request drafts — density moved overlays → tools
+    try:
+        valid_tools = ("hgt", "draw", "kml", "density")
+        drop_tools = {"ruler", "box"}
+        cur.execute(
+            """
+            SELECT id, draft_allowed_overlays, draft_allowed_tools
+            FROM access_requests
+            WHERE status = 'pending'
+            """
+        )
+        for row in cur.fetchall():
+            raw_over = row["draft_allowed_overlays"] or "[]"
+            raw_tools = row["draft_allowed_tools"] or "[]"
+            try:
+                overlays = json.loads(raw_over) if raw_over else []
+            except (json.JSONDecodeError, TypeError):
+                overlays = []
+            try:
+                tools = json.loads(raw_tools) if raw_tools else []
+            except (json.JSONDecodeError, TypeError):
+                tools = []
+            if not isinstance(overlays, list):
+                overlays = []
+            if not isinstance(tools, list):
+                tools = []
+
+            had_density = "density" in tools or "density" in overlays
+            new_overlays = [o for o in overlays if o != "density"]
+            cleaned = [t for t in tools if t not in drop_tools]
+            if had_density and "density" not in cleaned:
+                cleaned.append("density")
+            new_tools = [t for t in valid_tools if t in cleaned]
+
+            over_sql = json.dumps(new_overlays)
+            tools_sql = json.dumps(new_tools)
+            if over_sql != raw_over or tools_sql != raw_tools:
+                cur.execute(
+                    """
+                    UPDATE access_requests
+                    SET draft_allowed_overlays = ?, draft_allowed_tools = ?
+                    WHERE id = ?
+                    """,
+                    (over_sql, tools_sql, row["id"]),
+                )
+        conn.commit()
+    except Exception:
+        pass
+
     conn.commit()
     conn.close()
 
@@ -428,6 +575,15 @@ def get_user_by_id(user_id: int):
     row = cur.fetchone()
     conn.close()
     return user_from_row(row)
+
+
+def get_password_hash_by_user_id(user_id: int) -> str | None:
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    return row["password_hash"] if row else None
 
 
 def list_users():

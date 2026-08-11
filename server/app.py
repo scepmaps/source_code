@@ -31,6 +31,7 @@ from db import (
     get_all_export_stats,
     get_user_by_email,
     get_user_by_id,
+    get_password_hash_by_user_id,
     get_user_export_stats,
     get_user_kml,
     init_db,
@@ -71,7 +72,13 @@ from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from headless import render_headless_map  # Playwright path (browser-rendered bitmap)
 from kml_geojson import prepare_kml_export_layers
-from mail import is_valid_email, sanitize_header, send_access_request_email, smtp_configured
+from mail import (
+    is_valid_email,
+    sanitize_header,
+    send_access_request_email,
+    send_account_approved_email,
+    smtp_configured,
+)
 from PIL import Image, ImageDraw, ImageFont
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine
@@ -197,7 +204,7 @@ def _security_headers(response):
             "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; "
             "img-src 'self' data: https: blob:; "
             "font-src 'self' data: https://fonts.gstatic.com; "
-            "connect-src 'self'; "
+            "connect-src 'self' https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://cdn.ons.gov.uk https://unpkg.com; "
             "worker-src 'self' blob:; "
             "child-src 'self' blob:; "
             "frame-ancestors 'none';"
@@ -2615,9 +2622,10 @@ _FEATURE_PERMISSION_MAP = {
         "overlays": ["openaip"],
     },
     "Seamarks / density / history overlays": {
-        "overlays": ["seamarks", "density", "history", "label"]
+        "overlays": ["seamarks", "history", "label"],
+        "tools": ["density"],
     },
-    "Draw & KML tools": {},
+    "Draw & KML tools": {"tools": ["draw", "kml"]},
     "Mobile access": {},
     "Admin / multi-user workspace": {"is_admin": True},
 }
@@ -2828,6 +2836,48 @@ def me():
     activity.enrich(user=user)
     refreshed = mint_token_for_user(user)
     return {"user": user, "token": refreshed}
+
+
+@app.post("/auth/change-password")
+def change_password():
+    """Authenticated user password change — requires current password."""
+    token = extract_bearer_token(request)
+    if not token:
+        return ({"error": "Unauthorized"}, 401)
+    payload = verify_token(token)
+    if not payload:
+        return ({"error": "Unauthorized"}, 401)
+
+    user_id = int(payload.get("uid", 0))
+    user = get_user_by_id(user_id)
+    if not user:
+        return ({"error": "Unauthorized"}, 401)
+
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return ({"error": "Invalid payload"}, 400)
+
+    current_password = str(data.get("current_password") or "")
+    new_password = str(data.get("new_password") or "")
+    confirm_password = str(data.get("confirm_password") or new_password)
+
+    if not current_password or not new_password:
+        return ({"error": "Current and new password are required"}, 400)
+    if len(new_password) < 6:
+        return ({"error": "New password must be at least 6 characters"}, 400)
+    if new_password != confirm_password:
+        return ({"error": "New passwords do not match"}, 400)
+    if current_password == new_password:
+        return ({"error": "New password must be different from the current password"}, 400)
+
+    stored_hash = get_password_hash_by_user_id(user_id)
+    if not stored_hash or not verify_password(current_password, stored_hash):
+        activity.enrich(user=user, password_change_ok=False)
+        return ({"error": "Current password is incorrect"}, 403)
+
+    update_user(user_id, password_hash=hash_password(new_password))
+    activity.enrich(user=user, password_change_ok=True)
+    return {"ok": True, "message": "Password updated"}
 
 
 def _require_jwt_user(req):
@@ -3513,8 +3563,40 @@ def admin_validate_access_request(request_id: int):
         # User was created; request may have raced. Still report success.
         logger.warning("[access-request] user %s created but request %s status update failed", uid, request_id)
 
-    activity.enrich(target_email=email, target_new_id=uid, target_is_admin=is_admin)
-    return {"ok": True, "id": uid, "email": email}
+    welcome_email_sent = False
+    welcome_email_error = None
+    if smtp_configured():
+        try:
+            send_account_approved_email(
+                to_email=email,
+                name=name,
+                temporary_password=password,
+            )
+            welcome_email_sent = True
+        except Exception as exc:
+            welcome_email_error = "Failed to send welcome email"
+            logger.exception(
+                "[access-request] welcome email failed user_id=%s email=%s: %s",
+                uid,
+                email,
+                type(exc).__name__,
+            )
+    else:
+        welcome_email_error = "SMTP is not configured"
+
+    activity.enrich(
+        target_email=email,
+        target_new_id=uid,
+        target_is_admin=is_admin,
+        welcome_email_sent=welcome_email_sent,
+    )
+    return {
+        "ok": True,
+        "id": uid,
+        "email": email,
+        "welcome_email_sent": welcome_email_sent,
+        "welcome_email_error": welcome_email_error,
+    }
 
 
 @app.post("/admin/access-requests/<int:request_id>/dismiss")

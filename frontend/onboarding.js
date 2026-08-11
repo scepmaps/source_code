@@ -161,7 +161,7 @@ function buildTourStepDefinitions(context = {}) {
     },
     {
       selector: '.map-tool-btn--draw',
-      isEnabled: () => !isMobile,
+      isEnabled: () => !isMobile && hasPermission(allowedTools, 'draw'),
       popover: {
         side: 'right',
         title: 'Draw',
@@ -170,7 +170,7 @@ function buildTourStepDefinitions(context = {}) {
     },
     {
       selector: '.map-tool-btn--kml',
-      isEnabled: () => !isMobile,
+      isEnabled: () => !isMobile && hasPermission(allowedTools, 'kml'),
       popover: {
         side: 'right',
         title: 'KML Overlays',

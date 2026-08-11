@@ -525,16 +525,28 @@
                   <input type="checkbox" value="openaip" /> Air Space
                 </label>
                 <label class="checkbox-item">
-                  <input type="checkbox" value="density" /> Population Density
-                </label>
-                <label class="checkbox-item">
                   <input type="checkbox" value="label" /> Names
                 </label>
                 <label class="checkbox-item">
                   <input type="checkbox" value="history" /> History
                 </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Allowed Tools</label>
+              <div class="checkbox-group" id="tools">
                 <label class="checkbox-item">
-                  <input type="checkbox" value="hgt" data-scope="tool" /> HGT Tiles
+                  <input type="checkbox" value="hgt" /> HGT Tiles
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="draw" /> Draw
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="kml" /> KML
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="density" /> Population Density
                 </label>
               </div>
             </div>
@@ -643,15 +655,10 @@
         const getCheckedValues = (selector) =>
           Array.from(document.querySelectorAll(`${selector} input:checked`)).map(cb => cb.value);
         const bases = getCheckedValues('#baseMaps');
-        const overlayAndToolChecks = Array.from(document.querySelectorAll('#overlays input:checked'));
-        const overlays = overlayAndToolChecks
-          .filter(cb => cb.dataset.scope !== 'tool')
-          .map(cb => cb.value);
-        const tools = overlayAndToolChecks
-          .filter(cb => cb.dataset.scope === 'tool')
-          .map(cb => cb.value);
+        const overlays = getCheckedValues('#overlays');
+        const tools = getCheckedValues('#tools');
         // For bases: if none selected, send null to mean "unrestricted" (OSM will be added as fallback)
-        // For overlays: send empty array [] to explicitly mean "no overlays allowed"
+        // For overlays/tools: send empty array [] to explicitly mean "no access"
         // Note: null means unrestricted, [] means explicitly no access
         return {
           email: document.getElementById('email').value.trim().toLowerCase(),
@@ -661,7 +668,7 @@
           fun: document.getElementById('funMode').checked,
           allowed_bases: bases.length ? bases : null,
           allowed_overlays: overlays, // Always send array (empty [] means no overlays, null would mean unrestricted)
-          allowed_tools: tools.length ? tools : [],
+          allowed_tools: tools, // Always send array (empty [] means no tools)
           limit_day: parseInt(document.getElementById('limitDay').value) || -1,
           limit_week: parseInt(document.getElementById('limitWeek').value) || -1,
           limit_month: parseInt(document.getElementById('limitMonth').value) || -1,
@@ -680,7 +687,7 @@
         document.getElementById('limitMonth').value = user.limit_month === -1 ? '' : user.limit_month;
 
         // Clear all checkboxes first
-        document.querySelectorAll('#baseMaps input, #overlays input').forEach(cb => cb.checked = false);
+        document.querySelectorAll('#baseMaps input, #overlays input, #tools input').forEach(cb => cb.checked = false);
 
         // Set base maps (match by .value — never interpolate into a selector string)
         const bases = user.allowed_bases || ['osm', 'dark', 'esri', 'topo', 'navigation', 'night', 'ocean', 'shom', 'ukho', 'gbsouth'];
@@ -694,12 +701,12 @@
         const overlays = user.allowed_overlays;
         if (overlays === null || overlays === undefined) {
           // Unrestricted: check all overlays by default
-          document.querySelectorAll('#overlays input:not([data-scope="tool"])').forEach((cb) => {
+          document.querySelectorAll('#overlays input').forEach((cb) => {
             cb.checked = true;
           });
         } else if (Array.isArray(overlays)) {
           const overlaySet = new Set(overlays);
-          document.querySelectorAll('#overlays input:not([data-scope="tool"])').forEach((cb) => {
+          document.querySelectorAll('#overlays input').forEach((cb) => {
             cb.checked = overlaySet.has(cb.value);
           });
         }
@@ -707,12 +714,12 @@
         // Set tools
         const tools = user.allowed_tools;
         if (tools === null || tools === undefined) {
-          document.querySelectorAll('#overlays input[data-scope="tool"]').forEach((cb) => {
+          document.querySelectorAll('#tools input').forEach((cb) => {
             cb.checked = true;
           });
         } else if (Array.isArray(tools)) {
           const toolSet = new Set(tools);
-          document.querySelectorAll('#overlays input[data-scope="tool"]').forEach((cb) => {
+          document.querySelectorAll('#tools input').forEach((cb) => {
             cb.checked = toolSet.has(cb.value);
           });
         }
@@ -815,8 +822,8 @@
 
       // Rendering — build the table with DOM APIs so email/name cannot XSS the admin UI.
       const DEFAULT_BASES = ['osm', 'dark', 'esri', 'topo', 'navigation', 'night', 'ocean', 'shom', 'ukho', 'gbsouth'];
-      const DEFAULT_OVERLAYS = ['seamarks', 'openaip', 'density', 'label', 'history'];
-      const DEFAULT_TOOLS = ['hgt'];
+      const DEFAULT_OVERLAYS = ['seamarks', 'openaip', 'label', 'history'];
+      const DEFAULT_TOOLS = ['hgt', 'draw', 'kml', 'density'];
 
       const makePermissionTags = (items, labelFn = (v) => String(v)) => {
         const wrap = document.createElement('div');
@@ -956,12 +963,14 @@
       const OVERLAY_OPTIONS = [
         ['seamarks', 'Seamarks'],
         ['openaip', 'Air Space'],
-        ['density', 'Density'],
         ['label', 'Names'],
         ['history', 'History'],
       ];
       const TOOL_OPTIONS = [
         ['hgt', 'HGT'],
+        ['draw', 'Draw'],
+        ['kml', 'KML'],
+        ['density', 'Density'],
       ];
 
       const generatePassword = (length = 12) => {
@@ -1167,13 +1176,17 @@
         overlaysBlock.className = 'form-group';
         const overlaysLabel = document.createElement('span');
         overlaysLabel.className = 'ar-field-label';
-        overlaysLabel.textContent = 'Overlays & tools';
-        const overlayGroup = makeCheckboxGroup(OVERLAY_OPTIONS, req.draft_allowed_overlays || [], 'overlays');
-        const toolsGroup = makeCheckboxGroup(TOOL_OPTIONS, req.draft_allowed_tools || [], 'tools');
-        // Merge tool chips into the same row visually
-        Array.from(toolsGroup.children).forEach((child) => overlayGroup.appendChild(child));
-        overlaysBlock.append(overlaysLabel, overlayGroup);
+        overlaysLabel.textContent = 'Overlays';
+        overlaysBlock.append(overlaysLabel, makeCheckboxGroup(OVERLAY_OPTIONS, req.draft_allowed_overlays || [], 'overlays'));
         perms.appendChild(overlaysBlock);
+
+        const toolsBlock = document.createElement('div');
+        toolsBlock.className = 'form-group';
+        const toolsLabel = document.createElement('span');
+        toolsLabel.className = 'ar-field-label';
+        toolsLabel.textContent = 'Tools';
+        toolsBlock.append(toolsLabel, makeCheckboxGroup(TOOL_OPTIONS, req.draft_allowed_tools || [], 'tools'));
+        perms.appendChild(toolsBlock);
         body.appendChild(perms);
 
         const limitsBlock = document.createElement('div');
@@ -1257,7 +1270,7 @@
           showAlert('Password must be at least 6 characters', 'error');
           return;
         }
-        if (!confirm(`Create user ${payload.email} from this access request?`)) return;
+        if (!confirm(`Create user ${payload.email} and email them their temporary password?`)) return;
         setLoading(true);
         try {
           const res = await fetch(`${API}/admin/access-requests/${requestId}/validate`, {
@@ -1267,7 +1280,14 @@
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || 'Failed to validate request');
-          showAlert(`User created: ${payload.email}`);
+          if (data.welcome_email_sent) {
+            showAlert(`User created and welcome email sent to ${payload.email}`);
+          } else {
+            showAlert(
+              `User created: ${payload.email}. Welcome email not sent${data.welcome_email_error ? ` (${data.welcome_email_error})` : ''}.`,
+              'error'
+            );
+          }
           await Promise.all([loadAccessRequests(), loadUsers()]);
         } catch (error) {
           showAlert(error.message, 'error');

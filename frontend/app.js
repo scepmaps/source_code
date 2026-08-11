@@ -1,14 +1,15 @@
 import { LAYERS } from './config.js?v=20260806k';
-import { createToolbarController } from './toolbar/toolbar.js?v=20260806h';
-import { initSettingsController } from './settings/settings.js?v=20260807o';
+import { createToolbarController } from './toolbar/toolbar.js?v=20260811d';
+import { initSettingsController } from './settings/settings.js?v=20260810b';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
-import { initMapToolControls } from './tools/tools.js?v=20260807q';
+import { initMapToolControls } from './tools/tools.js?v=20260811b';
 import { initKmlOverlays } from './tools/kml.js?v=20260807i';
 import { initDrawTool } from './tools/draw.js?v=20260807t';
 import { iconHtml } from './toolbar/icons.js?v=20260807q';
 import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260810a';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
 import { absolutizeMapStyleUrls, makeArcgisTransformRequest } from './map-style.js?v=20260805c';
+import { createBasemapPreloader } from './basemap-preload.js?v=20260811d';
 
 // Auth gate: require login, attach token to export calls (Bearer JWT in localStorage — no cookies)
 let token = localStorage.getItem('token');
@@ -370,8 +371,8 @@ function setRulerControlActive(_active) {
 
 // Build layers based on user permissions
 const defaultBases = ['osm','dark','esri','topo','navigation','night','ocean','shom','ukho','gbsouth'];
-const defaultOver  = ['seamarks','openaip','density','label','history'];
-const defaultTools = ['hgt'];
+const defaultOver  = ['seamarks','openaip','label','history'];
+const defaultTools = ['hgt', 'draw', 'kml', 'density'];
 // Permission interpretation:
 // - null/undefined: unrestricted (use all defaults)
 // - []: explicitly no access to anything
@@ -403,17 +404,9 @@ if (rawBases === null || rawBases === undefined) {
 if (rawOver === null || rawOver === undefined) {
   allowedOver = defaultOver; // unrestricted
 } else if (Array.isArray(rawOver)) {
-  allowedOver = rawOver; // explicit list (could be empty - all overlays can be disabled)
+  allowedOver = rawOver.filter((item) => item !== 'density'); // density is a tool now
 } else {
   allowedOver = defaultOver; // fallback
-}
-
-// Density is an explicit admin-controlled permission for non-admin users.
-// Even if overlays are otherwise unrestricted, hide density unless it is
-// explicitly present in allowed_overlays.
-const densityExplicitlyAllowed = Array.isArray(rawOver) && rawOver.includes('density');
-if (!user?.is_admin && !densityExplicitlyAllowed) {
-  allowedOver = allowedOver.filter((item) => item !== 'density');
 }
 
 if (rawTools === null || rawTools === undefined) {
@@ -422,6 +415,19 @@ if (rawTools === null || rawTools === undefined) {
   allowedTools = rawTools; // explicit list (could be empty)
 } else {
   allowedTools = defaultTools; // fallback
+}
+
+// Density is an explicit admin-controlled permission for non-admin users.
+// Even if tools are otherwise unrestricted, hide density unless it is
+// explicitly present in allowed_tools.
+const densityExplicitlyAllowed = Array.isArray(rawTools) && rawTools.includes('density');
+if (!user?.is_admin && !densityExplicitlyAllowed) {
+  allowedTools = allowedTools.filter((item) => item !== 'density');
+}
+
+// Density remains an overlay in the map UI, but ACL lives under tools.
+if (allowedTools.includes('density') && !allowedOver.includes('density')) {
+  allowedOver = [...allowedOver, 'density'];
 }
 const layerDefs = {};
 // OSM and ArcGIS maps are true base layers
@@ -555,12 +561,138 @@ let nightGlMap = null;
 let navigationGlLayer = null;
 let navigationGlMap = null;
 
+// Keep-alive raster base instances (create once, toggle visibility on switch).
+const rasterBaseCache = Object.create(null);
+if (layerDefs.osm) rasterBaseCache.osm = layerDefs.osm;
+if (layerDefs.dark) rasterBaseCache.dark = layerDefs.dark;
+if (layerDefs.esri) rasterBaseCache.esri = layerDefs.esri;
+
+const VECTOR_BASE_KEYS = new Set(['topo', 'navigation', 'night', 'ocean']);
+const CHART_BASE_KEYS = new Set(['shom', 'ukho', 'gbsouth']);
+
 // Topo, navigation, and night are now vector layers, so we initialize with other raster layers
 // They will be created via createTopoLayer()/createNavigationLayer()/createNightLayer() when selected
 let currentBase = (osm||esri);
 let currentOverlay = null; // Track which chart overlay base is active (shom/ukho/gbsouth)
 let isNamesOverlayEnabled = false; // Track "Names" labels-only overlay state
 let baseSwitchRequestId = 0;
+let basemapPrimePromise = null;
+
+function hideMapLayer(layer) {
+  if (layer && map.hasLayer(layer)) map.removeLayer(layer);
+}
+
+function showMapLayer(layer) {
+  if (layer && !map.hasLayer(layer)) layer.addTo(map);
+  return layer;
+}
+
+function ensureRasterBase(baseType) {
+  if (!baseType) return null;
+  if (rasterBaseCache[baseType]) return rasterBaseCache[baseType];
+  const url = getLayerUrl(baseType);
+  const attrib = getLayerAttribution(baseType);
+  if (!url && baseType !== 'dark') return null;
+  const layer = createBaseRasterLayer(baseType, url || LAYERS.dark?.url, attrib);
+  if (layer) rasterBaseCache[baseType] = layer;
+  return layer || null;
+}
+
+function hideAllBasemaps() {
+  hideMapLayer(oceanGlLayer);
+  hideMapLayer(topoGlLayer);
+  hideMapLayer(nightGlLayer);
+  hideMapLayer(navigationGlLayer);
+  Object.values(rasterBaseCache).forEach(hideMapLayer);
+  hideMapLayer(shomOverlay);
+  hideMapLayer(ukhoOverlay);
+  hideMapLayer(gbsouthOverlay);
+}
+
+function chartOverlayFor(baseKey) {
+  if (baseKey === 'shom') return shomOverlay;
+  if (baseKey === 'gbsouth') return gbsouthOverlay;
+  if (baseKey === 'ukho') return ukhoOverlay;
+  return null;
+}
+
+async function ensureVectorBase(baseKey, { attach = true } = {}) {
+  if (baseKey === 'ocean') return createOceanLayer({ attach });
+  if (baseKey === 'topo') return createTopoLayer({ attach });
+  if (baseKey === 'night') return createNightLayer({ attach });
+  if (baseKey === 'navigation') return createNavigationLayer({ attach });
+  return null;
+}
+
+/** Create-or-reuse every allowed base (except UKHO) so later switches are instant. */
+async function primeBasemapLayers() {
+  if (basemapPrimePromise) return basemapPrimePromise;
+  basemapPrimePromise = (async () => {
+    for (const base of allowedBases) {
+      if (!base || base === 'ukho') continue;
+      try {
+        if (VECTOR_BASE_KEYS.has(base)) {
+          await ensureVectorBase(base, { attach: false });
+        } else if (CHART_BASE_KEYS.has(base)) {
+          ensureRasterBase('osm');
+        } else {
+          ensureRasterBase(base);
+        }
+      } catch (err) {
+        console.warn('[Basemap] prime failed for', base, err);
+      }
+    }
+    // Re-show whatever is selected now (user may have switched during priming).
+    const selected = baseSelect?.value;
+    if (selected) await activateBasemap(selected);
+  })().finally(() => {
+    basemapPrimePromise = null;
+  });
+  return basemapPrimePromise;
+}
+
+/**
+ * Switch basemap by toggling keep-alive layer instances (no recreate when cached).
+ * @returns {{ activeBaseType: string, stale?: boolean }}
+ */
+async function activateBasemap(selectedBase, { requestId = null } = {}) {
+  const isStale = () => requestId != null && requestId !== baseSwitchRequestId;
+  let activeBaseType = selectedBase;
+
+  hideAllBasemaps();
+  if (isStale()) return { activeBaseType, stale: true };
+
+  let nextBase = null;
+  let nextOverlay = null;
+
+  if (CHART_BASE_KEYS.has(selectedBase) && chartOverlayFor(selectedBase)) {
+    nextBase = ensureRasterBase('osm');
+    nextOverlay = chartOverlayFor(selectedBase);
+  } else if (VECTOR_BASE_KEYS.has(selectedBase)) {
+    nextBase = await ensureVectorBase(selectedBase, { attach: true });
+    if (isStale()) return { activeBaseType, stale: true };
+    if (!nextBase) {
+      console.warn(`[Basemap] Failed to load ${selectedBase}, falling back to OSM`);
+      nextBase = ensureRasterBase('osm') || osm || layerDefs.osm;
+      activeBaseType = 'osm';
+    }
+  } else {
+    nextBase = ensureRasterBase(selectedBase);
+    if (!nextBase) {
+      console.warn(`[Base Layer] Missing layer for "${selectedBase}", falling back to OSM.`);
+      nextBase = ensureRasterBase('osm') || osm || layerDefs.osm;
+      activeBaseType = 'osm';
+    }
+  }
+
+  if (isStale()) return { activeBaseType, stale: true };
+
+  showMapLayer(nextBase);
+  showMapLayer(nextOverlay);
+  currentBase = nextBase;
+  currentOverlay = nextOverlay;
+  return { activeBaseType };
+}
 
 if (currentBase) {
   currentBase.addTo(map);
@@ -958,60 +1090,8 @@ async function applyNamesOverlayForBase(baseType) {
 
 async function refreshBaseLayer() {
   const baseType = baseSelect.value;
-
-  // Remove current base
-  if (currentBase && currentBase.remove) {
-    map.removeLayer(currentBase);
-  }
-  removeOceanLayer();
-  removeTopoLayer();
-  removeNightLayer();
-  removeNavigationLayer();
-
-  // Handle ocean (vector tile layer)
-  if (baseType === 'ocean') {
-    currentBase = await createOceanLayer();
-    if (!currentBase) {
-      console.warn('[Ocean] Failed to load ocean layer');
-      return;
-    }
-  }
-  // Handle topo (vector tile layer)
-  else if (baseType === 'topo') {
-    currentBase = await createTopoLayer();
-    if (!currentBase) {
-      console.warn('[Topo] Failed to load topo layer');
-      return;
-    }
-  }
-  // Handle night (vector tile layer)
-  else if (baseType === 'night') {
-    currentBase = await createNightLayer();
-    if (!currentBase) {
-      console.warn('[Night] Failed to load night layer');
-      return;
-    }
-  }
-  // Handle navigation (vector tile layer)
-  else if (baseType === 'navigation') {
-    currentBase = await createNavigationLayer();
-    if (!currentBase) {
-      console.warn('[Navigation] Failed to load navigation layer');
-      return;
-    }
-  } else {
-    // Get the appropriate URL based on labeled mode
-    const url = getLayerUrl(baseType);
-    if (!url) {
-      console.warn(`[Labeled Map] No layer available for: ${baseType}`);
-      return;
-    }
-
-    // Create new layer with correct URL
-    currentBase = createBaseRasterLayer(baseType, url, getLayerAttribution(baseType));
-
-    currentBase.addTo(map);
-  }
+  const { activeBaseType } = await activateBasemap(baseType);
+  applyZoomLimitsForBase(activeBaseType);
 
   // Re-add overlays
   if (seamarksCb.checked && seamarks) seamarks.addTo(map).bringToFront();
@@ -1023,6 +1103,14 @@ async function refreshBaseLayer() {
 
   setAttrib();
 }
+
+const basemapPreloader = createBasemapPreloader({
+  map,
+  getAllowedBases: () => allowedBases,
+  layers: LAYERS,
+  getZoomLimits: getZoomLimitsForBase,
+  getActiveBase: () => baseSelect?.value || null,
+});
 
 const toolbarController = createToolbarController({
   baseSelect,
@@ -1037,6 +1125,10 @@ const toolbarController = createToolbarController({
   updateLabelButtonVisibility,
   getIsNamesOverlayEnabled: () => isNamesOverlayEnabled,
   setIsNamesOverlayEnabled: (next) => { isNamesOverlayEnabled = next; },
+  onMapsPickerOpen: () => {
+    basemapPreloader.warmOnMapsPickerOpen();
+    primeBasemapLayers();
+  },
 });
 const {
   updateBaseButtonStates,
@@ -1052,145 +1144,9 @@ async function applyUserPreferences() {
   // Apply base layer preference if set
   if (user.default_base && allowedBases.includes(user.default_base)) {
     const requestId = ++baseSwitchRequestId;
-    const isStaleRequest = () => requestId !== baseSwitchRequestId;
     baseSelect.value = user.default_base;
-    // Switch to the preferred base layer
-    const selectedBase = user.default_base;
-    let activeBaseType = selectedBase;
-
-    // Remove current layers
-    if (currentBase) map.removeLayer(currentBase);
-    if (currentOverlay) map.removeLayer(currentOverlay);
-
-    // Handle SHOM: OSM base + SHOM overlay
-    if (selectedBase === 'shom' && shomOverlay) {
-      removeOceanLayer();
-      removeTopoLayer();
-      removeNightLayer();
-      removeNavigationLayer();
-      const baseUrl = LAYERS.osm.url;
-      const baseAttrib = LAYERS.osm.attribution;
-      currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
-      currentOverlay = shomOverlay;
-      currentBase.addTo(map);
-      currentOverlay.addTo(map);
-    }
-    // Handle gbsouth: OSM base + gbsouth overlay
-    else if (selectedBase === 'gbsouth' && gbsouthOverlay) {
-      removeOceanLayer();
-      removeTopoLayer();
-      removeNightLayer();
-      removeNavigationLayer();
-      const baseUrl = LAYERS.osm.url;
-      const baseAttrib = LAYERS.osm.attribution;
-      currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
-      currentOverlay = gbsouthOverlay;
-      currentBase.addTo(map);
-      currentOverlay.addTo(map);
-    }
-    // Handle UKHO: OSM base + UKHO chart overlay
-    else if (selectedBase === 'ukho' && ukhoOverlay) {
-      removeOceanLayer();
-      removeTopoLayer();
-      removeNightLayer();
-      removeNavigationLayer();
-      const baseUrl = LAYERS.osm.url;
-      const baseAttrib = LAYERS.osm.attribution;
-      currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
-      currentOverlay = ukhoOverlay;
-      currentBase.addTo(map);
-      currentOverlay.addTo(map);
-    }
-    // Handle OCEAN: vector tile layer (MapLibre GL)
-    else if (selectedBase === 'ocean') {
-      if (currentBase && currentBase.remove) {
-        map.removeLayer(currentBase);
-      }
-      removeOceanLayer();
-      removeTopoLayer();
-      currentBase = await createOceanLayer();
-      if (isStaleRequest()) return;
-      if (!currentBase) {
-        currentBase = osm || layerDefs.osm;
-        if (currentBase) currentBase.addTo(map);
-        activeBaseType = 'osm';
-      }
-      currentOverlay = null;
-    }
-    // Handle TOPO: vector tile layer (MapLibre GL)
-    else if (selectedBase === 'topo') {
-      if (currentBase && currentBase.remove) {
-        map.removeLayer(currentBase);
-      }
-      removeOceanLayer();
-      removeTopoLayer();
-      removeNightLayer();
-      currentBase = await createTopoLayer();
-      if (isStaleRequest()) return;
-      if (!currentBase) {
-        currentBase = osm || layerDefs.osm;
-        if (currentBase) currentBase.addTo(map);
-        activeBaseType = 'osm';
-      }
-      currentOverlay = null;
-    }
-    // Handle NIGHT: vector tile layer (MapLibre GL)
-    else if (selectedBase === 'night') {
-      if (currentBase && currentBase.remove) {
-        map.removeLayer(currentBase);
-      }
-      removeOceanLayer();
-      removeTopoLayer();
-      removeNightLayer();
-      removeNavigationLayer();
-      currentBase = await createNightLayer();
-      if (isStaleRequest()) return;
-      if (!currentBase) {
-        currentBase = osm || layerDefs.osm;
-        if (currentBase) currentBase.addTo(map);
-        activeBaseType = 'osm';
-      }
-      currentOverlay = null;
-    }
-    // Handle NAVIGATION: vector tile layer (MapLibre GL)
-    else if (selectedBase === 'navigation') {
-      if (currentBase && currentBase.remove) {
-        map.removeLayer(currentBase);
-      }
-      removeOceanLayer();
-      removeTopoLayer();
-      removeNightLayer();
-      removeNavigationLayer();
-      currentBase = await createNavigationLayer();
-      if (isStaleRequest()) return;
-      if (!currentBase) {
-        currentBase = osm || layerDefs.osm;
-        if (currentBase) currentBase.addTo(map);
-        activeBaseType = 'osm';
-      }
-      currentOverlay = null;
-    }
-    // Handle OSM or ESRI: pure base layers (raster)
-    else {
-      removeOceanLayer();
-      removeTopoLayer();
-      removeNightLayer();
-      removeNavigationLayer();
-      const url = getLayerUrl(selectedBase);
-      const attrib = getLayerAttribution(selectedBase);
-      if (url) {
-        currentBase = createBaseRasterLayer(selectedBase, url, attrib);
-        currentBase.addTo(map);
-      } else {
-        console.warn(`[Base Layer] Missing URL for "${selectedBase}", falling back to OSM.`);
-        currentBase = osm || layerDefs.osm;
-        if (currentBase) currentBase.addTo(map);
-        activeBaseType = 'osm';
-      }
-      currentOverlay = null;
-    }
-    if (isStaleRequest()) return;
-    applyZoomLimitsForBase(activeBaseType);
+    const { activeBaseType, stale } = await activateBasemap(user.default_base, { requestId });
+    if (!stale) applyZoomLimitsForBase(activeBaseType);
   }
 
   // Apply overlay preferences if set
@@ -1294,174 +1250,16 @@ function setAttrib(){
 
 baseSelect.addEventListener('change', async () => {
   const requestId = ++baseSwitchRequestId;
-  const isStaleRequest = () => requestId !== baseSwitchRequestId;
   const selectedBase = baseSelect.value;
-  let activeBaseType = selectedBase;
-
-  // Remove current layers
-  if (currentBase) map.removeLayer(currentBase);
-  if (currentOverlay) map.removeLayer(currentOverlay);
-
-  // Handle SHOM: OSM base + SHOM overlay
-  if (selectedBase === 'shom' && shomOverlay) {
-    // Chart overlays sit on OSM — clear any leftover MapLibre vector basemap first.
-    removeOceanLayer();
-    removeTopoLayer();
-    removeNightLayer();
-    removeNavigationLayer();
-    // SHOM uses OSM underlay
-    const baseUrl = LAYERS.osm.url;
-    const baseAttrib = LAYERS.osm.attribution;
-    currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
-    currentOverlay = shomOverlay;
-    currentBase.addTo(map);
-    currentOverlay.addTo(map);
-  }
-  // Handle gbsouth: OSM base + gbsouth overlay
-  else if (selectedBase === 'gbsouth' && gbsouthOverlay) {
-    removeOceanLayer();
-    removeTopoLayer();
-    removeNightLayer();
-    removeNavigationLayer();
-    // GB South uses OSM underlay
-    const baseUrl = LAYERS.osm.url;
-    const baseAttrib = LAYERS.osm.attribution;
-    currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
-    currentOverlay = gbsouthOverlay;
-    currentBase.addTo(map);
-    currentOverlay.addTo(map);
-  }
-  // Handle UKHO: OSM base + UKHO chart overlay
-  else if (selectedBase === 'ukho' && ukhoOverlay) {
-    removeOceanLayer();
-    removeTopoLayer();
-    removeNightLayer();
-    removeNavigationLayer();
-    const baseUrl = LAYERS.osm.url;
-    const baseAttrib = LAYERS.osm.attribution;
-    currentBase = createBaseRasterLayer('osm', baseUrl, baseAttrib);
-    currentOverlay = ukhoOverlay;
-    currentBase.addTo(map);
-    currentOverlay.addTo(map);
-  }
-  // Handle OCEAN: vector tile layer (MapLibre GL)
-  else if (selectedBase === 'ocean') {
-    // Remove any existing base layers
-    if (currentBase && currentBase.remove) {
-      map.removeLayer(currentBase);
-    }
-    removeOceanLayer();
-    removeTopoLayer();
-
-    // Create ocean vector tile layer
-    currentBase = await createOceanLayer();
-    if (isStaleRequest()) return;
-    if (!currentBase) {
-      // Fallback to OSM if ocean fails
-      console.warn('[Ocean] Failed to load ocean layer, falling back to OSM');
-      currentBase = osm || layerDefs.osm;
-      if (currentBase) currentBase.addTo(map);
-      activeBaseType = 'osm';
-    }
-    currentOverlay = null;
-  }
-  // Handle TOPO: vector tile layer (MapLibre GL)
-  else if (selectedBase === 'topo') {
-    // Remove any existing base layers
-    if (currentBase && currentBase.remove) {
-      map.removeLayer(currentBase);
-    }
-    removeOceanLayer();
-    removeTopoLayer();
-    removeNightLayer();
-
-    // Create topo vector tile layer
-    currentBase = await createTopoLayer();
-    if (isStaleRequest()) return;
-    if (!currentBase) {
-      // Fallback to OSM if topo fails
-      console.warn('[Topo] Failed to load topo layer, falling back to OSM');
-      currentBase = osm || layerDefs.osm;
-      if (currentBase) currentBase.addTo(map);
-      activeBaseType = 'osm';
-    }
-    currentOverlay = null;
-  }
-  // Handle NIGHT: vector tile layer (MapLibre GL)
-  else if (selectedBase === 'night') {
-    // Remove any existing base layers
-    if (currentBase && currentBase.remove) {
-      map.removeLayer(currentBase);
-    }
-    removeOceanLayer();
-    removeTopoLayer();
-    removeNightLayer();
-    removeNavigationLayer();
-
-    // Create night vector tile layer
-    currentBase = await createNightLayer();
-    if (isStaleRequest()) return;
-    if (!currentBase) {
-      // Fallback to OSM if night fails
-      console.warn('[Night] Failed to load night layer, falling back to OSM');
-      currentBase = osm || layerDefs.osm;
-      if (currentBase) currentBase.addTo(map);
-      activeBaseType = 'osm';
-    }
-    currentOverlay = null;
-  }
-  // Handle NAVIGATION: vector tile layer (MapLibre GL)
-  else if (selectedBase === 'navigation') {
-    // Remove any existing base layers
-    if (currentBase && currentBase.remove) {
-      map.removeLayer(currentBase);
-    }
-    removeOceanLayer();
-    removeTopoLayer();
-    removeNightLayer();
-    removeNavigationLayer();
-
-    // Create navigation vector tile layer
-    currentBase = await createNavigationLayer();
-    if (isStaleRequest()) return;
-    if (!currentBase) {
-      // Fallback to OSM if navigation fails
-      console.warn('[Navigation] Failed to load navigation layer, falling back to OSM');
-      currentBase = osm || layerDefs.osm;
-      if (currentBase) currentBase.addTo(map);
-      activeBaseType = 'osm';
-    }
-    currentOverlay = null;
-  }
-  // Handle OSM or ESRI: pure base layers (raster)
-  else {
-    // Remove vector layers if they exist
-    removeOceanLayer();
-    removeTopoLayer();
-    removeNightLayer();
-    removeNavigationLayer();
-
-    const url = getLayerUrl(selectedBase);
-    const attrib = getLayerAttribution(selectedBase);
-    if (url) {
-      currentBase = createBaseRasterLayer(selectedBase, url, attrib);
-      currentBase.addTo(map);
-    } else {
-      console.warn(`[Base Layer] Missing URL for "${selectedBase}", falling back to OSM.`);
-      currentBase = osm || layerDefs.osm;
-      if (currentBase) currentBase.addTo(map);
-      activeBaseType = 'osm';
-    }
-    currentOverlay = null;
-  }
-  if (isStaleRequest()) return;
+  const { activeBaseType, stale } = await activateBasemap(selectedBase, { requestId });
+  if (stale) return;
   applyZoomLimitsForBase(activeBaseType);
 
   // Re-add other overlays on top
   if (seamarksCb.checked && seamarks) seamarks.addTo(map).bringToFront();
   if (openaipCb.checked && openaipLayer) openaipLayer.addTo(map).bringToFront();
   await applyNamesOverlayForBase(selectedBase);
-  if (isStaleRequest()) return;
+  if (requestId !== baseSwitchRequestId) return;
 
   // Update button states
   updateBaseButtonStates();
@@ -1502,219 +1300,192 @@ openaipCb.addEventListener('change', () => {
 });
 
 // --- Ocean Vector Tile Layer (MapLibre GL) ---
-async function createOceanLayer() {
-  if (oceanGlLayer) {
-    // Already created, just return
-    return oceanGlLayer;
-  }
-
+async function createOceanLayer({ attach = true } = {}) {
   if (!LAYERS.ocean || !LAYERS.ocean.styleUrl) {
     console.error('[Ocean] Ocean layer not configured');
     return null;
   }
 
-  try {
-    // Fetch the style JSON from backend
-    const styleResponse = await fetch(LAYERS.ocean.styleUrl, { headers: { Authorization: `Bearer ${token}` } });
-    if (!styleResponse.ok) {
-      throw new Error(`Failed to fetch ocean style: ${styleResponse.status}`);
+  if (!oceanGlLayer) {
+    try {
+      const styleResponse = await fetch(LAYERS.ocean.styleUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!styleResponse.ok) {
+        throw new Error(`Failed to fetch ocean style: ${styleResponse.status}`);
+      }
+
+      const styleJson = absolutizeMapStyleUrls(await styleResponse.json());
+
+      oceanGlLayer = L.maplibreGL({
+        style: styleJson,
+        interactive: true,
+        pane: 'basePane',
+        transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
+      }).addTo(map);
+
+      oceanGlMap = oceanGlLayer.getMaplibreMap();
+
+      oceanGlMap.on('load', () => {
+        console.log('[Ocean] Ocean vector tile layer loaded');
+      });
+
+      oceanGlMap.on('error', (e) => {
+        console.error('[Ocean] MapLibre GL error:', e?.error || e);
+      });
+    } catch (error) {
+      console.error('[Ocean] Failed to create ocean layer:', error);
+      return null;
     }
-
-    const styleJson = absolutizeMapStyleUrls(await styleResponse.json());
-
-    // Create MapLibre GL layer with the style
-    oceanGlLayer = L.maplibreGL({
-      style: styleJson,
-      interactive: true,
-      pane: 'basePane',
-      transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
-    }).addTo(map);
-
-    oceanGlMap = oceanGlLayer.getMaplibreMap();
-
-    oceanGlMap.on('load', () => {
-      console.log('[Ocean] Ocean vector tile layer loaded');
-    });
-
-    oceanGlMap.on('error', (e) => {
-      console.error('[Ocean] MapLibre GL error:', e?.error || e);
-    });
-
-    return oceanGlLayer;
-  } catch (error) {
-    console.error('[Ocean] Failed to create ocean layer:', error);
-    return null;
   }
+
+  if (attach) showMapLayer(oceanGlLayer);
+  else if (baseSelect?.value !== 'ocean') hideMapLayer(oceanGlLayer);
+  return oceanGlLayer;
 }
 
 function removeOceanLayer() {
-  if (oceanGlLayer) {
-    map.removeLayer(oceanGlLayer);
-    oceanGlLayer = null;
-    oceanGlMap = null;
-  }
+  // Keep-alive: hide only — do not destroy the MapLibre instance.
+  hideMapLayer(oceanGlLayer);
 }
 
 // --- Topo Vector Tile Layer (MapLibre GL) ---
-async function createTopoLayer() {
-  if (topoGlLayer) {
-    // Already created, just return
-    return topoGlLayer;
-  }
-
+async function createTopoLayer({ attach = true } = {}) {
   if (!LAYERS.topo || !LAYERS.topo.styleUrl) {
     console.error('[Topo] Topo layer not configured');
     return null;
   }
 
-  try {
-    // Fetch the style JSON from backend
-    const styleResponse = await fetch(LAYERS.topo.styleUrl, { headers: { Authorization: `Bearer ${token}` } });
-    if (!styleResponse.ok) {
-      throw new Error(`Failed to fetch topo style: ${styleResponse.status}`);
+  if (!topoGlLayer) {
+    try {
+      const styleResponse = await fetch(LAYERS.topo.styleUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!styleResponse.ok) {
+        throw new Error(`Failed to fetch topo style: ${styleResponse.status}`);
+      }
+
+      const styleJson = absolutizeMapStyleUrls(await styleResponse.json());
+
+      topoGlLayer = L.maplibreGL({
+        style: styleJson,
+        interactive: true,
+        pane: 'basePane',
+        transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
+      }).addTo(map);
+
+      topoGlMap = topoGlLayer.getMaplibreMap();
+
+      topoGlMap.on('load', () => {
+        console.log('[Topo] Topo vector tile layer loaded');
+      });
+
+      topoGlMap.on('error', (e) => {
+        console.error('[Topo] MapLibre GL error:', e?.error || e);
+      });
+    } catch (error) {
+      console.error('[Topo] Failed to create topo layer:', error);
+      return null;
     }
-
-    const styleJson = absolutizeMapStyleUrls(await styleResponse.json());
-
-    // Create MapLibre GL layer with the style
-    topoGlLayer = L.maplibreGL({
-      style: styleJson,
-      interactive: true,
-      pane: 'basePane',
-      transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
-    }).addTo(map);
-
-    topoGlMap = topoGlLayer.getMaplibreMap();
-
-    topoGlMap.on('load', () => {
-      console.log('[Topo] Topo vector tile layer loaded');
-    });
-
-    topoGlMap.on('error', (e) => {
-      console.error('[Topo] MapLibre GL error:', e?.error || e);
-    });
-
-    return topoGlLayer;
-  } catch (error) {
-    console.error('[Topo] Failed to create topo layer:', error);
-    return null;
   }
+
+  if (attach) showMapLayer(topoGlLayer);
+  else if (baseSelect?.value !== 'topo') hideMapLayer(topoGlLayer);
+  return topoGlLayer;
 }
 
 function removeTopoLayer() {
-  if (topoGlLayer) {
-    map.removeLayer(topoGlLayer);
-    topoGlLayer = null;
-    topoGlMap = null;
-  }
+  hideMapLayer(topoGlLayer);
 }
 
 // --- Night Vector Tile Layer (MapLibre GL) ---
-async function createNightLayer() {
-  if (nightGlLayer) {
-    // Already created, just return
-    return nightGlLayer;
-  }
-
+async function createNightLayer({ attach = true } = {}) {
   if (!LAYERS.night || !LAYERS.night.styleUrl) {
     console.error('[Night] Night layer not configured');
     return null;
   }
 
-  try {
-    // Fetch the style JSON from backend
-    const styleResponse = await fetch(LAYERS.night.styleUrl, { headers: { Authorization: `Bearer ${token}` } });
-    if (!styleResponse.ok) {
-      throw new Error(`Failed to fetch night style: ${styleResponse.status}`);
+  if (!nightGlLayer) {
+    try {
+      const styleResponse = await fetch(LAYERS.night.styleUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!styleResponse.ok) {
+        throw new Error(`Failed to fetch night style: ${styleResponse.status}`);
+      }
+
+      const styleJson = absolutizeMapStyleUrls(await styleResponse.json());
+
+      nightGlLayer = L.maplibreGL({
+        style: styleJson,
+        interactive: true,
+        pane: 'basePane',
+        transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
+      }).addTo(map);
+
+      nightGlMap = nightGlLayer.getMaplibreMap();
+
+      nightGlMap.on('load', () => {
+        console.log('[Night] Night vector tile layer loaded');
+      });
+
+      nightGlMap.on('error', (e) => {
+        console.error('[Night] MapLibre GL error:', e?.error || e);
+      });
+    } catch (error) {
+      console.error('[Night] Failed to create night layer:', error);
+      return null;
     }
-
-    const styleJson = absolutizeMapStyleUrls(await styleResponse.json());
-
-    // Create MapLibre GL layer with the style
-    nightGlLayer = L.maplibreGL({
-      style: styleJson,
-      interactive: true,
-      pane: 'basePane',
-      transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
-    }).addTo(map);
-
-    nightGlMap = nightGlLayer.getMaplibreMap();
-
-    nightGlMap.on('load', () => {
-      console.log('[Night] Night vector tile layer loaded');
-    });
-
-    nightGlMap.on('error', (e) => {
-      console.error('[Night] MapLibre GL error:', e?.error || e);
-    });
-
-    return nightGlLayer;
-  } catch (error) {
-    console.error('[Night] Failed to create night layer:', error);
-    return null;
   }
+
+  if (attach) showMapLayer(nightGlLayer);
+  else if (baseSelect?.value !== 'night') hideMapLayer(nightGlLayer);
+  return nightGlLayer;
 }
 
 function removeNightLayer() {
-  if (nightGlLayer) {
-    map.removeLayer(nightGlLayer);
-    nightGlLayer = null;
-    nightGlMap = null;
-  }
+  hideMapLayer(nightGlLayer);
 }
 
 // --- Navigation Vector Tile Layer (MapLibre GL) ---
-async function createNavigationLayer() {
-  if (navigationGlLayer) {
-    // Already created, just return
-    return navigationGlLayer;
-  }
-
+async function createNavigationLayer({ attach = true } = {}) {
   if (!LAYERS.navigation || !LAYERS.navigation.styleUrl) {
     console.error('[Navigation] Navigation layer not configured');
     return null;
   }
 
-  try {
-    // Fetch the style JSON from backend
-    const styleResponse = await fetch(LAYERS.navigation.styleUrl, { headers: { Authorization: `Bearer ${token}` } });
-    if (!styleResponse.ok) {
-      throw new Error(`Failed to fetch navigation style: ${styleResponse.status}`);
+  if (!navigationGlLayer) {
+    try {
+      const styleResponse = await fetch(LAYERS.navigation.styleUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!styleResponse.ok) {
+        throw new Error(`Failed to fetch navigation style: ${styleResponse.status}`);
+      }
+
+      const styleJson = absolutizeMapStyleUrls(await styleResponse.json());
+
+      navigationGlLayer = L.maplibreGL({
+        style: styleJson,
+        interactive: true,
+        pane: 'basePane',
+        transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
+      }).addTo(map);
+
+      navigationGlMap = navigationGlLayer.getMaplibreMap();
+
+      navigationGlMap.on('load', () => {
+        console.log('[Navigation] Navigation vector tile layer loaded');
+      });
+
+      navigationGlMap.on('error', (e) => {
+        console.error('[Navigation] MapLibre GL error:', e?.error || e);
+      });
+    } catch (error) {
+      console.error('[Navigation] Failed to create navigation layer:', error);
+      return null;
     }
-
-    const styleJson = absolutizeMapStyleUrls(await styleResponse.json());
-
-    // Create MapLibre GL layer with the style
-    navigationGlLayer = L.maplibreGL({
-      style: styleJson,
-      interactive: true,
-      pane: 'basePane',
-      transformRequest: makeArcgisTransformRequest(() => localStorage.getItem('token')),
-    }).addTo(map);
-
-    navigationGlMap = navigationGlLayer.getMaplibreMap();
-
-    navigationGlMap.on('load', () => {
-      console.log('[Navigation] Navigation vector tile layer loaded');
-    });
-
-    navigationGlMap.on('error', (e) => {
-      console.error('[Navigation] MapLibre GL error:', e?.error || e);
-    });
-
-    return navigationGlLayer;
-  } catch (error) {
-    console.error('[Navigation] Failed to create navigation layer:', error);
-    return null;
   }
+
+  if (attach) showMapLayer(navigationGlLayer);
+  else if (baseSelect?.value !== 'navigation') hideMapLayer(navigationGlLayer);
+  return navigationGlLayer;
 }
 
 function removeNavigationLayer() {
-  if (navigationGlLayer) {
-    map.removeLayer(navigationGlLayer);
-    navigationGlLayer = null;
-    navigationGlMap = null;
-  }
+  hideMapLayer(navigationGlLayer);
 }
 
 // --- Population Density Layer (MapLibre GL) ---
@@ -3977,3 +3748,12 @@ map.whenReady(() => {
     runOnboardingTour();
   }, 350);
 });
+
+// Persistent tile/style cache across reloads (same-origin + common CDNs).
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw-tiles.js').catch((err) => {
+      console.warn('[SW] tile cache registration failed:', err);
+    });
+  });
+}

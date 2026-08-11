@@ -145,7 +145,7 @@ export function initMapToolControls(opts) {
     onHideInlineHgtButton();
   }
 
-  if (!isMobileApp) {
+  if (!isMobileApp && allowedTools.includes('draw')) {
     const drawBtn = createToolButton({
       id: TOOL_BTN_IDS.draw,
       className: 'map-tool-btn--draw',
@@ -157,15 +157,17 @@ export function initMapToolControls(opts) {
     if (typeof onDrawButtonReady === 'function') onDrawButtonReady(drawBtn);
   }
 
-  const kmlBtn = createToolButton({
-    id: TOOL_BTN_IDS.kml,
-    className: 'map-tool-btn--kml',
-    title: 'KML overlays',
-    html: iconHtml('kml'),
-    onClick: () => {},
-  });
-  insertBeforeMore(kmlBtn);
-  if (typeof onKmlButtonReady === 'function') onKmlButtonReady(kmlBtn);
+  if (allowedTools.includes('kml')) {
+    const kmlBtn = createToolButton({
+      id: TOOL_BTN_IDS.kml,
+      className: 'map-tool-btn--kml',
+      title: 'KML overlays',
+      html: iconHtml('kml'),
+      onClick: () => {},
+    });
+    insertBeforeMore(kmlBtn);
+    if (typeof onKmlButtonReady === 'function') onKmlButtonReady(kmlBtn);
+  }
 
   if (typeof onToolsReady === 'function') onToolsReady();
 

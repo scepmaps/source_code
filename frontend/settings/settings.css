@@ -65,6 +65,70 @@ body.settings-modal-open::before {
   color: var(--bg);
 }
 
+.settings-password-section {
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--stroke);
+}
+
+.settings-password-section h4 {
+  margin: 0 0 6px;
+}
+
+.settings-password-hint {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.settings-password-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.settings-password-grid label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.settings-password-grid input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--stroke);
+  background: var(--bg-2);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.settings-password-grid input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.settings-password-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings-password-message {
+  font-size: 13px;
+}
+
+.settings-password-message.is-ok {
+  color: var(--accent);
+}
+
+.settings-password-message.is-err {
+  color: var(--danger, #ff4d6d);
+}
+
 .favorites-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
