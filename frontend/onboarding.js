@@ -364,16 +364,19 @@ export async function startOnboardingTour(options = {}) {
       nextBtnText: 'Next',
       prevBtnText: 'Back',
       popoverClass: 'scepmaps-tour-popover',
-      // Count close (X / overlay / Esc) and Finish toward the auto-show limit.
-      // Note: if onDestroyStarted is set, Driver.js waits for driver.destroy() —
-      // only use onDestroyed so close always works.
+      // Do not use onDestroyStarted — Driver.js blocks close until destroy() is called.
+      // Count when the tour is shown (not on destroy): close/X can tear down without
+      // always invoking onDestroyed, which left the auto-show counter stuck.
       onDestroyed: () => {
+        // Safety net if drive() somehow ran without markSeenOnce (should be rare).
         markSeenOnce();
         if (typeof onFinished === 'function') onFinished();
       },
       steps
     });
     driverObj.drive();
+    // Count this appearance immediately so X / Esc / overlay close all count.
+    markSeenOnce();
     return true;
   } catch (error) {
     console.warn('[Onboarding] Guided tour is unavailable:', error);

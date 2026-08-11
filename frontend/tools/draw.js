@@ -948,18 +948,184 @@ export function initDrawTool({
     panelEl.setAttribute('aria-label', 'Drawing tools');
 
     panelEl.innerHTML = `
+      <div class="draw-panel-header">
+        <span class="draw-panel-title">Draw</span>
+        <button type="button" class="tool-settings-gear" id="drawSettingsGear" title="Draw options" aria-label="Draw options" aria-expanded="false">
+          ${iconHtml('settings') || '⚙'}
+        </button>
+      </div>
       ${MODES.map(modeButtonHtml).join('')}
       <div class="draw-panel-footer">
         <div class="draw-color-row" aria-label="Draw color">${colorSwatchesHtml()}</div>
         <button type="button" class="draw-panel-clear" id="drawClearBtn" title="Clear drawings">Clear</button>
       </div>
-      <div class="draw-panel-hint">Line / arrow = 2 clicks. Hold-click for freehand. Eraser deletes shapes. Right-click adds a shape.</div>
+      <div class="draw-panel-hint">Line / arrow = 2 clicks. Hold-click for freehand. Eraser deletes shapes. Right-click adds a shape. Gear opens labels, units, and palette.</div>
+      <div id="drawSettingsPanel" class="tool-settings-sheet draw-settings-sheet" role="dialog" aria-label="Draw options" hidden>
+        <div class="tool-settings-header">
+          <span class="tool-settings-title">Draw options</span>
+          <button type="button" class="tool-settings-close" id="drawSettingsClose" aria-label="Close options">&times;</button>
+        </div>
+        <label class="tool-settings-field-label">Color palette</label>
+        <div id="drawSettingsPalette" class="settings-draw-palette" aria-label="Draw color palette"></div>
+        <div class="draw-settings-toggles">
+          <label class="tool-settings-switch" title="Show length and area labels on drawn shapes">
+            <span>Measurements</span>
+            <span class="settings-switch">
+              <input type="checkbox" id="drawOptMeasurements" />
+              <span class="settings-switch-slider" aria-hidden="true"></span>
+            </span>
+          </label>
+          <label class="tool-settings-switch" title="Show line / perimeter length">
+            <span>Lengths</span>
+            <span class="settings-switch">
+              <input type="checkbox" id="drawOptLength" />
+              <span class="settings-switch-slider" aria-hidden="true"></span>
+            </span>
+          </label>
+          <label class="tool-settings-switch" title="Show area for polygons, rectangles, and circles">
+            <span>Areas</span>
+            <span class="settings-switch">
+              <input type="checkbox" id="drawOptArea" />
+              <span class="settings-switch-slider" aria-hidden="true"></span>
+            </span>
+          </label>
+          <label class="tool-settings-switch" title="Show latitude / longitude on shapes">
+            <span>Coordinates</span>
+            <span class="settings-switch">
+              <input type="checkbox" id="drawOptCoordinates" />
+              <span class="settings-switch-slider" aria-hidden="true"></span>
+            </span>
+          </label>
+        </div>
+        <div class="draw-settings-controls">
+          <div class="tool-settings-field">
+            <label for="drawOptUnits">Units</label>
+            <select id="drawOptUnits">
+              <option value="m">Meters</option>
+              <option value="km">Kilometers</option>
+              <option value="ft">Feet</option>
+              <option value="mi">Miles</option>
+              <option value="nm">Nautical mi</option>
+            </select>
+          </div>
+          <div class="tool-settings-field">
+            <label for="drawOptStroke">Stroke</label>
+            <div class="tool-settings-range-row">
+              <input type="range" id="drawOptStroke" min="1" max="6" step="0.25" />
+              <span id="drawOptStrokeVal">2.25</span>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
 
     panelEl.addEventListener('click', (e) => e.stopPropagation());
+    panelEl.querySelector('#drawSettingsGear')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSettingsPanel();
+    });
+    panelEl.querySelector('#drawSettingsClose')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSettingsPanel();
+    });
     bindPanelChrome();
+    bindSettingsChrome();
     refreshColorActive();
     return panelEl;
+  }
+
+  function isSettingsOpen() {
+    const sheet = panelEl?.querySelector('#drawSettingsPanel');
+    return !!(sheet && !sheet.hidden && sheet.classList.contains('open'));
+  }
+
+  function closeSettingsPanel() {
+    const sheet = panelEl?.querySelector('#drawSettingsPanel');
+    if (!sheet) return;
+    sheet.hidden = true;
+    sheet.classList.remove('open');
+    panelEl?.querySelector('#drawSettingsGear')?.classList.remove('is-open');
+    panelEl?.querySelector('#drawSettingsGear')?.setAttribute('aria-expanded', 'false');
+  }
+
+  function loadSettingsIntoForm() {
+    if (!panelEl) return;
+    const s = settings;
+    const setCb = (id, val) => {
+      const el = panelEl.querySelector(`#${id}`);
+      if (el) el.checked = !!val;
+    };
+    setCb('drawOptMeasurements', s.showMeasurements);
+    setCb('drawOptLength', s.showLength);
+    setCb('drawOptArea', s.showArea);
+    setCb('drawOptCoordinates', s.showCoordinates);
+    const unitsEl = panelEl.querySelector('#drawOptUnits');
+    if (unitsEl) unitsEl.value = s.units || 'm';
+    const stroke = panelEl.querySelector('#drawOptStroke');
+    const strokeVal = panelEl.querySelector('#drawOptStrokeVal');
+    if (stroke) stroke.value = String(s.strokeWeight ?? 2.25);
+    if (strokeVal) strokeVal.textContent = String(s.strokeWeight ?? 2.25);
+
+    const paletteHost = panelEl.querySelector('#drawSettingsPalette');
+    if (paletteHost) {
+      paletteHost.innerHTML = '';
+      (s.palette || []).forEach((color, idx) => {
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.value = color;
+        input.dataset.paletteIndex = String(idx);
+        input.title = `Palette color ${idx + 1}`;
+        input.addEventListener('input', applySettingsFromForm);
+        paletteHost.appendChild(input);
+      });
+    }
+  }
+
+  function applySettingsFromForm() {
+    if (!panelEl) return;
+    const paletteHost = panelEl.querySelector('#drawSettingsPalette');
+    const palette = paletteHost
+      ? [...paletteHost.querySelectorAll('input[type="color"]')].map((el) => el.value)
+      : undefined;
+    const stroke = panelEl.querySelector('#drawOptStroke');
+    const strokeVal = panelEl.querySelector('#drawOptStrokeVal');
+    if (stroke && strokeVal) strokeVal.textContent = stroke.value;
+    applySettings({
+      palette,
+      showMeasurements: !!panelEl.querySelector('#drawOptMeasurements')?.checked,
+      showLength: !!panelEl.querySelector('#drawOptLength')?.checked,
+      showArea: !!panelEl.querySelector('#drawOptArea')?.checked,
+      showCoordinates: !!panelEl.querySelector('#drawOptCoordinates')?.checked,
+      strokeWeight: stroke ? parseFloat(stroke.value) : 2.25,
+      units: panelEl.querySelector('#drawOptUnits')?.value || 'm',
+    });
+  }
+
+  function openSettingsPanel() {
+    ensurePanel();
+    loadSettingsIntoForm();
+    const sheet = panelEl.querySelector('#drawSettingsPanel');
+    if (!sheet) return;
+    sheet.hidden = false;
+    sheet.classList.add('open');
+    panelEl.querySelector('#drawSettingsGear')?.classList.add('is-open');
+    panelEl.querySelector('#drawSettingsGear')?.setAttribute('aria-expanded', 'true');
+  }
+
+  function toggleSettingsPanel() {
+    if (isSettingsOpen()) closeSettingsPanel();
+    else openSettingsPanel();
+  }
+
+  function bindSettingsChrome() {
+    if (!panelEl) return;
+    ['drawOptMeasurements', 'drawOptLength', 'drawOptArea', 'drawOptCoordinates'].forEach((id) => {
+      panelEl.querySelector(`#${id}`)?.addEventListener('change', applySettingsFromForm);
+    });
+    panelEl.querySelector('#drawOptStroke')?.addEventListener('input', applySettingsFromForm);
+    panelEl.querySelector('#drawOptUnits')?.addEventListener('change', applySettingsFromForm);
   }
 
   function refreshPanelActive() {
@@ -1017,6 +1183,7 @@ export function initDrawTool({
 
   function closePanel() {
     // Toolbar re-click / Esc exit: fully leave draw mode (panel + mode + cursor).
+    closeSettingsPanel();
     cancelDraft();
     activeMode = null;
     closeMapMenu();

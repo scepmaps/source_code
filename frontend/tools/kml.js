@@ -116,12 +116,40 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     panelEl.innerHTML = `
       <div class="kml-panel-header">
         <span class="kml-panel-title">KML overlays</span>
-        <button type="button" class="kml-panel-upload" id="kmlUploadBtn" title="Import KML">
-          ${iconHtml('upload') || '＋'} Import
-        </button>
+        <div class="kml-panel-header-actions">
+          <button type="button" class="tool-settings-gear" id="kmlSettingsGear" title="KML options" aria-label="KML options" aria-expanded="false">
+            ${iconHtml('settings') || '⚙'}
+          </button>
+          <button type="button" class="kml-panel-upload" id="kmlUploadBtn" title="Import KML">
+            ${iconHtml('upload') || '＋'} Import
+          </button>
+        </div>
       </div>
       <div class="kml-panel-list" id="kmlPanelList"></div>
-      <div class="kml-panel-hint">Import a .kml or .kmz file, then toggle it on the map.</div>
+      <div class="kml-panel-hint">Import a .kml or .kmz file, then toggle it on the map. Gear opens rename, opacity, and outline options.</div>
+      <div id="kmlSettingsPanel" class="tool-settings-sheet kml-settings-sheet" role="dialog" aria-label="KML options" hidden>
+        <div class="tool-settings-header">
+          <span class="tool-settings-title">KML options</span>
+          <button type="button" class="tool-settings-close" id="kmlSettingsClose" aria-label="Close options">&times;</button>
+        </div>
+        <label class="tool-settings-switch" title="Draw a bright thin red outline on every KML zone">
+          <span>Red zone outlines</span>
+          <span class="settings-switch">
+            <input type="checkbox" id="kmlOptRedOutline" />
+            <span class="settings-switch-slider" aria-hidden="true"></span>
+          </span>
+        </label>
+        <label class="tool-settings-switch" title="Show feature names on the map">
+          <span>Show names</span>
+          <span class="settings-switch">
+            <input type="checkbox" id="kmlOptShowNames" />
+            <span class="settings-switch-slider" aria-hidden="true"></span>
+          </span>
+        </label>
+        <div class="tool-settings-divider"></div>
+        <div class="tool-settings-subtitle">Layers</div>
+        <div id="kmlSettingsList" class="kml-settings-list"></div>
+      </div>
     `;
 
     listEl = panelEl.querySelector('#kmlPanelList');
@@ -129,6 +157,22 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
       e.preventDefault();
       e.stopPropagation();
       pickFile();
+    });
+    panelEl.querySelector('#kmlSettingsGear')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSettingsPanel();
+    });
+    panelEl.querySelector('#kmlSettingsClose')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSettingsPanel();
+    });
+    panelEl.querySelector('#kmlOptRedOutline')?.addEventListener('change', (e) => {
+      setRedOutline(!!e.target.checked);
+    });
+    panelEl.querySelector('#kmlOptShowNames')?.addEventListener('change', (e) => {
+      setShowNames(!!e.target.checked);
     });
     panelEl.addEventListener('click', (e) => e.stopPropagation());
 
@@ -145,6 +189,105 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     });
 
     return panelEl;
+  }
+
+  function isSettingsOpen() {
+    const sheet = panelEl?.querySelector('#kmlSettingsPanel');
+    return !!(sheet && !sheet.hidden && sheet.classList.contains('open'));
+  }
+
+  function closeSettingsPanel() {
+    const sheet = panelEl?.querySelector('#kmlSettingsPanel');
+    if (!sheet) return;
+    sheet.hidden = true;
+    sheet.classList.remove('open');
+    panelEl?.querySelector('#kmlSettingsGear')?.classList.remove('is-open');
+    panelEl?.querySelector('#kmlSettingsGear')?.setAttribute('aria-expanded', 'false');
+  }
+
+  function openSettingsPanel() {
+    ensurePanel();
+    const sheet = panelEl.querySelector('#kmlSettingsPanel');
+    if (!sheet) return;
+    const red = panelEl.querySelector('#kmlOptRedOutline');
+    const names = panelEl.querySelector('#kmlOptShowNames');
+    if (red) red.checked = !!redOutline;
+    if (names) names.checked = !!showNames;
+    renderSettingsList();
+    sheet.hidden = false;
+    sheet.classList.add('open');
+    panelEl.querySelector('#kmlSettingsGear')?.classList.add('is-open');
+    panelEl.querySelector('#kmlSettingsGear')?.setAttribute('aria-expanded', 'true');
+  }
+
+  function toggleSettingsPanel() {
+    if (isSettingsOpen()) closeSettingsPanel();
+    else openSettingsPanel();
+  }
+
+  function renderSettingsList() {
+    const host = panelEl?.querySelector('#kmlSettingsList');
+    if (!host) return;
+    if (!items.length) {
+      host.innerHTML = '<div class="kml-panel-empty">No KML files yet</div>';
+      return;
+    }
+    host.innerHTML = '';
+    items.forEach((item) => {
+      const card = document.createElement('div');
+      card.className = 'kml-settings-card';
+      card.dataset.kmlId = String(item.id);
+
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'kml-settings-name';
+      nameInput.value = item.name || '';
+      nameInput.placeholder = 'Overlay name';
+      let nameTimer = null;
+      nameInput.addEventListener('input', () => {
+        clearTimeout(nameTimer);
+        nameTimer = setTimeout(() => {
+          const next = nameInput.value.trim();
+          if (!next || next === item.name) return;
+          updateStyle(item.id, { name: next }).catch(() => {});
+        }, 450);
+      });
+      nameInput.addEventListener('change', () => {
+        const next = nameInput.value.trim();
+        if (!next || next === item.name) return;
+        updateStyle(item.id, { name: next }).catch(() => {});
+      });
+
+      const opacityRow = document.createElement('div');
+      opacityRow.className = 'tool-settings-range-row';
+      const opacityInput = document.createElement('input');
+      opacityInput.type = 'range';
+      opacityInput.min = '0';
+      opacityInput.max = '1';
+      opacityInput.step = '0.05';
+      opacityInput.value = String(item.opacity ?? 0.65);
+      const opacityVal = document.createElement('span');
+      opacityVal.textContent = `${Math.round((item.opacity ?? 0.65) * 100)}%`;
+      let opacityTimer = null;
+      opacityInput.addEventListener('input', () => {
+        opacityVal.textContent = `${Math.round(parseFloat(opacityInput.value) * 100)}%`;
+        clearTimeout(opacityTimer);
+        opacityTimer = setTimeout(() => {
+          updateStyle(item.id, { opacity: parseFloat(opacityInput.value) }).catch(() => {});
+        }, 200);
+      });
+      opacityRow.appendChild(opacityInput);
+      opacityRow.appendChild(opacityVal);
+
+      const opacityLabel = document.createElement('div');
+      opacityLabel.className = 'tool-settings-field-label';
+      opacityLabel.textContent = 'Opacity';
+
+      card.appendChild(nameInput);
+      card.appendChild(opacityLabel);
+      card.appendChild(opacityRow);
+      host.appendChild(card);
+    });
   }
 
   function pickFile() {
@@ -176,6 +319,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
   }
 
   function closePanel() {
+    closeSettingsPanel();
     panelEl?.classList.remove('open');
     btnEl?.classList.remove('panel-open', 'map-tool-btn--active');
     btnEl?.setAttribute('aria-expanded', 'false');
@@ -310,6 +454,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
       row.appendChild(actions);
       listEl.appendChild(row);
     });
+    if (isSettingsOpen()) renderSettingsList();
   }
 
   function applyLayerStyle(layer, item) {
@@ -685,6 +830,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     }
 
     renderList();
+    if (isSettingsOpen()) renderSettingsList();
     notify();
     return updated;
   }

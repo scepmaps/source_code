@@ -16,6 +16,8 @@ export function createToolbarController(opts) {
     getIsNamesOverlayEnabled,
     setIsNamesOverlayEnabled,
     onMapsPickerOpen,
+    onOverlayDensityGear,
+    onSaveCurrentBaseAsDefault,
   } = opts;
 
   const favMapOptions = {
@@ -93,6 +95,18 @@ export function createToolbarController(opts) {
         el.style.right = '';
         el.style.transform = '';
       }
+    });
+    document.querySelectorAll('.tool-settings-sheet.open').forEach((el) => {
+      // Keep draw/kml nested sheets in sync when their parent rail panel closes.
+      if (exceptId && el.closest(`#${exceptId}`)) return;
+      if (el.id === 'densitySettingsPanel') return; // managed separately
+      el.classList.remove('open');
+      el.hidden = true;
+    });
+    document.querySelectorAll('.tool-settings-gear.is-open').forEach((el) => {
+      if (el.id === 'densityLegendGear' || el.id === 'overlayDensityGear') return;
+      el.classList.remove('is-open');
+      el.setAttribute('aria-expanded', 'false');
     });
     document.getElementById('btnMaps')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnOverlays')?.setAttribute('aria-expanded', 'false');
@@ -295,13 +309,99 @@ export function createToolbarController(opts) {
     localStorage.setItem('scepmaps_favorites', JSON.stringify({ maps, overlays }));
   }
 
+  function ensurePanelToolbar(panel, panelId) {
+    let header = panel.querySelector('.rail-panel-toolbar');
+    if (header) return header;
+    header = document.createElement('div');
+    header.className = 'rail-panel-toolbar';
+    if (panelId === 'overlayPickerPanel') {
+      header.innerHTML = `
+        <span class="rail-panel-toolbar-title">Overlays</span>
+        ${allowedOver.includes('density')
+          ? `<button type="button" class="tool-settings-gear" id="overlayDensityGear" title="Density appearance" aria-label="Density appearance">${iconHtml('settings') || ''}</button>`
+          : ''}
+      `;
+      header.querySelector('#overlayDensityGear')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof onOverlayDensityGear === 'function') onOverlayDensityGear(header);
+      });
+    } else if (panelId === 'mapPickerPanel') {
+      header.innerHTML = `
+        <span class="rail-panel-toolbar-title">Maps</span>
+        <button type="button" class="tool-settings-gear" id="mapDefaultsGear" title="Map defaults" aria-label="Map defaults">${iconHtml('settings') || ''}</button>
+      `;
+      header.querySelector('#mapDefaultsGear')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleMapDefaultsSheet(panel);
+      });
+    }
+    panel.insertBefore(header, panel.firstChild);
+    return header;
+  }
+
+  function toggleMapDefaultsSheet(panel) {
+    let sheet = panel.querySelector('#mapDefaultsSheet');
+    const gear = panel.querySelector('#mapDefaultsGear');
+    if (!sheet) {
+      sheet = document.createElement('div');
+      sheet.id = 'mapDefaultsSheet';
+      sheet.className = 'tool-settings-sheet map-defaults-sheet';
+      sheet.innerHTML = `
+        <div class="tool-settings-header">
+          <span class="tool-settings-title">Map defaults</span>
+          <button type="button" class="tool-settings-close" aria-label="Close">&times;</button>
+        </div>
+        <p class="tool-settings-hint">Startup map and position are saved in Settings. Use this to quickly set the current base as your default.</p>
+        <button type="button" class="tool-settings-action" id="mapSaveDefaultBaseBtn">Use current map as default</button>
+        <button type="button" class="tool-settings-action tool-settings-action--ghost" id="mapOpenSettingsBtn">Open Settings</button>
+      `;
+      sheet.querySelector('.tool-settings-close')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        sheet.classList.remove('open');
+        sheet.hidden = true;
+        gear?.classList.remove('is-open');
+      });
+      sheet.querySelector('#mapSaveDefaultBaseBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof onSaveCurrentBaseAsDefault === 'function') onSaveCurrentBaseAsDefault();
+      });
+      sheet.querySelector('#mapOpenSettingsBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        document.getElementById('settingsBtn')?.click();
+      });
+      sheet.addEventListener('click', (e) => e.stopPropagation());
+      panel.appendChild(sheet);
+    }
+    const opening = !sheet.classList.contains('open');
+    sheet.hidden = !opening;
+    sheet.classList.toggle('open', opening);
+    gear?.classList.toggle('is-open', opening);
+  }
+
   function populateNamedPanel(panelId, items, iconMap, labels, type, idMap) {
     const panel = document.getElementById(panelId);
     if (!panel) return;
+
+    const keepToolbar = panelId === 'overlayPickerPanel' || panelId === 'mapPickerPanel';
+    const oldToolbar = keepToolbar ? panel.querySelector('.rail-panel-toolbar') : null;
+    const oldSheet = panelId === 'mapPickerPanel' ? panel.querySelector('#mapDefaultsSheet') : null;
     panel.innerHTML = '';
+    if (keepToolbar) {
+      if (oldToolbar) panel.appendChild(oldToolbar);
+      else ensurePanelToolbar(panel, panelId);
+      if (oldSheet) panel.appendChild(oldSheet);
+    }
 
     if (!items.length) {
-      panel.innerHTML = '<div class="rail-panel-empty">Nothing available</div>';
+      const empty = document.createElement('div');
+      empty.className = 'rail-panel-empty';
+      empty.textContent = 'Nothing available';
+      panel.appendChild(empty);
       return;
     }
 
@@ -536,7 +636,7 @@ export function createToolbarController(opts) {
     const isRailUiTarget = (target) => {
       const el = target instanceof Element ? target : target?.parentElement;
       return !!el?.closest(
-        '#sideRail, #mobileSheetHost, #mapPickerPanel, #overlayPickerPanel, #moreToolDropdown, #kmlPickerPanel, #drawPickerPanel, #drawMapMenu, #mobileSheetBackdrop'
+        '#sideRail, #mobileSheetHost, #mapPickerPanel, #overlayPickerPanel, #moreToolDropdown, #kmlPickerPanel, #drawPickerPanel, #drawMapMenu, #densitySettingsPanel, #mobileSheetBackdrop'
       );
     };
 

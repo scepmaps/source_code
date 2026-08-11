@@ -504,6 +504,27 @@
   text-align: center;
 }
 
+.rail-panel-toolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 4px;
+  border-bottom: 1px solid rgba(77, 226, 255, 0.12);
+  margin-bottom: 2px;
+}
+.rail-panel-toolbar-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+#mapPickerPanel,
+#overlayPickerPanel {
+  position: relative;
+}
+
 .side-rail .map-tool-btn {
   width: 38px !important;
   height: 38px !important;
