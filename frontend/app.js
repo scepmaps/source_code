@@ -6,7 +6,7 @@ import { initMapToolControls } from './tools/tools.js?v=20260811b';
 import { initKmlOverlays } from './tools/kml.js?v=20260807i';
 import { initDrawTool } from './tools/draw.js?v=20260807t';
 import { iconHtml } from './toolbar/icons.js?v=20260807q';
-import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260810a';
+import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260811f';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
 import { absolutizeMapStyleUrls, makeArcgisTransformRequest } from './map-style.js?v=20260805c';
 import { createBasemapPreloader } from './basemap-preload.js?v=20260811d';
@@ -3707,7 +3707,7 @@ initSettingsController({
 // Toolbar behavior moved to source_code/frontend/toolbar/toolbar.js
 
 async function runOnboardingTour(options = {}) {
-  const { showFailureNotice = false } = options;
+  const { showFailureNotice = false, force = false } = options;
   const started = await startOnboardingTour({
     userId: user?.id ?? null,
     onboardingResetVersion: Number(user?.onboarding_reset_version || 0),
@@ -3715,6 +3715,9 @@ async function runOnboardingTour(options = {}) {
     allowedOverlays: allowedOver,
     allowedTools,
     isMobile: isMobileApp,
+    force,
+    // Auto runs count toward the 2-view limit; Settings → Help also counts once per close.
+    countTowardAutoLimit: true,
     onFinished: () => {
       // Keep Leaflet stable after overlay teardown.
       map.invalidateSize();
@@ -3735,17 +3738,17 @@ helpTourBtn?.addEventListener('click', () => {
   }
   // Wait a tick so the modal fully closes and settingsBtn is hittable for the tour.
   requestAnimationFrame(() => {
-    runOnboardingTour({ showFailureNotice: true });
+    runOnboardingTour({ showFailureNotice: true, force: true });
   });
 });
 
-// Start the tour once for first-time users after controls finish rendering.
+// Auto-start up to twice for first-time users after controls finish rendering.
 // Mobile has a different chrome; skip auto tour there (Help still works).
 map.whenReady(() => {
   setTimeout(() => {
     if (isMobileApp) return;
     if (!shouldAutoStartOnboardingTour(user?.id ?? null, Number(user?.onboarding_reset_version || 0))) return;
-    runOnboardingTour();
+    runOnboardingTour({ force: false });
   }, 350);
 });
 

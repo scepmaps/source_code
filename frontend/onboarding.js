@@ -1,7 +1,9 @@
-const TOUR_SEEN_KEY_PREFIX = 'scepmaps_onboarding_seen_v2';
+const TOUR_SEEN_KEY_PREFIX = 'scepmaps_onboarding_seen_v3';
 const DRIVER_CSS_ID = 'driverjs-css';
 const DRIVER_SCRIPT_ID = 'driverjs-script';
 const TOUR_ZOOM_CONTROL_ID = 'zoomControls';
+/** Auto-start the tutorial at most this many times (close or finish both count). */
+const AUTO_SHOW_LIMIT = 2;
 
 function isElementVisible(el) {
   if (!el) return false;
@@ -260,14 +262,57 @@ function getTourSeenStorageKey(userId = null, onboardingResetVersion = 0) {
   return `${TOUR_SEEN_KEY_PREFIX}:${normalizedUserId}:v${normalizedVersion}`;
 }
 
-export function shouldAutoStartOnboardingTour(userId = null, onboardingResetVersion = 0) {
+/** Legacy boolean keys from v2 — treat "seen" as already at the auto limit. */
+function getLegacyTourSeenStorageKey(userId = null, onboardingResetVersion = 0) {
+  const normalizedUserId = userId == null ? 'anon' : String(userId);
+  const normalizedVersion = Number.isFinite(Number(onboardingResetVersion)) ? Number(onboardingResetVersion) : 0;
+  return `scepmaps_onboarding_seen_v2:${normalizedUserId}:v${normalizedVersion}`;
+}
+
+export function getOnboardingTourSeenCount(userId = null, onboardingResetVersion = 0) {
   const key = getTourSeenStorageKey(userId, onboardingResetVersion);
-  return localStorage.getItem(key) !== 'true';
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) {
+      // Migrate old boolean flag so users who already finished aren't shown twice again.
+      const legacy = localStorage.getItem(getLegacyTourSeenStorageKey(userId, onboardingResetVersion));
+      if (legacy === 'true') {
+        localStorage.setItem(key, String(AUTO_SHOW_LIMIT));
+        return AUTO_SHOW_LIMIT;
+      }
+      return 0;
+    }
+    if (raw === 'true') return AUTO_SHOW_LIMIT;
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return Math.min(AUTO_SHOW_LIMIT, n);
+  } catch (_) {
+    return AUTO_SHOW_LIMIT; // if storage fails, don't spam the tour
+  }
+}
+
+function incrementOnboardingTourSeenCount(userId = null, onboardingResetVersion = 0) {
+  const key = getTourSeenStorageKey(userId, onboardingResetVersion);
+  const next = Math.min(AUTO_SHOW_LIMIT, getOnboardingTourSeenCount(userId, onboardingResetVersion) + 1);
+  try {
+    localStorage.setItem(key, String(next));
+  } catch (_) {
+    // ignore quota / private mode
+  }
+  return next;
+}
+
+export function shouldAutoStartOnboardingTour(userId = null, onboardingResetVersion = 0) {
+  return getOnboardingTourSeenCount(userId, onboardingResetVersion) < AUTO_SHOW_LIMIT;
 }
 
 export function resetOnboardingTourSeenFlag(userId = null, onboardingResetVersion = 0) {
-  const key = getTourSeenStorageKey(userId, onboardingResetVersion);
-  localStorage.removeItem(key);
+  try {
+    localStorage.removeItem(getTourSeenStorageKey(userId, onboardingResetVersion));
+    localStorage.removeItem(getLegacyTourSeenStorageKey(userId, onboardingResetVersion));
+  } catch (_) {
+    // ignore
+  }
 }
 
 export async function startOnboardingTour(options = {}) {
@@ -278,9 +323,17 @@ export async function startOnboardingTour(options = {}) {
     allowedBases = [],
     allowedOverlays = [],
     allowedTools = [],
-    isMobile = false
+    isMobile = false,
+    /** When true (Settings → Help), always run even if auto-limit is reached. */
+    force = false,
+    /** Count this run toward the auto-show limit (default true for auto + Help). */
+    countTowardAutoLimit = true,
   } = options;
   try {
+    if (!force && !shouldAutoStartOnboardingTour(userId, onboardingResetVersion)) {
+      return false;
+    }
+
     ensureZoomControlId();
     ensureDriverCssLoaded();
     await ensureDriverScriptLoaded();
@@ -294,6 +347,13 @@ export async function startOnboardingTour(options = {}) {
     const steps = getExistingSteps(stepDefs);
     if (!steps.length) return false;
 
+    let counted = false;
+    const markSeenOnce = () => {
+      if (counted || !countTowardAutoLimit) return;
+      counted = true;
+      incrementOnboardingTourSeenCount(userId, onboardingResetVersion);
+    };
+
     const driverObj = window.driver.js.driver({
       showProgress: true,
       animate: true,
@@ -304,9 +364,12 @@ export async function startOnboardingTour(options = {}) {
       nextBtnText: 'Next',
       prevBtnText: 'Back',
       popoverClass: 'scepmaps-tour-popover',
+      // Count close (X / overlay / Esc) and Finish toward the auto-show limit.
+      onDestroyStarted: () => {
+        markSeenOnce();
+      },
       onDestroyed: () => {
-        const key = getTourSeenStorageKey(userId, onboardingResetVersion);
-        localStorage.setItem(key, 'true');
+        markSeenOnce();
         if (typeof onFinished === 'function') onFinished();
       },
       steps
