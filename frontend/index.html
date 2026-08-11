@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
     <link rel="stylesheet" href="tools/tools.css?v=20260807q">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css?v=20260810b">
+    <link rel="stylesheet" href="settings/settings.css?v=20260811e">
     <script type="module">
       import { isMobileClient } from './mobile/device.js?v=20260806e';
       try {
@@ -197,16 +197,21 @@
           </div>
         </div>
         <div class="stats-modal-body">
-          <div style="margin-bottom: 20px; display: flex; gap: 8px;">
-            <button class="btn" id="statsBtn" style="flex: 1;">
-              📊 My Stats
+          <div class="settings-top-actions">
+            <button type="button" class="btn settings-feedback-btn" id="settingsFeedbackBtn">
+              💬 Feedback
             </button>
-            <button class="btn" id="helpTourBtn" style="flex: 1;">
-              ❓ Help / Tutorial
-            </button>
-            <button class="btn" id="logoutBtn" style="flex: 1;">
-              🚪 Logout
-            </button>
+            <div class="settings-top-actions-row">
+              <button class="btn" id="statsBtn" style="flex: 1;">
+                📊 My Stats
+              </button>
+              <button class="btn" id="helpTourBtn" style="flex: 1;">
+                ❓ Help / Tutorial
+              </button>
+              <button class="btn" id="logoutBtn" style="flex: 1;">
+                🚪 Logout
+              </button>
+            </div>
           </div>
 
           <div id="settingsPasswordSection" class="settings-password-section">
@@ -471,6 +476,37 @@
       </div>
     </div>
 
+    <div id="feedbackModal" class="stats-modal feedback-modal" hidden>
+      <div class="stats-modal-content feedback-modal-content" role="dialog" aria-labelledby="feedbackTitle" aria-modal="true">
+        <div class="stats-modal-header">
+          <h3 id="feedbackTitle">Share feedback</h3>
+          <button type="button" class="btn" id="closeFeedbackBtn" aria-label="Close feedback">&times;</button>
+        </div>
+        <div class="stats-modal-body">
+          <p class="feedback-intro">
+            Is there anything we can add — tools, maps, overlays? Any thoughts or questions about SCEPMAPS?
+            We read every message.
+          </p>
+          <label class="feedback-label" for="feedbackTopics">About (optional)</label>
+          <div class="feedback-topics" id="feedbackTopics">
+            <label class="feedback-topic"><input type="checkbox" value="Tools" /> Tools</label>
+            <label class="feedback-topic"><input type="checkbox" value="Maps" /> Maps</label>
+            <label class="feedback-topic"><input type="checkbox" value="Overlays" /> Overlays</label>
+            <label class="feedback-topic"><input type="checkbox" value="Export" /> Export</label>
+            <label class="feedback-topic"><input type="checkbox" value="Question" /> Question</label>
+            <label class="feedback-topic"><input type="checkbox" value="Other" /> Other</label>
+          </div>
+          <label class="feedback-label" for="feedbackMessage">Your message</label>
+          <textarea id="feedbackMessage" maxlength="4000" rows="6" placeholder="Tell us what would help you most…" required></textarea>
+          <div class="feedback-actions">
+            <button type="button" class="btn primary" id="sendFeedbackBtn">Send feedback</button>
+            <button type="button" class="btn" id="cancelFeedbackBtn">Cancel</button>
+            <span id="feedbackMessageStatus" class="feedback-status" hidden></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <!-- MapLibre GL for vector tile density layer -->
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
@@ -479,6 +515,6 @@
     <!-- Interactive Mapping Grid System -->
     <script src="particles.js"></script>
 
-    <script type="module" src="app.js?v=20260811d"></script>
+    <script type="module" src="app.js?v=20260811e"></script>
   </body>
 </html>

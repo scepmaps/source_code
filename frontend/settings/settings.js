@@ -559,7 +559,86 @@ export function initSettingsController(opts) {
     });
   }
 
+  function setFeedbackStatus(text, kind) {
+    const msg = document.getElementById('feedbackMessageStatus');
+    if (!msg) return;
+    if (!text) {
+      msg.hidden = true;
+      msg.textContent = '';
+      msg.className = 'feedback-status';
+      return;
+    }
+    msg.hidden = false;
+    msg.textContent = text;
+    msg.className = `feedback-status ${kind === 'ok' ? 'is-ok' : 'is-err'}`;
+  }
+
+  function resetFeedbackForm() {
+    const ta = document.getElementById('feedbackMessage');
+    if (ta) ta.value = '';
+    document.querySelectorAll('#feedbackTopics input[type="checkbox"]').forEach((cb) => {
+      cb.checked = false;
+    });
+    setFeedbackStatus('');
+  }
+
+  function openFeedbackModal() {
+    const modal = document.getElementById('feedbackModal');
+    if (!modal) return;
+    resetFeedbackForm();
+    modal.hidden = false;
+    document.getElementById('feedbackMessage')?.focus();
+  }
+
+  function closeFeedbackModal() {
+    const modal = document.getElementById('feedbackModal');
+    if (!modal) return;
+    modal.hidden = true;
+    setFeedbackStatus('');
+  }
+
+  async function sendFeedback() {
+    const ta = document.getElementById('feedbackMessage');
+    const btn = document.getElementById('sendFeedbackBtn');
+    if (!ta || !btn) return;
+    const message = ta.value.trim();
+    if (message.length < 3) {
+      setFeedbackStatus('Please write a short message.', 'err');
+      return;
+    }
+    const topics = [...document.querySelectorAll('#feedbackTopics input[type="checkbox"]:checked')]
+      .map((el) => el.value);
+
+    const previousLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    setFeedbackStatus('Sending…', 'ok');
+    try {
+      const res = await fetch(`${API_BASE}/auth/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ message, topics }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFeedbackStatus(data.error || 'Failed to send feedback.', 'err');
+        return;
+      }
+      setFeedbackStatus(data.message || 'Thanks — feedback sent.', 'ok');
+      setTimeout(() => closeFeedbackModal(), 1200);
+    } catch (_) {
+      setFeedbackStatus('Network error. Please try again.', 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = previousLabel;
+    }
+  }
+
   const closeSettingsModal = () => {
+    closeFeedbackModal();
     kmlDrafts.clear();
     clearPasswordFields();
     setPasswordMessage('');
@@ -682,6 +761,11 @@ export function initSettingsController(opts) {
     });
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
+      const feedbackModal = document.getElementById('feedbackModal');
+      if (feedbackModal && !feedbackModal.hidden) {
+        closeFeedbackModal();
+        return;
+      }
       if (document.getElementById('userSettingsModal').style.display === 'flex') {
         closeSettingsModal();
       }
@@ -690,6 +774,13 @@ export function initSettingsController(opts) {
     bindIfExists('closeSettingsBtn', 'click', closeSettingsModal);
     bindIfExists('savePreferencesBtn', 'click', savePreferences);
     bindIfExists('changePasswordBtn', 'click', changePassword);
+    bindIfExists('settingsFeedbackBtn', 'click', openFeedbackModal);
+    bindIfExists('closeFeedbackBtn', 'click', closeFeedbackModal);
+    bindIfExists('cancelFeedbackBtn', 'click', closeFeedbackModal);
+    bindIfExists('sendFeedbackBtn', 'click', sendFeedback);
+    document.getElementById('feedbackModal')?.addEventListener('click', (e) => {
+      if (e.target?.id === 'feedbackModal') closeFeedbackModal();
+    });
     bindIfExists('setCurrentPositionBtn', 'click', setCurrentPosition);
     bindIfExists('useCurrentLayersBtn', 'click', useCurrentLayers);
     bindIfExists('settingsBase', 'change', (e) => {

@@ -60,6 +60,114 @@ body.settings-modal-open::before {
   flex: 0 0 auto;
 }
 
+.settings-top-actions {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-top-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-feedback-btn {
+  width: 100%;
+  font-weight: 600;
+}
+
+.feedback-modal {
+  z-index: 1200;
+}
+
+.feedback-modal[hidden] {
+  display: none !important;
+}
+
+.feedback-modal:not([hidden]) {
+  display: flex;
+}
+
+.feedback-modal-content {
+  max-width: 480px;
+}
+
+.feedback-intro {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 0 0 14px;
+}
+
+.feedback-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.feedback-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.feedback-topic {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--stroke);
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.feedback-topic input {
+  margin: 0;
+}
+
+#feedbackMessage {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 120px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--stroke);
+  border-radius: 8px;
+  background: var(--panel, transparent);
+  color: inherit;
+  font: inherit;
+  margin-bottom: 14px;
+}
+
+#feedbackMessage:focus {
+  outline: 2px solid rgba(77, 226, 255, 0.35);
+  border-color: var(--accent, #4de2ff);
+}
+
+.feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.feedback-status {
+  font-size: 13px;
+}
+
+.feedback-status.is-ok {
+  color: var(--accent, #4de2ff);
+}
+
+.feedback-status.is-err {
+  color: #ff7b7b;
+}
+
 .settings-save-btn {
   background: var(--accent);
   color: var(--bg);

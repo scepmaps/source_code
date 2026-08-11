@@ -54,7 +54,7 @@ _ENABLED = os.getenv("ACTIVITY_ENABLED", "1").strip().lower() not in ("0", "fals
 
 # ── Route classification ──────────────────────────────────────────────────────
 _EXPORT_PATHS = frozenset({"/export", "/export_headless", "/export_hgt", "/export_hgt_map_tiff"})
-_AUTH_PATHS   = frozenset({"/auth/login", "/auth/me", "/auth/preferences", "/auth/request-access", "/auth/change-password"})
+_AUTH_PATHS   = frozenset({"/auth/login", "/auth/me", "/auth/preferences", "/auth/request-access", "/auth/change-password", "/auth/feedback"})
 _USER_PATHS   = frozenset({"/user/stats"})
 _TILE_PREFIX  = "/tiles/"
 _ADMIN_PREFIX = "/admin/"

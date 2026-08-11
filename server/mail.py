@@ -250,3 +250,53 @@ def send_account_approved_email(
         reply_to=reply_contact,
         dry_run_log_body=redacted_body,
     )
+
+
+def send_product_feedback_email(
+    *,
+    from_name: str,
+    from_email: str,
+    topics: list[str],
+    message: str,
+) -> None:
+    """Send authenticated user product feedback to the fixed notify list."""
+    reply = sanitize_header(from_email, 254).lower()
+    if not is_valid_email(reply):
+        raise ValueError("Invalid sender email")
+
+    safe_name = sanitize_header(from_name, 120) or "SCEPMAPS user"
+    safe_topics = [
+        sanitize_header(str(t), 40)
+        for t in (topics or [])
+        if sanitize_header(str(t), 40)
+    ]
+    topic_line = ", ".join(safe_topics) if safe_topics else "(none selected)"
+    safe_message = (message or "").replace("\x00", "").strip()[:4000]
+    if len(safe_message) < 3:
+        raise ValueError("Feedback message too short")
+
+    subject = f"SCEPMAPS feedback from {safe_name}"
+    body = (
+        f"Product feedback from a SCEPMAPS user\n"
+        f"{'=' * 40}\n\n"
+        f"Name: {safe_name}\n"
+        f"Email: {reply}\n"
+        f"Topics: {topic_line}\n\n"
+        f"Message:\n{safe_message}\n"
+    )
+
+    recipients = access_request_recipients()
+    errors: list[str] = []
+    for to_addr in recipients:
+        try:
+            _send_message(
+                to_addr=to_addr,
+                subject=subject,
+                body_text=body,
+                reply_to=reply,
+            )
+        except Exception as exc:
+            errors.append(f"{to_addr}: {exc}")
+            logger.exception("[mail] feedback notify failed to=%s", to_addr)
+    if errors and len(errors) == len(recipients):
+        raise RuntimeError("Failed to send feedback email to all recipients")

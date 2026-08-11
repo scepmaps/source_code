@@ -77,6 +77,7 @@ from mail import (
     sanitize_header,
     send_access_request_email,
     send_account_approved_email,
+    send_product_feedback_email,
     smtp_configured,
 )
 from PIL import Image, ImageDraw, ImageFont
@@ -2878,6 +2879,60 @@ def change_password():
     update_user(user_id, password_hash=hash_password(new_password))
     activity.enrich(user=user, password_change_ok=True)
     return {"ok": True, "message": "Password updated"}
+
+
+_ALLOWED_FEEDBACK_TOPICS = frozenset(
+    {"Tools", "Maps", "Overlays", "Export", "Question", "Other"}
+)
+
+
+@app.post("/auth/feedback")
+def submit_feedback():
+    """Authenticated product feedback → fixed notify inbox (Reply-To = user)."""
+    user = _require_jwt_user(request)
+    if not user:
+        return ({"error": "Unauthorized"}, 401)
+
+    data = request.get_json(force=True, silent=True) or {}
+    message = str(data.get("message") or "").strip()
+    if len(message) < 3:
+        return ({"error": "Please write a short message"}, 400)
+    if len(message) > 4000:
+        return ({"error": "Message is too long (max 4000 characters)"}, 400)
+
+    raw_topics = data.get("topics") or []
+    if not isinstance(raw_topics, list):
+        return ({"error": "Invalid topics"}, 400)
+    topics = [str(t) for t in raw_topics if str(t) in _ALLOWED_FEEDBACK_TOPICS]
+
+    # Light per-user rate limit (in addition to general request volume).
+    uid = int(user.get("id") or 0)
+    if not access_request_limiter.allow(f"feedback:user:{uid}:1h", limit=8, window_seconds=3600):
+        return ({"error": "Too many feedback messages. Please try again later."}, 429)
+
+    activity.enrich(user=user, feedback=True, feedback_topics=topics)
+
+    if not smtp_configured():
+        logger.error("[feedback] SMTP not configured; dropping message from user_id=%s", uid)
+        return ({"error": "Feedback is temporarily unavailable"}, 503)
+
+    try:
+        send_product_feedback_email(
+            from_name=str(user.get("name") or ""),
+            from_email=str(user.get("email") or ""),
+            topics=topics,
+            message=message,
+        )
+    except ValueError as e:
+        return ({"error": str(e)}, 400)
+    except Exception:
+        logger.exception("[feedback] email failed user_id=%s", uid)
+        return ({"error": "Failed to send feedback. Please try again."}, 500)
+
+    return {
+        "ok": True,
+        "message": "Thanks — your feedback was sent. We'll get back to you if needed.",
+    }
 
 
 def _require_jwt_user(req):
