@@ -12,8 +12,13 @@ from email.utils import formataddr, parseaddr
 
 logger = logging.getLogger(__name__)
 
-# Hard-coded notify address — never taken from request body.
-DEFAULT_ACCESS_REQUEST_TO = "pol.roty@scep.city"
+# Hard-coded notify addresses — never taken from request body.
+# ACCESS_REQUEST_TO may be a comma-separated list; invalid entries are dropped.
+DEFAULT_ACCESS_REQUEST_RECIPIENTS = (
+    "pol.roty@scep.city",
+    "joseph.vittoz@scep.city",
+)
+DEFAULT_ACCESS_REQUEST_TO = ",".join(DEFAULT_ACCESS_REQUEST_RECIPIENTS)
 DEFAULT_PUBLIC_APP_URL = "https://app.scep.city"
 
 _HEADER_UNSAFE = re.compile(r"[\r\n\x00]")
@@ -39,9 +44,23 @@ def is_valid_email(value: str) -> bool:
     return addr.lower() == email
 
 
+def access_request_recipients() -> list[str]:
+    """Fixed notify list for access-request emails (comma-separated env or defaults)."""
+    raw = os.getenv("ACCESS_REQUEST_TO", DEFAULT_ACCESS_REQUEST_TO)
+    # Allow comma-separated lists; keep sanitizer per-address (not the whole string).
+    parts = [sanitize_header(p, 254).lower() for p in (raw or "").split(",")]
+    recipients: list[str] = []
+    for email in parts:
+        if email and is_valid_email(email) and email not in recipients:
+            recipients.append(email)
+    if recipients:
+        return recipients
+    return list(DEFAULT_ACCESS_REQUEST_RECIPIENTS)
+
+
 def access_request_recipient() -> str:
-    configured = sanitize_header(os.getenv("ACCESS_REQUEST_TO", DEFAULT_ACCESS_REQUEST_TO), 254).lower()
-    return configured if is_valid_email(configured) else DEFAULT_ACCESS_REQUEST_TO
+    """Primary notify address (first in the list) — used for From fallback / Reply-To."""
+    return access_request_recipients()[0]
 
 
 def public_app_url() -> str:
@@ -151,18 +170,27 @@ def send_access_request_email(
     reply_to: str,
 ) -> None:
     """
-    Send access-request notification to the fixed recipient only.
+    Send access-request notification to the fixed recipient list only.
     Never accepts a caller-controlled To/Cc/Bcc.
     """
     reply = sanitize_header(reply_to, 254).lower()
     if not is_valid_email(reply):
         raise ValueError("Invalid reply-to email")
-    _send_message(
-        to_addr=access_request_recipient(),
-        subject=subject,
-        body_text=body_text,
-        reply_to=reply,
-    )
+    recipients = access_request_recipients()
+    errors: list[str] = []
+    for to_addr in recipients:
+        try:
+            _send_message(
+                to_addr=to_addr,
+                subject=subject,
+                body_text=body_text,
+                reply_to=reply,
+            )
+        except Exception as exc:
+            errors.append(f"{to_addr}: {exc}")
+            logger.exception("[mail] access-request notify failed to=%s", to_addr)
+    if errors and len(errors) == len(recipients):
+        raise RuntimeError("Failed to send access-request email to all recipients")
 
 
 def send_account_approved_email(
@@ -183,23 +211,35 @@ def send_account_approved_email(
         raise ValueError("Invalid recipient email")
 
     display_name = sanitize_header(name, 120) or "there"
+    first_name = display_name.split()[0] if display_name and display_name != "there" else display_name
     login_url = f"{public_app_url()}/login.html"
+    # Prefer Joseph as the human reply contact for welcome emails.
+    joseph = "joseph.vittoz@scep.city"
+    reply_contact = joseph if is_valid_email(joseph) else access_request_recipient()
     # Password may contain special chars — keep as-is in body (not headers).
     password = (temporary_password or "").replace("\x00", "")[:200]
     if len(password) < 6:
         raise ValueError("Password too short to send")
 
-    subject = "Your SCEPMAPS account is ready"
+    subject = "Welcome to SCEPMAPS — your account is ready"
     body = (
-        f"Hello {display_name},\n\n"
-        f"Your SCEPMAPS access request has been approved.\n\n"
-        f"Sign in here:\n"
+        f"Hi {first_name},\n\n"
+        f"Great news — your SCEPMAPS access request has been approved, "
+        f"and I'm really glad to have you on board.\n\n"
+        f"You can sign in here:\n"
         f"  {login_url}\n\n"
-        f"Email: {to_addr}\n"
-        f"Temporary password: {password}\n\n"
-        f"Please sign in and change this password immediately:\n"
-        f"  Settings → Change Password\n\n"
-        f"— SCEPMAPS\n"
+        f"Your login details:\n"
+        f"  Email: {to_addr}\n"
+        f"  Temporary password: {password}\n\n"
+        f"For security, please change this password as soon as you're in "
+        f"(Settings → Change Password).\n\n"
+        f"If you have any questions — how something works, what maps or tools "
+        f"you need, or anything else — just reply to this email. I'm happy to "
+        f"help and always open to a quick exchange.\n\n"
+        f"Looking forward to hearing how you get on.\n\n"
+        f"Best regards,\n"
+        f"Joseph\n"
+        f"{reply_contact}\n"
     )
     redacted_body = body.replace(password, "[REDACTED]")
 
@@ -207,6 +247,6 @@ def send_account_approved_email(
         to_addr=to_addr,
         subject=subject,
         body_text=body,
-        reply_to=access_request_recipient(),
+        reply_to=reply_contact,
         dry_run_log_body=redacted_body,
     )
