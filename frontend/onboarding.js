@@ -365,9 +365,8 @@ export async function startOnboardingTour(options = {}) {
       prevBtnText: 'Back',
       popoverClass: 'scepmaps-tour-popover',
       // Count close (X / overlay / Esc) and Finish toward the auto-show limit.
-      onDestroyStarted: () => {
-        markSeenOnce();
-      },
+      // Note: if onDestroyStarted is set, Driver.js waits for driver.destroy() —
+      // only use onDestroyed so close always works.
       onDestroyed: () => {
         markSeenOnce();
         if (typeof onFinished === 'function') onFinished();
