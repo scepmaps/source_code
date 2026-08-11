@@ -764,7 +764,8 @@
           });
 
           if (!res.ok) {
-            const error = await res.json();
+            if (res.status === 401) return logout();
+            const error = await res.json().catch(() => ({}));
             throw new Error(error.error || 'Save failed');
           }
 
@@ -779,6 +780,11 @@
       };
 
       const deleteUser = async (userId) => {
+        const me = JSON.parse(localStorage.getItem('user') || 'null');
+        if (me?.id && Number(me.id) === Number(userId)) {
+          showAlert('You cannot delete your own account', 'error');
+          return;
+        }
         if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
 
         try {
@@ -788,9 +794,16 @@
             headers: getAuthHeaders()
           });
 
-          if (!res.ok) throw new Error('Delete failed');
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            if (res.status === 401) return logout();
+            throw new Error(data.error || 'Delete failed');
+          }
 
           showAlert('User deleted successfully!');
+          if (currentEditingUser?.id && Number(currentEditingUser.id) === Number(userId)) {
+            resetForm();
+          }
           loadUsers();
         } catch (error) {
           showAlert('Failed to delete user: ' + error.message, 'error');
@@ -933,7 +946,15 @@
           const resetBtn = makeActionButton('🧭 Reset Tutorial');
           resetBtn.addEventListener('click', () => resetUserOnboarding(user.id, user.email || ''));
           const delBtn = makeActionButton('🗑️ Delete', { danger: true });
-          delBtn.addEventListener('click', () => deleteUser(user.id));
+          const me = JSON.parse(localStorage.getItem('user') || 'null');
+          if (me?.id && Number(me.id) === Number(user.id)) {
+            delBtn.disabled = true;
+            delBtn.title = 'You cannot delete your own account';
+            delBtn.style.opacity = '0.5';
+            delBtn.style.cursor = 'not-allowed';
+          } else {
+            delBtn.addEventListener('click', () => deleteUser(user.id));
+          }
           tdActions.append(editBtn, statsBtn, resetBtn, delBtn);
           tr.appendChild(tdActions);
 
@@ -1327,6 +1348,11 @@
 
         if (!currentEditingUser && !userData.password) {
           showAlert('Password is required for new users', 'error');
+          return;
+        }
+
+        if (userData.password && userData.password.length < 6) {
+          showAlert('Password must be at least 6 characters', 'error');
           return;
         }
 

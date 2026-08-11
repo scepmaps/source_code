@@ -139,13 +139,9 @@ def init_db():
     except Exception:
         pass
 
-    # Sanitize any legacy rows where permissions were stored as '[]' JSON instead of unrestricted
-    try:
-        cur.execute("UPDATE users SET allowed_bases = '' WHERE allowed_bases = '[]'")
-        cur.execute("UPDATE users SET allowed_overlays = '' WHERE allowed_overlays = '[]'")
-        conn.commit()
-    except Exception:
-        pass
+    # NOTE: Do NOT rewrite allowed_* = '[]' to ''.
+    # Empty JSON arrays mean "explicitly no access"; empty string means unrestricted.
+    # An older sanitize here kept flipping intentional denials back to full access on every boot.
 
     # Migration: ensure OSM Dark is present for users who already have OSM in an explicit whitelist
     try:
@@ -606,13 +602,18 @@ def create_user(
     limit_day: int,
     limit_week: int,
     limit_month: int,
+    fun: bool = False,
 ):
     conn = _get_conn()
     cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO users (email, name, password_hash, is_admin, allowed_bases, allowed_overlays, allowed_tools, limit_day, limit_week, limit_month)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (
+            email, name, password_hash, is_admin,
+            allowed_bases, allowed_overlays, allowed_tools,
+            limit_day, limit_week, limit_month, fun
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             email,
@@ -625,6 +626,7 @@ def create_user(
             limit_day,
             limit_week,
             limit_month,
+            1 if fun else 0,
         ),
     )
     conn.commit()
@@ -748,12 +750,50 @@ def update_user(
     conn.close()
 
 
-def delete_user(user_id: int):
+def count_admins() -> int:
     conn = _get_conn()
     cur = conn.cursor()
-    cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
-    conn.commit()
+    cur.execute("SELECT COUNT(*) AS c FROM users WHERE is_admin = 1")
+    row = cur.fetchone()
     conn.close()
+    return int(row["c"] if row else 0)
+
+
+def delete_user(user_id: int) -> bool:
+    """Delete a user and clear dependent rows.
+
+    access_requests keeps non-cascading FKs to users; wipe/null those first so
+    deletes work whether or not PRAGMA foreign_keys is enabled.
+    """
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+    if not cur.fetchone():
+        conn.close()
+        return False
+
+    try:
+        conn.execute("BEGIN")
+        # Dependent data (CASCADE only fires when foreign_keys pragma is ON)
+        cur.execute("DELETE FROM export_logs WHERE user_id = ?", (user_id,))
+        cur.execute("DELETE FROM user_kml_overlays WHERE user_id = ?", (user_id,))
+        # Access-request FKs are NOT ON DELETE CASCADE
+        cur.execute(
+            "UPDATE access_requests SET created_user_id = NULL WHERE created_user_id = ?",
+            (user_id,),
+        )
+        cur.execute(
+            "UPDATE access_requests SET reviewed_by = NULL WHERE reviewed_by = ?",
+            (user_id,),
+        )
+        cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        return cur.rowcount > 0
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def log_export(user_id: int, base: str, overlays):

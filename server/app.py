@@ -19,6 +19,7 @@ import requests
 from auth import extract_bearer_token, hash_password, mint_token_for_user, verify_password, verify_token
 from db import (
     count_exports_since,
+    count_admins,
     count_pending_access_requests,
     count_user_kml,
     create_access_request,
@@ -3379,14 +3380,19 @@ def admin_create_user():
     if not admin:
         return ({"error": "Unauthorized"}, 401)
     activity.enrich(user=admin, admin_action="create_user")
-    data = request.get_json(force=True)
-    email = data.get("email", "").strip().lower()
-    name = data.get("name", "")
+    data = request.get_json(force=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    name = str(data.get("name", "") or "").strip()
     is_admin = bool(data.get("is_admin", False))
-    password = data.get("password", "")
+    fun = bool(data.get("fun", False))
+    password = str(data.get("password", "") or "")
 
     if not email or not password:
         return ({"error": "Missing email or password"}, 400)
+    if not is_valid_email(email):
+        return ({"error": "Invalid email address"}, 400)
+    if len(password) < 6:
+        return ({"error": "Password must be at least 6 characters"}, 400)
 
     # Handle permissions: if not provided, default to unrestricted (None)
     allowed_bases = data.get("allowed_bases")
@@ -3402,9 +3408,12 @@ def admin_create_user():
     if not isinstance(allowed_tools, list):
         allowed_tools = None
 
-    limit_day = int(data.get("limit_day", -1))
-    limit_week = int(data.get("limit_week", -1))
-    limit_month = int(data.get("limit_month", -1))
+    try:
+        limit_day = int(data.get("limit_day", -1))
+        limit_week = int(data.get("limit_week", -1))
+        limit_month = int(data.get("limit_month", -1))
+    except (TypeError, ValueError):
+        return ({"error": "Invalid export limits"}, 400)
 
     try:
         uid = create_user(
@@ -3418,15 +3427,19 @@ def admin_create_user():
             limit_day,
             limit_week,
             limit_month,
+            fun=fun,
         )
         activity.enrich(
             target_email=email,
             target_is_admin=is_admin,
             target_new_id=uid,
         )
-        return {"id": uid}
+        return {"id": uid, "ok": True}
     except sqlite3.IntegrityError:
         return ({"error": "Email already exists"}, 409)
+    except Exception as exc:
+        logger.exception("[admin] create_user failed email=%s", email)
+        return ({"error": f"Failed to create user: {type(exc).__name__}"}, 500)
 
 
 @app.put("/admin/users/<int:user_id>")
@@ -3435,28 +3448,54 @@ def admin_update_user(user_id: int):
     if not admin:
         return ({"error": "Unauthorized"}, 401)
     activity.enrich(user=admin, admin_action="update_user", target_user_id=user_id)
-    data = request.get_json(force=True)
+    target = get_user_by_id(user_id)
+    if not target:
+        return ({"error": "User not found"}, 404)
+
+    data = request.get_json(force=True) or {}
     pw = data.get("password")
+    if pw is not None and pw != "" and len(str(pw)) < 6:
+        return ({"error": "Password must be at least 6 characters"}, 400)
+
+    email = data.get("email")
+    if email is not None:
+        email = str(email).strip().lower()
+        if not is_valid_email(email):
+            return ({"error": "Invalid email address"}, 400)
+
+    # Demoting/removing the last admin is not allowed
+    next_is_admin = data.get("is_admin") if "is_admin" in data else None
+    if target.get("is_admin") and next_is_admin is False and count_admins() <= 1:
+        return ({"error": "Cannot remove the last administrator"}, 400)
+
     # If arrays are provided but empty, treat as explicit empty (no access).
     # If omitted, leave unchanged by passing None.
     allowed_bases = data["allowed_bases"] if "allowed_bases" in data else None
     allowed_overlays = data["allowed_overlays"] if "allowed_overlays" in data else None
     allowed_tools = data["allowed_tools"] if "allowed_tools" in data else None
 
-    update_user(
-        user_id,
-        name=data.get("name"),
-        email=data.get("email"),
-        password_hash=hash_password(pw) if pw else None,
-        is_admin=data.get("is_admin"),
-        allowed_bases=allowed_bases,
-        allowed_overlays=allowed_overlays,
-        allowed_tools=allowed_tools,
-        limit_day=int(data["limit_day"]) if "limit_day" in data else None,
-        limit_week=int(data["limit_week"]) if "limit_week" in data else None,
-        limit_month=int(data["limit_month"]) if "limit_month" in data else None,
-        fun=data.get("fun") if "fun" in data else None,
-    )
+    try:
+        update_user(
+            user_id,
+            name=data.get("name"),
+            email=email,
+            password_hash=hash_password(pw) if pw else None,
+            is_admin=next_is_admin,
+            allowed_bases=allowed_bases,
+            allowed_overlays=allowed_overlays,
+            allowed_tools=allowed_tools,
+            limit_day=int(data["limit_day"]) if "limit_day" in data else None,
+            limit_week=int(data["limit_week"]) if "limit_week" in data else None,
+            limit_month=int(data["limit_month"]) if "limit_month" in data else None,
+            fun=data.get("fun") if "fun" in data else None,
+        )
+    except sqlite3.IntegrityError:
+        return ({"error": "Email already exists"}, 409)
+    except (TypeError, ValueError):
+        return ({"error": "Invalid user payload"}, 400)
+    except Exception as exc:
+        logger.exception("[admin] update_user failed id=%s", user_id)
+        return ({"error": f"Failed to update user: {type(exc).__name__}"}, 500)
     return {"ok": True}
 
 
@@ -3466,7 +3505,28 @@ def admin_delete_user(user_id: int):
     if not admin:
         return ({"error": "Unauthorized"}, 401)
     activity.enrich(user=admin, admin_action="delete_user", target_user_id=user_id)
-    delete_user(user_id)
+
+    if int(admin.get("id") or 0) == int(user_id):
+        return ({"error": "You cannot delete your own account"}, 400)
+
+    target = get_user_by_id(user_id)
+    if not target:
+        return ({"error": "User not found"}, 404)
+
+    if target.get("is_admin") and count_admins() <= 1:
+        return ({"error": "Cannot delete the last administrator"}, 400)
+
+    try:
+        ok = delete_user(user_id)
+    except sqlite3.IntegrityError:
+        logger.exception("[admin] delete_user integrity error id=%s", user_id)
+        return ({"error": "Cannot delete user: related records still reference this account"}, 409)
+    except Exception as exc:
+        logger.exception("[admin] delete_user failed id=%s", user_id)
+        return ({"error": f"Failed to delete user: {type(exc).__name__}"}, 500)
+
+    if not ok:
+        return ({"error": "User not found"}, 404)
     return {"ok": True}
 
 
@@ -3607,12 +3667,10 @@ def admin_validate_access_request(request_id: int):
             limit_day,
             limit_week,
             limit_month,
+            fun=fun,
         )
     except sqlite3.IntegrityError:
         return ({"error": "Email already exists"}, 409)
-
-    if fun:
-        update_user(uid, fun=True)
 
     if not mark_access_request_approved(request_id, admin_id=int(admin["id"]), created_user_id=uid):
         # User was created; request may have raced. Still report success.
