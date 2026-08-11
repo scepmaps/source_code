@@ -1,13 +1,12 @@
 import { LAYERS } from './config.js?v=20260806k';
-import { createToolbarController } from './toolbar/toolbar.js?v=20260811f';
-import { initSettingsController } from './settings/settings.js?v=20260811f';
-import { initDensitySettingsPanel } from './settings/tool-panels.js?v=20260811f';
+import { createToolbarController } from './toolbar/toolbar.js?v=20260811d';
+import { initSettingsController } from './settings/settings.js?v=20260811e';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
-import { initMapToolControls } from './tools/tools.js?v=20260811c';
-import { initKmlOverlays } from './tools/kml.js?v=20260811f';
-import { initDrawTool } from './tools/draw.js?v=20260811f';
+import { initMapToolControls } from './tools/tools.js?v=20260811b';
+import { initKmlOverlays } from './tools/kml.js?v=20260807i';
+import { initDrawTool } from './tools/draw.js?v=20260807t';
 import { iconHtml } from './toolbar/icons.js?v=20260807q';
-import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260811h';
+import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260811g';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
 import { absolutizeMapStyleUrls, makeArcgisTransformRequest } from './map-style.js?v=20260805c';
 import { createBasemapPreloader } from './basemap-preload.js?v=20260811d';
@@ -575,8 +574,7 @@ const CHART_BASE_KEYS = new Set(['shom', 'ukho', 'gbsouth']);
 // They will be created via createTopoLayer()/createNavigationLayer()/createNightLayer() when selected
 let currentBase = (osm||esri);
 let currentOverlay = null; // Track which chart overlay base is active (shom/ukho/gbsouth)
-// Name tags default on whenever Satellite is available (toggle still works mid-session).
-let isNamesOverlayEnabled = allowedOver.includes('label');
+let isNamesOverlayEnabled = false; // Track "Names" labels-only overlay state
 let baseSwitchRequestId = 0;
 let basemapPrimePromise = null;
 
@@ -1065,32 +1063,21 @@ function updateLabelButtonVisibility() {
   const btn = document.getElementById('btnLabel');
 
   if (btn) {
-    btn.style.display = shouldShow ? '' : 'none';
+    if (shouldShow) {
+      btn.style.display = '';
+    } else {
+      btn.style.display = 'none';
+      if (isNamesOverlayEnabled) {
+        isNamesOverlayEnabled = false;
+        if (namesGlLayer && map.hasLayer(namesGlLayer)) map.removeLayer(namesGlLayer);
+      }
+    }
   }
 
-  // Leaving Satellite: remove the overlay layer, but keep the default-on preference
-  // so switching back to Satellite restores name tags.
-  if (!shouldShow && namesGlLayer && map.hasLayer(namesGlLayer)) {
-    map.removeLayer(namesGlLayer);
-  }
-}
-
-/** Re-enable name tags whenever Satellite becomes the active base. */
-function enableNamesDefaultForSatellite(baseType) {
-  if (
-    allowedOver.includes('label') &&
-    supportsNamesOverlay(baseType) &&
-    !baseHasNames(baseType)
-  ) {
-    isNamesOverlayEnabled = true;
-  }
 }
 
 async function applyNamesOverlayForBase(baseType) {
-  const canShowNames =
-    allowedOver.includes('label') &&
-    supportsNamesOverlay(baseType) &&
-    !baseHasNames(baseType);
+  const canShowNames = supportsNamesOverlay(baseType) && !baseHasNames(baseType);
   if (isNamesOverlayEnabled && canShowNames) {
     const layer = await createNamesOverlayLayer();
     if (layer && !map.hasLayer(layer)) {
@@ -1109,7 +1096,6 @@ async function refreshBaseLayer() {
   // Re-add overlays
   if (seamarksCb.checked && seamarks) seamarks.addTo(map).bringToFront();
   if (openaipCb.checked && openaipLayer) openaipLayer.addTo(map).bringToFront();
-  enableNamesDefaultForSatellite(baseType);
   applyNamesOverlayForBase(baseType);
 
   // Apply / clear label enhancement for raster basemaps
@@ -1125,8 +1111,6 @@ const basemapPreloader = createBasemapPreloader({
   getZoomLimits: getZoomLimitsForBase,
   getActiveBase: () => baseSelect?.value || null,
 });
-
-let densitySettingsPanel = null;
 
 const toolbarController = createToolbarController({
   baseSelect,
@@ -1144,43 +1128,6 @@ const toolbarController = createToolbarController({
   onMapsPickerOpen: () => {
     basemapPreloader.warmOnMapsPickerOpen();
     primeBasemapLayers();
-  },
-  onOverlayDensityGear: (anchor) => {
-    densitySettingsPanel?.toggle(anchor);
-  },
-  onSaveCurrentBaseAsDefault: async () => {
-    const base = baseSelect?.value;
-    if (!base) {
-      alert('Select a base map first.');
-      return;
-    }
-    try {
-      const res = await fetch(`${API_BASE}/auth/preferences`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ default_base: base }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to save default map');
-      }
-      const data = await res.json();
-      if (data.user) {
-        user = data.user;
-        localStorage.setItem('user', JSON.stringify(data.user));
-      }
-      const btn = document.getElementById('mapSaveDefaultBaseBtn');
-      if (btn) {
-        const prev = btn.textContent;
-        btn.textContent = 'Saved';
-        setTimeout(() => { btn.textContent = prev; }, 1600);
-      }
-    } catch (err) {
-      alert(err.message || 'Could not save default map');
-    }
   },
 });
 const {
@@ -1220,6 +1167,10 @@ async function applyUserPreferences() {
     if (user.default_overlays.includes('density') && LAYERS.density && allowedOver.includes('density')) {
       densityCb.checked = true;
     }
+    // Set Names flag BEFORE applying the overlay (was previously set too late).
+    if (user.default_overlays.includes('label') && allowedOver.includes('label')) {
+      isNamesOverlayEnabled = true;
+    }
     if (user.default_overlays.includes('history') && allowedOver.includes('history')) {
       historyToggle.checked = true;
       exportHistory.addTo(map);
@@ -1229,8 +1180,7 @@ async function applyUserPreferences() {
     }
   }
 
-  // Name tags stay on by default with Satellite (permission permitting).
-  enableNamesDefaultForSatellite(baseSelect.value);
+  // Apply names after overlay prefs so a saved "label" default actually shows.
   await applyNamesOverlayForBase(baseSelect.value);
 
   // Apply ruler unit preference
@@ -1308,7 +1258,6 @@ baseSelect.addEventListener('change', async () => {
   // Re-add other overlays on top
   if (seamarksCb.checked && seamarks) seamarks.addTo(map).bringToFront();
   if (openaipCb.checked && openaipLayer) openaipLayer.addTo(map).bringToFront();
-  enableNamesDefaultForSatellite(selectedBase);
   await applyNamesOverlayForBase(selectedBase);
   if (requestId !== baseSwitchRequestId) return;
 
@@ -1316,7 +1265,6 @@ baseSelect.addEventListener('change', async () => {
   updateBaseButtonStates();
   updateLabelButtonVisibility(); // Show/hide label button based on selected map
   if (typeof refreshOverlayPicker === 'function') refreshOverlayPicker();
-  updateOverlayButtonStates();
   applyLabelEnhancement(); // Apply label enhancement for ArcGIS maps
   setAttrib();
 });
@@ -1864,7 +1812,6 @@ densityCb.addEventListener('change', () => {
   } else {
     removeDensityLayer();
     document.getElementById('densityLegend').classList.remove('visible');
-    densitySettingsPanel?.close?.();
   }
   setAttrib();
 });
@@ -1875,16 +1822,6 @@ if (densityCb.checked && !densityGlLayer) {
   document.getElementById('densityLegend').classList.add('visible');
   setAttrib();
 }
-
-densitySettingsPanel = initDensitySettingsPanel({
-  userRef: () => user,
-  setUser: (nextUser) => { user = nextUser; },
-  getToken: () => token,
-  API_BASE,
-  allowedOver,
-  updateDensityOpacity,
-  updateDensityBorderColors,
-});
 
 historyToggle.addEventListener('change', () => {
   if (historyToggle.checked) {
@@ -3761,6 +3698,10 @@ initSettingsController({
   setRulerUnits: (next) => { rulerUnits = next; },
   updateRulerLabels,
   hasRulerPoints: () => rulerPoints.length > 1,
+  updateDensityOpacity,
+  updateDensityBorderColors,
+  kmlController,
+  drawController,
 }).init();
 
 // Toolbar behavior moved to source_code/frontend/toolbar/toolbar.js

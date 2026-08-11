@@ -49,12 +49,6 @@
   justify-content: space-between;
   gap: 8px;
 }
-.kml-panel-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-}
 .kml-panel-title {
   font-size: 12px;
   font-weight: 700;
@@ -208,20 +202,6 @@
 .draw-panel {
   width: min(300px, calc(100vw - 96px));
   grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.draw-panel-header {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 2px 2px;
-}
-.draw-panel-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--text);
 }
 .draw-panel-footer {
   grid-column: 1 / -1;

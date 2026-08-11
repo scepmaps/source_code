@@ -18,10 +18,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260811f">
-    <link rel="stylesheet" href="tools/tools.css?v=20260811f">
+    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
+    <link rel="stylesheet" href="tools/tools.css?v=20260807q">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css?v=20260811f">
+    <link rel="stylesheet" href="settings/settings.css?v=20260811e">
     <link rel="stylesheet" href="mobile/mobile.css?v=20260806y">
     <script type="module">
       // Escape hatch: force desktop with ?desktop / stay with ?mobile
@@ -192,7 +192,7 @@
     <div id="userSettingsModal" class="stats-modal">
       <div class="stats-modal-content">
         <div class="stats-modal-header">
-          <h3>Settings</h3>
+          <h3>User Preferences</h3>
           <div class="settings-header-actions">
             <button class="btn settings-save-btn" id="savePreferencesBtn" style="display:none;">Save Changes</button>
             <button class="btn" id="closeSettingsBtn">&times;</button>
@@ -206,7 +206,7 @@
             <div class="settings-top-actions-row">
               <button class="btn" id="statsBtn" style="flex: 1;">My Stats</button>
               <button class="btn" id="helpTourBtn" style="flex: 1;">Help</button>
-              <button class="btn btn-danger" id="logoutBtn" style="flex: 1;">Logout</button>
+              <button class="btn" id="logoutBtn" style="flex: 1;">Logout</button>
             </div>
           </div>
 
@@ -267,7 +267,7 @@
           </div>
 
           <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
-            <h4>Measurement Units</h4>
+            <h4>Tool Settings</h4>
             <div style="margin-bottom: 12px;">
               <label style="display: block; margin-bottom: 4px;">Ruler Units</label>
               <select id="settingsRulerUnit" style="width: 100%;">
@@ -277,6 +277,126 @@
                 <option value="mi">Miles (mi)</option>
                 <option value="nm">Nautical Miles (nm)</option>
               </select>
+            </div>
+          </div>
+
+          <div id="settingsDensitySection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <h4>Population Density Overlay</h4>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
+              Customize the population density overlay appearance
+            </p>
+
+            <div style="margin-bottom: 12px;">
+              <label style="display: block; margin-bottom: 4px;">Layer Opacity</label>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <input type="range" id="settingsDensityOpacity" min="0" max="1" step="0.05" value="0.65"
+                       style="flex: 1; accent-color: var(--accent);" />
+                <span id="densityOpacityValue" style="min-width: 40px; text-align: right;">65%</span>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px;">
+              <div>
+                <label style="display: block; margin-bottom: 4px;">Border Color</label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input type="color" id="settingsDensityBorderColor" value="#ffffff"
+                         style="width: 40px; height: 32px; border: 1px solid var(--stroke); border-radius: 4px; cursor: pointer;" />
+                  <input type="range" id="settingsDensityBorderOpacity" min="0" max="1" step="0.1" value="0.2"
+                         style="flex: 1; accent-color: var(--accent);" />
+                  <span id="borderOpacityValue" style="min-width: 30px; font-size: 12px;">20%</span>
+                </div>
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 4px;">Hover Border Color</label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input type="color" id="settingsDensityHoverColor" value="#000000"
+                         style="width: 40px; height: 32px; border: 1px solid var(--stroke); border-radius: 4px; cursor: pointer;" />
+                  <input type="range" id="settingsDensityHoverOpacity" min="0" max="1" step="0.1" value="0.9"
+                         style="flex: 1; accent-color: var(--accent);" />
+                  <span id="hoverOpacityValue" style="min-width: 30px; font-size: 12px;">90%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="settingsKmlSection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <div class="settings-kml-header">
+              <div>
+                <h4>KML Overlays</h4>
+                <p style="color: var(--muted); font-size: 13px; margin: 0;">
+                  Import and configure your saved KML layers. Click Save Changes to apply.
+                </p>
+              </div>
+              <button type="button" class="btn" id="settingsKmlImportBtn">Import KML</button>
+            </div>
+            <label class="settings-kml-outline-toggle" title="Draw a bright thin red outline on every KML zone">
+              <span>Red zone outlines</span>
+              <span class="settings-switch">
+                <input type="checkbox" id="settingsKmlRedOutline" />
+                <span class="settings-switch-slider" aria-hidden="true"></span>
+              </span>
+            </label>
+            <label class="settings-kml-outline-toggle" title="Show feature names on the map">
+              <span>Show names</span>
+              <span class="settings-switch">
+                <input type="checkbox" id="settingsKmlShowNames" />
+                <span class="settings-switch-slider" aria-hidden="true"></span>
+              </span>
+            </label>
+            <div id="settingsKmlList" class="settings-kml-list"></div>
+          </div>
+
+          <div id="settingsDrawSection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+            <h4>Drawing</h4>
+            <p style="color: var(--muted);">Palette, labels, and stroke for the desktop draw tool.</p>
+            <label class="settings-draw-palette-label" for="settingsDrawPalette">Color palette</label>
+            <div id="settingsDrawPalette" class="settings-draw-palette" aria-label="Draw color palette"></div>
+            <div class="settings-draw-row">
+              <label class="settings-kml-outline-toggle">
+                <span>Measurements</span>
+                <span class="settings-switch">
+                  <input type="checkbox" id="settingsDrawShowMeasurements" />
+                  <span class="settings-switch-slider" aria-hidden="true"></span>
+                </span>
+              </label>
+              <label class="settings-kml-outline-toggle">
+                <span>Lengths</span>
+                <span class="settings-switch">
+                  <input type="checkbox" id="settingsDrawShowLength" />
+                  <span class="settings-switch-slider" aria-hidden="true"></span>
+                </span>
+              </label>
+              <label class="settings-kml-outline-toggle">
+                <span>Areas</span>
+                <span class="settings-switch">
+                  <input type="checkbox" id="settingsDrawShowArea" />
+                  <span class="settings-switch-slider" aria-hidden="true"></span>
+                </span>
+              </label>
+              <label class="settings-kml-outline-toggle">
+                <span>Coordinates</span>
+                <span class="settings-switch">
+                  <input type="checkbox" id="settingsDrawShowCoordinates" />
+                  <span class="settings-switch-slider" aria-hidden="true"></span>
+                </span>
+              </label>
+            </div>
+            <div class="settings-draw-controls">
+              <div class="settings-draw-stroke-row">
+                <label for="settingsDrawUnits">Units</label>
+                <select id="settingsDrawUnits">
+                  <option value="m">Meters</option>
+                  <option value="km">Kilometers</option>
+                  <option value="ft">Feet</option>
+                  <option value="mi">Miles</option>
+                  <option value="nm">Nautical mi</option>
+                </select>
+              </div>
+              <div class="settings-draw-stroke-row">
+                <label for="settingsDrawStrokeWeight">Stroke</label>
+                <input type="range" id="settingsDrawStrokeWeight" min="1" max="6" step="0.25" value="2.25" />
+                <span id="settingsDrawStrokeVal" class="settings-draw-stroke-val">2.25</span>
+              </div>
             </div>
           </div>
 
@@ -317,9 +437,6 @@
           </div>
 
           <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
-            <p class="settings-moved-hint">
-              Density appearance and KML options are on the Overlays / KML panels (gear icon).
-            </p>
             <span id="preferencesMessage" style="color: var(--accent); display: none;">
               Preferences saved!
             </span>
@@ -372,6 +489,6 @@
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
     <script src="particles.js"></script>
-    <script type="module" src="app.js?v=20260811f"></script>
+    <script type="module" src="app.js?v=20260811g"></script>
   </body>
 </html>
