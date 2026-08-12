@@ -237,6 +237,35 @@ body.settings-modal-open::before {
   color: var(--danger, #ff4d6d);
 }
 
+.settings-account-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--stroke);
+}
+.settings-account-section > h4 {
+  margin: 0 0 4px;
+}
+.settings-account-hint {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+.settings-account-field {
+  margin-bottom: 12px;
+}
+.settings-account-field label {
+  display: block;
+  margin-bottom: 4px;
+}
+.settings-account-field select {
+  width: 100%;
+}
+.settings-account-status {
+  border-top: none;
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
 .favorites-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

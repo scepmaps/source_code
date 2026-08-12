@@ -78,7 +78,7 @@
   opacity: 0.5; animation: pulse 2s infinite;
 }
 
-.more-btn-wrapper { position: relative; display: inline-flex; }
+.more-btn-wrapper { position: relative; display: inline-flex; overflow: visible; }
 .more-btn { font-weight: bold; letter-spacing: 2px; }
 .more-btn svg { width: 18px; height: 18px; }
 .more-btn.more-selected-collapsed {
@@ -504,7 +504,7 @@
   text-align: center;
 }
 
-/* Panel "More" settings expander (Maps / Overlays / Draw / KML) */
+/* Panel "More" — button in picker; settings dock to the side */
 .rail-panel-more {
   grid-column: 1 / -1;
   display: flex;
@@ -514,6 +514,8 @@
   padding-top: 8px;
   border-top: 1px solid rgba(77, 226, 255, 0.14);
   min-width: 0;
+  position: relative;
+  z-index: 2;
 }
 .rail-panel-more-btn {
   appearance: none;
@@ -536,17 +538,38 @@
   border-color: rgba(77, 226, 255, 0.4);
   background: rgba(77, 226, 255, 0.14);
 }
-.rail-panel-more-body {
-  min-width: 0;
+.rail-panel-more-side {
+  display: none;
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 0;
+  width: min(300px, calc(100vw - 120px));
+  max-height: min(72vh, calc(100vh - 96px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: clamp(10px, 1.4vh, 14px);
+  border-radius: 16px;
+  border: 1px solid rgba(77, 226, 255, 0.22);
+  background: linear-gradient(180deg, rgba(14, 23, 55, 0.98), rgba(10, 20, 47, 0.96));
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(33, 48, 105, 0.55) inset;
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  box-sizing: border-box;
+  z-index: 1001;
+  pointer-events: auto;
 }
-.rail-panel-more-body[hidden] {
+.rail-panel-more-side.is-open,
+.rail-panel-more-side:not([hidden]) {
+  display: block;
+}
+.rail-panel-more-side[hidden] {
   display: none !important;
 }
 .panel-more-settings {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 2px 2px 4px;
+  padding: 0;
   color: var(--text);
   font-family: Inter, system-ui, sans-serif;
 }
@@ -566,11 +589,26 @@
   display: block;
   font-size: 11px;
   color: var(--muted);
-  margin: 0;
+  margin: 0 0 2px;
 }
-.panel-more-settings select {
+.panel-more-settings select,
+.panel-more-settings input[type="number"] {
   width: 100%;
   font-size: 12px;
+  box-sizing: border-box;
+}
+.panel-more-divider {
+  height: 1px;
+  background: rgba(77, 226, 255, 0.12);
+  margin: 4px 0;
+}
+.panel-more-position-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.panel-more-position-grid > div:last-child {
+  grid-column: 1 / -1;
 }
 .panel-more-actions {
   display: flex;
@@ -626,9 +664,13 @@
   grid-template-columns: 1fr;
   gap: 10px;
 }
-.kml-panel > .rail-panel-more,
-.draw-panel > .rail-panel-more {
-  width: 100%;
+.ruler-settings-panel {
+  width: min(260px, calc(100vw - 96px));
+  grid-template-columns: 1fr;
+  padding: 12px !important;
+}
+.ruler-settings-panel.open {
+  display: grid;
 }
 
 .side-rail .map-tool-btn {

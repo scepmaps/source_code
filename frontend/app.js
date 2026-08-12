@@ -1,8 +1,8 @@
 import { LAYERS } from './config.js?v=20260806k';
-import { createToolbarController } from './toolbar/toolbar.js?v=20260812a';
-import { initSettingsController } from './settings/settings.js?v=20260812a';
+import { createToolbarController } from './toolbar/toolbar.js?v=20260812b';
+import { initSettingsController } from './settings/settings.js?v=20260812b';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
-import { initMapToolControls } from './tools/tools.js?v=20260811b';
+import { initMapToolControls } from './tools/tools.js?v=20260812b';
 import { initKmlOverlays } from './tools/kml.js?v=20260807i';
 import { initDrawTool } from './tools/draw.js?v=20260807t';
 import { iconHtml } from './toolbar/icons.js?v=20260807q';

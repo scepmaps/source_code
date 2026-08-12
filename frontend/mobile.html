@@ -18,11 +18,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260812a">
-    <link rel="stylesheet" href="tools/tools.css?v=20260812a">
+    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260812b">
+    <link rel="stylesheet" href="tools/tools.css?v=20260812b">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css?v=20260812a">
-    <link rel="stylesheet" href="mobile/mobile.css?v=20260806y">
+    <link rel="stylesheet" href="settings/settings.css?v=20260812b">
+    <link rel="stylesheet" href="mobile/mobile.css?v=20260812b">
     <script type="module">
       // Escape hatch: force desktop with ?desktop / stay with ?mobile
       import { isMobileClient } from './mobile/device.js?v=20260806e';
@@ -85,7 +85,7 @@
           </div>
 
           <div class="mobile-dock-btn" data-section="settings">
-            <button type="button" class="emoji-btn" id="settingsBtn" data-tip="Settings" title="Settings" aria-label="Settings">
+            <button type="button" class="emoji-btn" id="settingsBtn" data-tip="Account" title="Account" aria-label="Account">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
           </div>
@@ -192,7 +192,13 @@
     <div id="userSettingsModal" class="stats-modal">
       <div class="stats-modal-content">
         <div class="stats-modal-header">
-          <h3>User Preferences</h3>
+          <div class="settings-header-title">
+            <h3>Account</h3>
+            <div class="settings-user-identity" id="settingsUserIdentity" hidden>
+              <div class="settings-user-name" id="settingsUserName"></div>
+              <div class="settings-user-email" id="settingsUserEmail"></div>
+            </div>
+          </div>
           <div class="settings-header-actions">
             <button class="btn settings-save-btn" id="savePreferencesBtn" style="display:none;">Save Changes</button>
             <button class="btn" id="closeSettingsBtn">&times;</button>
@@ -211,7 +217,7 @@
           </div>
 
           <div id="settingsPasswordSection" class="settings-password-section">
-            <h4>Change Password</h4>
+            <h4>Password</h4>
             <p class="settings-password-hint">Update the password you use to sign in.</p>
             <div class="settings-password-grid">
               <div>
@@ -233,57 +239,14 @@
             </div>
           </div>
 
-          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
-            <h4>Tool Settings</h4>
-            <div style="margin-bottom: 12px;">
-              <label style="display: block; margin-bottom: 4px;">Ruler Units</label>
-              <select id="settingsRulerUnit" style="width: 100%;">
-                <option value="m">Meters (m)</option>
-                <option value="km">Kilometers (km)</option>
-                <option value="ft">Feet (ft)</option>
-                <option value="mi">Miles (mi)</option>
-                <option value="nm">Nautical Miles (nm)</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Export settings omitted on mobile -->
+          <!-- Export settings omitted on mobile UI; keep fields for preference APIs -->
           <div class="mobile-hide-export" hidden aria-hidden="true">
-            <select id="settingsSystem"><option value="UAS">UAS</option></select>
+            <input type="hidden" id="settingsSystem" value="UAS" />
             <select id="settingsQuality"><option value="SD">SD</option><option value="HD">HD</option></select>
             <input type="checkbox" id="exportAttribution" checked />
           </div>
 
-          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
-            <h4>Default Map Position</h4>
-            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
-              Set your preferred starting position when you open the map
-            </p>
-
-            <div style="display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px;">
-              <div>
-                <label style="display: block; margin-bottom: 4px;">Latitude</label>
-                <input type="number" id="settingsLat" step="0.000001" min="-90" max="90"
-                       placeholder="e.g. 48.8566" style="width: 100%;" />
-              </div>
-              <div>
-                <label style="display: block; margin-bottom: 4px;">Longitude</label>
-                <input type="number" id="settingsLon" step="0.000001" min="-180" max="180"
-                       placeholder="e.g. 2.3522" style="width: 100%;" />
-              </div>
-              <div>
-                <label style="display: block; margin-bottom: 4px;">Zoom Level</label>
-                <input type="number" id="settingsZoom" min="0" max="18"
-                       placeholder="e.g. 12" style="width: 100%;" />
-              </div>
-            </div>
-
-            <button class="btn" id="setCurrentPositionBtn">
-              Use Current Map Position
-            </button>
-          </div>
-
-          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
+          <div class="settings-account-section settings-account-status">
             <span id="preferencesMessage" style="color: var(--accent); display: none;">
               Preferences saved!
             </span>
@@ -332,7 +295,7 @@
       </div>
     </div>
 
-    <!-- Panel "More" settings — mounted into Maps / Overlays / Draw / KML pickers -->
+    <!-- Panel "More" settings — mounted into Maps / Overlays / Draw / KML / Ruler -->
     <div id="panelSettingsHost" hidden aria-hidden="true">
       <div id="settingsMapsSection" class="panel-more-settings">
         <h4>Default map</h4>
@@ -351,7 +314,25 @@
           <option value="ukho">UKHO Charts</option>
           <option value="gbsouth">GB South Aviation</option>
         </select>
+        <div class="panel-more-divider"></div>
+        <h4>Start position</h4>
+        <p class="panel-more-hint">Where the map opens</p>
+        <div class="panel-more-position-grid">
+          <div>
+            <label class="panel-more-label" for="settingsLat">Latitude</label>
+            <input type="number" id="settingsLat" step="0.000001" min="-90" max="90" placeholder="48.8566" />
+          </div>
+          <div>
+            <label class="panel-more-label" for="settingsLon">Longitude</label>
+            <input type="number" id="settingsLon" step="0.000001" min="-180" max="180" placeholder="2.3522" />
+          </div>
+          <div>
+            <label class="panel-more-label" for="settingsZoom">Zoom</label>
+            <input type="number" id="settingsZoom" min="0" max="18" placeholder="12" />
+          </div>
+        </div>
         <div class="panel-more-actions">
+          <button type="button" class="btn" id="setCurrentPositionBtn">Use current view</button>
           <button type="button" class="btn" id="useCurrentLayersBtn">Use current layers</button>
           <button type="button" class="btn" id="saveMapsDefaultsBtn">Save</button>
         </div>
@@ -393,6 +374,23 @@
           <button type="button" class="btn" id="saveOverlaysDefaultsBtn">Save</button>
         </div>
         <span id="overlaysDefaultsMessage" class="panel-more-status" hidden></span>
+      </div>
+
+      <div id="settingsRulerSection" class="panel-more-settings">
+        <h4>Ruler</h4>
+        <p class="panel-more-hint">Distance units for the ruler tool</p>
+        <label class="panel-more-label" for="settingsRulerUnit">Units</label>
+        <select id="settingsRulerUnit">
+          <option value="m">Meters (m)</option>
+          <option value="km">Kilometers (km)</option>
+          <option value="ft">Feet (ft)</option>
+          <option value="mi">Miles (mi)</option>
+          <option value="nm">Nautical Miles (nm)</option>
+        </select>
+        <div class="panel-more-actions">
+          <button type="button" class="btn" id="saveRulerDefaultsBtn">Save</button>
+        </div>
+        <span id="rulerDefaultsMessage" class="panel-more-status" hidden></span>
       </div>
 
       <div id="settingsDrawSection" class="panel-more-settings">
@@ -473,6 +471,6 @@
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
     <script src="particles.js"></script>
-    <script type="module" src="app.js?v=20260812a"></script>
+    <script type="module" src="app.js?v=20260812b"></script>
   </body>
 </html>

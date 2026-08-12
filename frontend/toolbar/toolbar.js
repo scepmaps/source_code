@@ -1,5 +1,5 @@
 import { iconHtml } from './icons.js?v=20260807o';
-import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260811b';
+import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260812b';
 
 export function createToolbarController(opts) {
   const {
@@ -82,26 +82,44 @@ export function createToolbarController(opts) {
 
   function closeAllPanels(exceptId = null) {
     // Draw panel is sticky — only closed via its own button toggle or Esc.
-    ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown', 'kmlPickerPanel'].forEach((id) => {
+    ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown', 'kmlPickerPanel', 'rulerSettingsPanel'].forEach((id) => {
       if (id === exceptId) return;
       const el = document.getElementById(id);
       el?.classList.remove('open');
       if (el) {
+        el.classList.remove('has-more-open');
         el.style.top = '';
         el.style.bottom = '';
         el.style.left = '';
         el.style.right = '';
         el.style.transform = '';
+        const more = el.querySelector(':scope > .rail-panel-more');
+        const side =
+          el._moreSideEl ||
+          el.querySelector(':scope > .rail-panel-more-side') ||
+          el.parentElement?.querySelector(`.rail-panel-more-side[data-for="${el.id}"]`);
+        const moreBtn = more?.querySelector('.rail-panel-more-btn');
+        more?.classList.remove('is-expanded');
+        if (side) {
+          side.hidden = true;
+          side.classList.remove('is-open');
+        }
+        if (moreBtn) {
+          moreBtn.setAttribute('aria-expanded', 'false');
+          moreBtn.textContent = 'More';
+        }
       }
     });
     document.getElementById('btnMaps')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnOverlays')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnKml')?.setAttribute('aria-expanded', 'false');
+    document.getElementById('btnRulerMore')?.setAttribute('aria-expanded', 'false');
     document.getElementById('btnMaps')?.classList.remove('panel-open');
     document.getElementById('btnOverlays')?.classList.remove('panel-open');
     document.getElementById('btnKml')?.classList.remove('panel-open', 'map-tool-btn--active');
+    document.getElementById('btnRulerMore')?.classList.remove('panel-open', 'map-tool-btn--active');
     const anyOpen = !!document.querySelector(
-      '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open, #kmlPickerPanel.open, #drawPickerPanel.open'
+      '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open, #kmlPickerPanel.open, #drawPickerPanel.open, #rulerSettingsPanel.open'
     );
     setMobileSheetOpen(anyOpen);
   }
@@ -424,18 +442,30 @@ export function createToolbarController(opts) {
     if (!group || !moreWrapper) return;
 
     const keys = Object.keys(toolBtnIds).filter((k) => document.getElementById(toolBtnIds[k]));
+    const mountNodeFor = (key, btn) => {
+      const wrap = btn.closest('.more-btn-wrapper');
+      // Keep tool wrappers that own a rail panel / settings host.
+      if (wrap && wrap !== moreWrapper && wrap.querySelector('.rail-panel, #rulerSettingsPanel')) {
+        return wrap;
+      }
+      if (key === 'ruler' && wrap && wrap !== moreWrapper) return wrap;
+      return btn;
+    };
 
     if (isMobileApp()) {
-      // Mobile dock: only the Ruler button sits next to Maps / Overlay.
+      // Mobile dock: Ruler (+ its settings gear) sits next to Maps / Overlay.
       keys.forEach((k) => {
         const btn = document.getElementById(toolBtnIds[k]);
         if (!btn) return;
+        const node = mountNodeFor(k, btn);
         if (k === 'ruler') {
           btn.style.display = '';
-          group.appendChild(btn);
+          const gear = document.getElementById('btnRulerMore');
+          if (gear) gear.style.display = '';
+          group.appendChild(node);
         } else {
           btn.style.display = 'none';
-          if (btn.parentElement !== group) group.insertBefore(btn, moreWrapper);
+          if (node.parentElement !== group) group.insertBefore(node, moreWrapper);
         }
       });
       moreWrapper.style.display = 'none';
@@ -450,7 +480,10 @@ export function createToolbarController(opts) {
       const btn = document.getElementById(toolBtnIds[k]);
       if (!btn) return;
       btn.style.display = '';
-      group.insertBefore(btn, moreWrapper);
+      const gear = k === 'ruler' ? document.getElementById('btnRulerMore') : null;
+      if (gear) gear.style.display = '';
+      const node = mountNodeFor(k, btn);
+      group.insertBefore(node, moreWrapper);
     });
     moreWrapper.style.display = 'none';
     document.getElementById('moreToolDropdown')?.classList.remove('open');
@@ -549,7 +582,7 @@ export function createToolbarController(opts) {
     const isRailUiTarget = (target) => {
       const el = target instanceof Element ? target : target?.parentElement;
       return !!el?.closest(
-        '#sideRail, #mobileSheetHost, #mapPickerPanel, #overlayPickerPanel, #moreToolDropdown, #kmlPickerPanel, #drawPickerPanel, #drawMapMenu, #mobileSheetBackdrop'
+        '#sideRail, #mobileSheetHost, #mapPickerPanel, #overlayPickerPanel, #moreToolDropdown, #kmlPickerPanel, #drawPickerPanel, #rulerSettingsPanel, .rail-panel-more-side, #drawMapMenu, #mobileSheetBackdrop'
       );
     };
 
@@ -596,7 +629,7 @@ export function createToolbarController(opts) {
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' && e.key !== 'Esc') return;
       const anyOpen = document.querySelector(
-        '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open, #kmlPickerPanel.open'
+        '#mapPickerPanel.open, #overlayPickerPanel.open, #moreToolDropdown.open, #kmlPickerPanel.open, #rulerSettingsPanel.open'
       );
       if (!anyOpen) return;
       e.preventDefault();

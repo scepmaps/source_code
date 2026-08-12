@@ -102,6 +102,8 @@ export function initMapToolControls(opts) {
     else host.appendChild(el);
   };
 
+  const rulerWrap = document.createElement('div');
+  rulerWrap.className = 'more-btn-wrapper';
   const rulerBtn = createToolButton({
     id: TOOL_BTN_IDS.ruler,
     className: 'map-tool-btn--ruler',
@@ -111,7 +113,46 @@ export function initMapToolControls(opts) {
       if (typeof onToggleRuler === 'function') onToggleRuler();
     },
   });
-  insertBeforeMore(rulerBtn);
+  const rulerPanel = document.createElement('div');
+  rulerPanel.id = 'rulerSettingsPanel';
+  rulerPanel.className = 'rail-panel ruler-settings-panel';
+  rulerPanel.setAttribute('role', 'dialog');
+  rulerPanel.setAttribute('aria-label', 'Ruler settings');
+  rulerPanel.addEventListener('click', (e) => e.stopPropagation());
+  const rulerMoreBtn = document.createElement('button');
+  rulerMoreBtn.type = 'button';
+  rulerMoreBtn.id = 'btnRulerMore';
+  rulerMoreBtn.className = 'emoji-btn map-tool-btn map-tool-btn--ruler-more';
+  rulerMoreBtn.dataset.tip = 'Ruler settings';
+  rulerMoreBtn.setAttribute('aria-label', 'Ruler settings');
+  rulerMoreBtn.setAttribute('aria-haspopup', 'true');
+  rulerMoreBtn.setAttribute('aria-expanded', 'false');
+  rulerMoreBtn.innerHTML = iconHtml('settings') || '⚙';
+  rulerMoreBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const wasOpen = rulerPanel.classList.contains('open');
+    document.querySelectorAll(
+      '#mapPickerPanel, #overlayPickerPanel, #moreToolDropdown, #kmlPickerPanel, #drawPickerPanel'
+    ).forEach((el) => el.classList.remove('open'));
+    document.getElementById('btnMaps')?.classList.remove('panel-open', 'active');
+    document.getElementById('btnOverlays')?.classList.remove('panel-open', 'active');
+    document.getElementById('btnMaps')?.setAttribute('aria-expanded', 'false');
+    document.getElementById('btnOverlays')?.setAttribute('aria-expanded', 'false');
+    if (wasOpen) {
+      rulerPanel.classList.remove('open');
+      rulerMoreBtn.classList.remove('panel-open', 'map-tool-btn--active');
+      rulerMoreBtn.setAttribute('aria-expanded', 'false');
+    } else {
+      rulerPanel.classList.add('open');
+      rulerMoreBtn.classList.add('panel-open', 'map-tool-btn--active');
+      rulerMoreBtn.setAttribute('aria-expanded', 'true');
+    }
+  });
+  rulerWrap.appendChild(rulerBtn);
+  rulerWrap.appendChild(rulerMoreBtn);
+  rulerWrap.appendChild(rulerPanel);
+  insertBeforeMore(rulerWrap);
   if (typeof onRulerButtonReady === 'function') onRulerButtonReady(rulerBtn);
 
   boxBtn = createToolButton({

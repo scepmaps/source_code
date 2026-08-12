@@ -1,4 +1,4 @@
-import { ensurePanelMore } from './panel-more.js?v=20260812a';
+import { ensurePanelMore, collapseAllPanelMore } from './panel-more.js?v=20260812b';
 
 export function initSettingsController(opts) {
   const {
@@ -334,7 +334,7 @@ export function initSettingsController(opts) {
     }, 2500);
   }
 
-  async function saveLayerDefaults({ statusId } = {}) {
+  async function saveLayerDefaults({ statusId, includePosition = false } = {}) {
     const base = document.getElementById('settingsBase')?.value || '';
     const densityOpacityVal = document.getElementById('settingsDensityOpacity')?.value;
     const borderHex = document.getElementById('settingsDensityBorderColor')?.value;
@@ -354,6 +354,14 @@ export function initSettingsController(opts) {
       preferences.density_opacity = parseFloat(densityOpacityVal);
       preferences.density_border_color = hexToRgba(borderHex, borderOpacity);
       preferences.density_border_hover_color = hexToRgba(hoverHex, hoverOpacity);
+    }
+    if (includePosition) {
+      const lat = document.getElementById('settingsLat')?.value;
+      const lon = document.getElementById('settingsLon')?.value;
+      const zoom = document.getElementById('settingsZoom')?.value;
+      if (lat !== '' && lat != null) preferences.default_lat = parseFloat(lat);
+      if (lon !== '' && lon != null) preferences.default_lon = parseFloat(lon);
+      if (zoom !== '' && zoom != null) preferences.default_zoom = parseInt(zoom, 10);
     }
 
     try {
@@ -376,10 +384,56 @@ export function initSettingsController(opts) {
     }
   }
 
+  async function saveRulerDefaults() {
+    const units = document.getElementById('settingsRulerUnit')?.value || 'm';
+    try {
+      const res = await fetch(`${API_BASE}/auth/preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getToken() },
+        body: JSON.stringify({ default_units: units }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to save preferences');
+      }
+      const data = await res.json();
+      setUser(data.user);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      setRulerUnits(units);
+      if (hasRulerPoints()) updateRulerLabels();
+      showPanelStatus('rulerDefaultsMessage', 'Saved');
+    } catch (error) {
+      alert('Error saving preferences: ' + error.message);
+    }
+  }
+
+  function loadMapsDefaultsIntoForm() {
+    loadLayerDefaultsIntoForm();
+    const user = userRef() || {};
+    if (user.default_lat != null) {
+      const el = document.getElementById('settingsLat');
+      if (el) el.value = user.default_lat;
+    }
+    if (user.default_lon != null) {
+      const el = document.getElementById('settingsLon');
+      if (el) el.value = user.default_lon;
+    }
+    if (user.default_zoom != null) {
+      const el = document.getElementById('settingsZoom');
+      if (el) el.value = user.default_zoom;
+    }
+  }
+
+  function loadRulerDefaultsIntoForm() {
+    const user = userRef() || {};
+    const el = document.getElementById('settingsRulerUnit');
+    if (el) el.value = user.default_units || 'm';
+  }
+
   function mountPanelSettings() {
     ensurePanelMore(document.getElementById('mapPickerPanel'), {
       sectionEl: document.getElementById('settingsMapsSection'),
-      onExpand: loadLayerDefaultsIntoForm,
+      onExpand: loadMapsDefaultsIntoForm,
     });
     ensurePanelMore(document.getElementById('overlayPickerPanel'), {
       sectionEl: document.getElementById('settingsOverlaysSection'),
@@ -393,7 +447,12 @@ export function initSettingsController(opts) {
       sectionEl: document.getElementById('settingsKmlSection'),
       onExpand: loadKmlOptionsIntoForm,
     });
-    // Sections are live in the DOM now — unhide host leftovers if any remain.
+    // Ruler: settings are the panel body (opened via gear button next to ruler).
+    const rulerPanel = document.getElementById('rulerSettingsPanel');
+    const rulerSection = document.getElementById('settingsRulerSection');
+    if (rulerPanel && rulerSection && rulerSection.parentElement !== rulerPanel) {
+      rulerPanel.appendChild(rulerSection);
+    }
     document.getElementById('panelSettingsHost')?.setAttribute('aria-hidden', 'true');
   }
 
@@ -426,14 +485,12 @@ export function initSettingsController(opts) {
     document.body.classList.add('settings-modal-open');
     document.getElementById('userSettingsModal').style.display = 'flex';
 
-    if (user.default_lat != null) document.getElementById('settingsLat').value = user.default_lat;
-    if (user.default_lon != null) document.getElementById('settingsLon').value = user.default_lon;
-    if (user.default_zoom != null) document.getElementById('settingsZoom').value = user.default_zoom;
-
-    document.getElementById('settingsRulerUnit').value = user.default_units || 'm';
-    document.getElementById('settingsSystem').value = user.default_system === 'UAS' ? 'UAS' : 'UAS';
-    document.getElementById('settingsQuality').value = user.default_quality === 'HD' ? 'HD' : 'SD';
-    document.getElementById('exportAttribution').checked = localStorage.getItem('scepmaps_export_attribution') !== 'false';
+    const systemEl = document.getElementById('settingsSystem');
+    if (systemEl) systemEl.value = 'UAS';
+    const qualityEl = document.getElementById('settingsQuality');
+    if (qualityEl) qualityEl.value = user.default_quality === 'HD' ? 'HD' : 'SD';
+    const attribEl = document.getElementById('exportAttribution');
+    if (attribEl) attribEl.checked = localStorage.getItem('scepmaps_export_attribution') !== 'false';
     markSettingsClean();
   };
 
@@ -578,20 +635,11 @@ export function initSettingsController(opts) {
   };
 
   const savePreferences = async () => {
-    const lat = document.getElementById('settingsLat').value;
-    const lon = document.getElementById('settingsLon').value;
-    const zoom = document.getElementById('settingsZoom').value;
-    const system = document.getElementById('settingsSystem').value;
-    const quality = document.getElementById('settingsQuality').value;
-    const units = document.getElementById('settingsRulerUnit').value;
-
+    const system = document.getElementById('settingsSystem')?.value || 'UAS';
+    const quality = document.getElementById('settingsQuality')?.value;
     const preferences = {};
-    if (lat !== '') preferences.default_lat = parseFloat(lat);
-    if (lon !== '') preferences.default_lon = parseFloat(lon);
-    if (zoom !== '') preferences.default_zoom = parseInt(zoom);
     if (system !== '') preferences.default_system = system;
     if (quality !== '') preferences.default_quality = quality;
-    if (units !== '') preferences.default_units = units;
 
     try {
       const res = await fetch(`${API_BASE}/auth/preferences`, {
@@ -606,14 +654,15 @@ export function initSettingsController(opts) {
       const data = await res.json();
       setUser(data.user);
       localStorage.setItem('user', JSON.stringify(data.user));
-      localStorage.setItem('scepmaps_export_attribution', document.getElementById('exportAttribution').checked.toString());
-      if (units) {
-        setRulerUnits(units);
-        if (hasRulerPoints()) updateRulerLabels();
+      const attribEl = document.getElementById('exportAttribution');
+      if (attribEl) {
+        localStorage.setItem('scepmaps_export_attribution', attribEl.checked.toString());
       }
       const message = document.getElementById('preferencesMessage');
-      message.style.display = 'inline';
-      setTimeout(() => { message.style.display = 'none'; }, 3000);
+      if (message) {
+        message.style.display = 'inline';
+        setTimeout(() => { message.style.display = 'none'; }, 3000);
+      }
       markSettingsClean();
     } catch (error) {
       alert('Error saving preferences: ' + error.message);
@@ -623,10 +672,12 @@ export function initSettingsController(opts) {
   const setCurrentPosition = () => {
     const center = map.getCenter();
     const zoom = map.getZoom();
-    document.getElementById('settingsLat').value = center.lat.toFixed(6);
-    document.getElementById('settingsLon').value = center.lng.toFixed(6);
-    document.getElementById('settingsZoom').value = zoom;
-    refreshSaveButtonVisibility();
+    const latEl = document.getElementById('settingsLat');
+    const lonEl = document.getElementById('settingsLon');
+    const zoomEl = document.getElementById('settingsZoom');
+    if (latEl) latEl.value = center.lat.toFixed(6);
+    if (lonEl) lonEl.value = center.lng.toFixed(6);
+    if (zoomEl) zoomEl.value = zoom;
   };
   const useCurrentLayers = () => {
     document.getElementById('settingsBase').value = baseSelect.value;
@@ -643,10 +694,11 @@ export function initSettingsController(opts) {
   };
   function init() {
     mountPanelSettings();
-    // Prefill layer forms once so Save works even before More is opened.
-    loadLayerDefaultsIntoForm();
+    // Prefill forms once so Save works even before More is opened.
+    loadMapsDefaultsIntoForm();
     loadDrawSettingsIntoForm();
     loadKmlOptionsIntoForm();
+    loadRulerDefaultsIntoForm();
 
     bindIfExists('settingsDensityOpacity', 'input', (e) => {
       const opacity = parseFloat(e.target.value);
@@ -692,8 +744,18 @@ export function initSettingsController(opts) {
     });
     bindIfExists('setCurrentPositionBtn', 'click', setCurrentPosition);
     bindIfExists('useCurrentLayersBtn', 'click', useCurrentLayers);
-    bindIfExists('saveMapsDefaultsBtn', 'click', () => saveLayerDefaults({ statusId: 'mapsDefaultsMessage' }));
-    bindIfExists('saveOverlaysDefaultsBtn', 'click', () => saveLayerDefaults({ statusId: 'overlaysDefaultsMessage' }));
+    bindIfExists('saveMapsDefaultsBtn', 'click', () => {
+      saveLayerDefaults({ statusId: 'mapsDefaultsMessage', includePosition: true });
+    });
+    bindIfExists('saveOverlaysDefaultsBtn', 'click', () => {
+      saveLayerDefaults({ statusId: 'overlaysDefaultsMessage' });
+    });
+    bindIfExists('saveRulerDefaultsBtn', 'click', saveRulerDefaults);
+    bindIfExists('btnRulerMore', 'click', loadRulerDefaultsIntoForm);
+    bindIfExists('settingsRulerUnit', 'change', (e) => {
+      setRulerUnits(e.target.value || 'm');
+      if (hasRulerPoints()) updateRulerLabels();
+    });
     bindIfExists('settingsBase', 'change', (e) => {
       const selectedBase = e.target.value;
       renderOverlayOptions(selectedBase);
@@ -714,5 +776,5 @@ export function initSettingsController(opts) {
     bindIfExists('settingsDrawUnits', 'change', applyDrawSettingsFromForm);
   }
 
-  return { init };
+  return { init, collapseAllPanelMore };
 }

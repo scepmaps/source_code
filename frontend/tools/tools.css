@@ -269,6 +269,20 @@
   flex: 0 0 auto;
   margin-top: 2px;
 }
+.map-tool-btn--ruler-more {
+  width: 28px !important;
+  min-width: 28px !important;
+  padding: 0 !important;
+}
+.map-tool-btn--ruler-more svg {
+  width: 14px;
+  height: 14px;
+}
+.side-rail .more-btn-wrapper:has(#btnRuler) {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
 
 .draw-measure-label {
   background: transparent !important;

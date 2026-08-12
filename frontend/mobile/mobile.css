@@ -500,6 +500,28 @@ body.mobile-app .rail-panel-empty {
   font-size: 13px;
 }
 
+/* More settings: stack under the picker inside the bottom sheet */
+body.mobile-app .rail-panel-more-side {
+  position: static !important;
+  right: auto !important;
+  top: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin-top: 4px;
+  grid-column: 1 / -1;
+  box-shadow: none !important;
+  border-radius: 12px !important;
+  background: rgba(8, 14, 32, 0.55) !important;
+}
+body.mobile-app .rail-panel.has-more-open {
+  max-height: min(70vh, 520px) !important;
+}
+body.mobile-app .ruler-settings-panel {
+  grid-template-columns: 1fr !important;
+  grid-auto-rows: auto !important;
+}
+
 /* ---- Map chrome offsets ---- */
 body.mobile-app .attribution {
   right: 10px !important;
