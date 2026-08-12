@@ -16,10 +16,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css?v=20260806m">
-    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260812b">
-    <link rel="stylesheet" href="tools/tools.css?v=20260812b">
+    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260812c">
+    <link rel="stylesheet" href="tools/tools.css?v=20260812c">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css?v=20260812b">
+    <link rel="stylesheet" href="settings/settings.css?v=20260812c">
     <script type="module">
       import { isMobileClient } from './mobile/device.js?v=20260806e';
       try {
@@ -238,6 +238,21 @@
           </div>
 
           <div class="settings-account-section">
+            <h4>Preferred units</h4>
+            <p class="settings-account-hint">Used by the ruler and drawing measurements</p>
+            <div class="settings-account-field">
+              <label for="settingsPreferredUnits">Units</label>
+              <select id="settingsPreferredUnits">
+                <option value="m">Meters (m)</option>
+                <option value="km">Kilometers (km)</option>
+                <option value="ft">Feet (ft)</option>
+                <option value="mi">Miles (mi)</option>
+                <option value="nm">Nautical Miles (nm)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="settings-account-section">
             <h4>Export defaults</h4>
             <p class="settings-account-hint">Preferred quality when exporting map imagery</p>
             <input type="hidden" id="settingsSystem" value="UAS" />
@@ -297,7 +312,7 @@
       </div>
     </div>
 
-    <!-- Panel "More" settings — mounted into Maps / Overlays / Draw / KML / Ruler -->
+    <!-- Panel "More" settings — mounted into Maps / Overlays / Draw / KML -->
     <div id="panelSettingsHost" hidden aria-hidden="true">
       <div id="settingsMapsSection" class="panel-more-settings">
         <h4>Default map</h4>
@@ -378,23 +393,6 @@
         <span id="overlaysDefaultsMessage" class="panel-more-status" hidden></span>
       </div>
 
-      <div id="settingsRulerSection" class="panel-more-settings">
-        <h4>Ruler</h4>
-        <p class="panel-more-hint">Distance units for the ruler tool</p>
-        <label class="panel-more-label" for="settingsRulerUnit">Units</label>
-        <select id="settingsRulerUnit">
-          <option value="m">Meters (m)</option>
-          <option value="km">Kilometers (km)</option>
-          <option value="ft">Feet (ft)</option>
-          <option value="mi">Miles (mi)</option>
-          <option value="nm">Nautical Miles (nm)</option>
-        </select>
-        <div class="panel-more-actions">
-          <button type="button" class="btn" id="saveRulerDefaultsBtn">Save</button>
-        </div>
-        <span id="rulerDefaultsMessage" class="panel-more-status" hidden></span>
-      </div>
-
       <div id="settingsDrawSection" class="panel-more-settings">
         <h4>Drawing</h4>
         <p class="panel-more-hint">Palette, labels, and stroke</p>
@@ -432,16 +430,6 @@
         </div>
         <div class="settings-draw-controls">
           <div class="settings-draw-stroke-row">
-            <label for="settingsDrawUnits">Units</label>
-            <select id="settingsDrawUnits">
-              <option value="m">Meters</option>
-              <option value="km">Kilometers</option>
-              <option value="ft">Feet</option>
-              <option value="mi">Miles</option>
-              <option value="nm">Nautical mi</option>
-            </select>
-          </div>
-          <div class="settings-draw-stroke-row">
             <label for="settingsDrawStrokeWeight">Stroke</label>
             <input type="range" id="settingsDrawStrokeWeight" min="1" max="6" step="0.25" value="2.25" />
             <span id="settingsDrawStrokeVal" class="settings-draw-stroke-val">2.25</span>
@@ -477,6 +465,6 @@
     <!-- Interactive Mapping Grid System -->
     <script src="particles.js"></script>
 
-    <script type="module" src="app.js?v=20260812b"></script>
+    <script type="module" src="app.js?v=20260812c"></script>
   </body>
 </html>

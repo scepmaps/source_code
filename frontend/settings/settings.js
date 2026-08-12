@@ -318,6 +318,23 @@ export function initSettingsController(opts) {
     if (showNamesCb) showNamesCb.checked = !!kmlController?.getShowNames?.();
   }
 
+  function loadMapsDefaultsIntoForm() {
+    loadLayerDefaultsIntoForm();
+    const user = userRef() || {};
+    if (user.default_lat != null) {
+      const el = document.getElementById('settingsLat');
+      if (el) el.value = user.default_lat;
+    }
+    if (user.default_lon != null) {
+      const el = document.getElementById('settingsLon');
+      if (el) el.value = user.default_lon;
+    }
+    if (user.default_zoom != null) {
+      const el = document.getElementById('settingsZoom');
+      if (el) el.value = user.default_zoom;
+    }
+  }
+
   function showPanelStatus(elementId, text) {
     const el = document.getElementById(elementId);
     if (!el) return;
@@ -384,49 +401,18 @@ export function initSettingsController(opts) {
     }
   }
 
-  async function saveRulerDefaults() {
-    const units = document.getElementById('settingsRulerUnit')?.value || 'm';
-    try {
-      const res = await fetch(`${API_BASE}/auth/preferences`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getToken() },
-        body: JSON.stringify({ default_units: units }),
-      });
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}));
-        throw new Error(error.error || 'Failed to save preferences');
-      }
-      const data = await res.json();
-      setUser(data.user);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      setRulerUnits(units);
-      if (hasRulerPoints()) updateRulerLabels();
-      showPanelStatus('rulerDefaultsMessage', 'Saved');
-    } catch (error) {
-      alert('Error saving preferences: ' + error.message);
+  function applyPreferredUnits(units) {
+    const next = units || 'm';
+    setRulerUnits(next);
+    if (hasRulerPoints()) updateRulerLabels();
+    if (drawController?.applySettings) {
+      drawController.applySettings({ units: next });
     }
   }
 
-  function loadMapsDefaultsIntoForm() {
-    loadLayerDefaultsIntoForm();
+  function loadPreferredUnitsIntoForm() {
     const user = userRef() || {};
-    if (user.default_lat != null) {
-      const el = document.getElementById('settingsLat');
-      if (el) el.value = user.default_lat;
-    }
-    if (user.default_lon != null) {
-      const el = document.getElementById('settingsLon');
-      if (el) el.value = user.default_lon;
-    }
-    if (user.default_zoom != null) {
-      const el = document.getElementById('settingsZoom');
-      if (el) el.value = user.default_zoom;
-    }
-  }
-
-  function loadRulerDefaultsIntoForm() {
-    const user = userRef() || {};
-    const el = document.getElementById('settingsRulerUnit');
+    const el = document.getElementById('settingsPreferredUnits');
     if (el) el.value = user.default_units || 'm';
   }
 
@@ -447,12 +433,6 @@ export function initSettingsController(opts) {
       sectionEl: document.getElementById('settingsKmlSection'),
       onExpand: loadKmlOptionsIntoForm,
     });
-    // Ruler: settings are the panel body (opened via gear button next to ruler).
-    const rulerPanel = document.getElementById('rulerSettingsPanel');
-    const rulerSection = document.getElementById('settingsRulerSection');
-    if (rulerPanel && rulerSection && rulerSection.parentElement !== rulerPanel) {
-      rulerPanel.appendChild(rulerSection);
-    }
     document.getElementById('panelSettingsHost')?.setAttribute('aria-hidden', 'true');
   }
 
@@ -491,6 +471,7 @@ export function initSettingsController(opts) {
     if (qualityEl) qualityEl.value = user.default_quality === 'HD' ? 'HD' : 'SD';
     const attribEl = document.getElementById('exportAttribution');
     if (attribEl) attribEl.checked = localStorage.getItem('scepmaps_export_attribution') !== 'false';
+    loadPreferredUnitsIntoForm();
     markSettingsClean();
   };
 
@@ -519,8 +500,6 @@ export function initSettingsController(opts) {
     setCb('settingsDrawShowLength', s.showLength);
     setCb('settingsDrawShowArea', s.showArea);
     setCb('settingsDrawShowCoordinates', s.showCoordinates);
-    const unitsEl = document.getElementById('settingsDrawUnits');
-    if (unitsEl) unitsEl.value = s.units || 'm';
     const stroke = document.getElementById('settingsDrawStrokeWeight');
     const strokeVal = document.getElementById('settingsDrawStrokeVal');
     if (stroke) stroke.value = String(s.strokeWeight ?? 2.25);
@@ -536,6 +515,10 @@ export function initSettingsController(opts) {
     const stroke = document.getElementById('settingsDrawStrokeWeight');
     const strokeVal = document.getElementById('settingsDrawStrokeVal');
     if (stroke && strokeVal) strokeVal.textContent = stroke.value;
+    const preferred =
+      document.getElementById('settingsPreferredUnits')?.value ||
+      userRef()?.default_units ||
+      'm';
     drawController.applySettings({
       palette,
       showMeasurements: !!document.getElementById('settingsDrawShowMeasurements')?.checked,
@@ -543,7 +526,7 @@ export function initSettingsController(opts) {
       showArea: !!document.getElementById('settingsDrawShowArea')?.checked,
       showCoordinates: !!document.getElementById('settingsDrawShowCoordinates')?.checked,
       strokeWeight: stroke ? parseFloat(stroke.value) : 2.25,
-      units: document.getElementById('settingsDrawUnits')?.value || 'm',
+      units: preferred,
     });
   }
 
@@ -637,9 +620,11 @@ export function initSettingsController(opts) {
   const savePreferences = async () => {
     const system = document.getElementById('settingsSystem')?.value || 'UAS';
     const quality = document.getElementById('settingsQuality')?.value;
+    const units = document.getElementById('settingsPreferredUnits')?.value || 'm';
     const preferences = {};
     if (system !== '') preferences.default_system = system;
     if (quality !== '') preferences.default_quality = quality;
+    if (units !== '') preferences.default_units = units;
 
     try {
       const res = await fetch(`${API_BASE}/auth/preferences`, {
@@ -658,6 +643,7 @@ export function initSettingsController(opts) {
       if (attribEl) {
         localStorage.setItem('scepmaps_export_attribution', attribEl.checked.toString());
       }
+      applyPreferredUnits(units);
       const message = document.getElementById('preferencesMessage');
       if (message) {
         message.style.display = 'inline';
@@ -698,7 +684,8 @@ export function initSettingsController(opts) {
     loadMapsDefaultsIntoForm();
     loadDrawSettingsIntoForm();
     loadKmlOptionsIntoForm();
-    loadRulerDefaultsIntoForm();
+    loadPreferredUnitsIntoForm();
+    applyPreferredUnits(document.getElementById('settingsPreferredUnits')?.value || userRef()?.default_units || 'm');
 
     bindIfExists('settingsDensityOpacity', 'input', (e) => {
       const opacity = parseFloat(e.target.value);
@@ -750,11 +737,9 @@ export function initSettingsController(opts) {
     bindIfExists('saveOverlaysDefaultsBtn', 'click', () => {
       saveLayerDefaults({ statusId: 'overlaysDefaultsMessage' });
     });
-    bindIfExists('saveRulerDefaultsBtn', 'click', saveRulerDefaults);
-    bindIfExists('btnRulerMore', 'click', loadRulerDefaultsIntoForm);
-    bindIfExists('settingsRulerUnit', 'change', (e) => {
-      setRulerUnits(e.target.value || 'm');
-      if (hasRulerPoints()) updateRulerLabels();
+    bindIfExists('settingsPreferredUnits', 'change', (e) => {
+      applyPreferredUnits(e.target.value || 'm');
+      refreshSaveButtonVisibility();
     });
     bindIfExists('settingsBase', 'change', (e) => {
       const selectedBase = e.target.value;
@@ -773,7 +758,6 @@ export function initSettingsController(opts) {
     bindIfExists('settingsDrawShowArea', 'change', applyDrawSettingsFromForm);
     bindIfExists('settingsDrawShowCoordinates', 'change', applyDrawSettingsFromForm);
     bindIfExists('settingsDrawStrokeWeight', 'input', applyDrawSettingsFromForm);
-    bindIfExists('settingsDrawUnits', 'change', applyDrawSettingsFromForm);
   }
 
   return { init, collapseAllPanelMore };
