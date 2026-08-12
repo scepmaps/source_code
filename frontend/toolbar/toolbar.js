@@ -1,6 +1,6 @@
 import { iconHtml } from './icons.js?v=20260807o';
 import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260812c';
-import { syncOpenPanelMore } from '../settings/panel-more.js?v=20260812e';
+import { syncOpenPanelMore, collapseAllPanelMore } from '../settings/panel-more.js?v=20260812f';
 
 export function createToolbarController(opts) {
   const {
@@ -104,6 +104,10 @@ export function createToolbarController(opts) {
   }
 
   function closeAllPanels(exceptId = null) {
+    // Always collapse More settings (including Draw's) when switching modules.
+    // Draw's picker itself stays sticky; only its side settings close here.
+    collapseAllPanelMore();
+
     // Draw panel is sticky — only closed via its own button toggle or Esc.
     ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown', 'kmlPickerPanel'].forEach((id) => {
       if (id === exceptId) return;

@@ -8,7 +8,7 @@ import {
   pointStyleFromFeature,
   summarizeStats,
 } from './kml-parse.js?v=20260807i';
-import { collapseAllPanelMore, collapsePanelMore, syncOpenPanelMore } from '../settings/panel-more.js?v=20260812e';
+import { collapseAllPanelMore, collapsePanelMore, syncOpenPanelMore } from '../settings/panel-more.js?v=20260812f';
 
 const DEFAULT_COLOR = '#4de2ff';
 const DEFAULT_OPACITY = 0.65;

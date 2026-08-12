@@ -1,4 +1,4 @@
-import { ensurePanelMore, collapseAllPanelMore } from './panel-more.js?v=20260812e';
+import { ensurePanelMore, collapseAllPanelMore } from './panel-more.js?v=20260812f';
 
 export function initSettingsController(opts) {
   const {
@@ -467,6 +467,7 @@ export function initSettingsController(opts) {
     }
     document.body.classList.add('settings-modal-open');
     document.getElementById('userSettingsModal').style.display = 'flex';
+    collapseAllPanelMore();
 
     const systemEl = document.getElementById('settingsSystem');
     if (systemEl) systemEl.value = 'UAS';
