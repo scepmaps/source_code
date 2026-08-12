@@ -504,6 +504,133 @@
   text-align: center;
 }
 
+/* Panel "More" settings expander (Maps / Overlays / Draw / KML) */
+.rail-panel-more {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(77, 226, 255, 0.14);
+  min-width: 0;
+}
+.rail-panel-more-btn {
+  appearance: none;
+  align-self: stretch;
+  border: 1px solid rgba(77, 226, 255, 0.22);
+  background: rgba(77, 226, 255, 0.08);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.rail-panel-more-btn:hover {
+  background: rgba(77, 226, 255, 0.16);
+}
+.rail-panel-more.is-expanded .rail-panel-more-btn {
+  border-color: rgba(77, 226, 255, 0.4);
+  background: rgba(77, 226, 255, 0.14);
+}
+.rail-panel-more-body {
+  min-width: 0;
+}
+.rail-panel-more-body[hidden] {
+  display: none !important;
+}
+.panel-more-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 2px 4px;
+  color: var(--text);
+  font-family: Inter, system-ui, sans-serif;
+}
+.panel-more-settings > h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.panel-more-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.panel-more-label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+.panel-more-settings select {
+  width: 100%;
+  font-size: 12px;
+}
+.panel-more-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+}
+.panel-more-actions .btn {
+  font-size: 11px;
+  padding: 6px 10px;
+}
+.panel-more-status {
+  font-size: 11px;
+  color: var(--accent);
+}
+.panel-more-range-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panel-more-range-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+.panel-more-range-row input[type="color"] {
+  width: 32px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(77, 226, 255, 0.25);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.panel-more-range-row span {
+  min-width: 34px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--muted);
+}
+.panel-more-density {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(77, 226, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.panel-more-density-colors {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.kml-panel > .rail-panel-more,
+.draw-panel > .rail-panel-more {
+  width: 100%;
+}
+
 .side-rail .map-tool-btn {
   width: 38px !important;
   height: 38px !important;

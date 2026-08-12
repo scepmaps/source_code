@@ -18,10 +18,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260806u">
-    <link rel="stylesheet" href="tools/tools.css?v=20260807q">
+    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260812a">
+    <link rel="stylesheet" href="tools/tools.css?v=20260812a">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css?v=20260811e">
+    <link rel="stylesheet" href="settings/settings.css?v=20260812a">
     <link rel="stylesheet" href="mobile/mobile.css?v=20260806y">
     <script type="module">
       // Escape hatch: force desktop with ?desktop / stay with ?mobile
@@ -234,39 +234,6 @@
           </div>
 
           <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
-            <h4>Default Layer Settings</h4>
-            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
-              Set your preferred base map and overlays
-            </p>
-
-            <div style="display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px;">
-              <div>
-                <label style="display: block; margin-bottom: 4px;">Base Map</label>
-                <select id="settingsBase" style="width: 100%;">
-                  <option value="">-- None --</option>
-                  <option value="osm">OpenStreetMap</option>
-                  <option value="dark">OSM Dark</option>
-                  <option value="esri">Satellite</option>
-                  <option value="topo">Topographic</option>
-                  <option value="navigation">Navigation</option>
-                  <option value="night">Night</option>
-                  <option value="shom">SHOM Charts</option>
-                  <option value="ukho">UKHO Charts</option>
-                  <option value="gbsouth">GB South Aviation</option>
-                </select>
-              </div>
-              <div>
-                <label style="display: block; margin-bottom: 4px;">Overlays</label>
-                <div id="settingsOverlaysList" class="settings-overlays-list"></div>
-              </div>
-            </div>
-
-            <button class="btn" id="useCurrentLayersBtn">
-              Use Current as Default Layer Settings
-            </button>
-          </div>
-
-          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
             <h4>Tool Settings</h4>
             <div style="margin-bottom: 12px;">
               <label style="display: block; margin-bottom: 4px;">Ruler Units</label>
@@ -277,126 +244,6 @@
                 <option value="mi">Miles (mi)</option>
                 <option value="nm">Nautical Miles (nm)</option>
               </select>
-            </div>
-          </div>
-
-          <div id="settingsDensitySection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
-            <h4>Population Density Overlay</h4>
-            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
-              Customize the population density overlay appearance
-            </p>
-
-            <div style="margin-bottom: 12px;">
-              <label style="display: block; margin-bottom: 4px;">Layer Opacity</label>
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <input type="range" id="settingsDensityOpacity" min="0" max="1" step="0.05" value="0.65"
-                       style="flex: 1; accent-color: var(--accent);" />
-                <span id="densityOpacityValue" style="min-width: 40px; text-align: right;">65%</span>
-              </div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px;">
-              <div>
-                <label style="display: block; margin-bottom: 4px;">Border Color</label>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <input type="color" id="settingsDensityBorderColor" value="#ffffff"
-                         style="width: 40px; height: 32px; border: 1px solid var(--stroke); border-radius: 4px; cursor: pointer;" />
-                  <input type="range" id="settingsDensityBorderOpacity" min="0" max="1" step="0.1" value="0.2"
-                         style="flex: 1; accent-color: var(--accent);" />
-                  <span id="borderOpacityValue" style="min-width: 30px; font-size: 12px;">20%</span>
-                </div>
-              </div>
-              <div>
-                <label style="display: block; margin-bottom: 4px;">Hover Border Color</label>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <input type="color" id="settingsDensityHoverColor" value="#000000"
-                         style="width: 40px; height: 32px; border: 1px solid var(--stroke); border-radius: 4px; cursor: pointer;" />
-                  <input type="range" id="settingsDensityHoverOpacity" min="0" max="1" step="0.1" value="0.9"
-                         style="flex: 1; accent-color: var(--accent);" />
-                  <span id="hoverOpacityValue" style="min-width: 30px; font-size: 12px;">90%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div id="settingsKmlSection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
-            <div class="settings-kml-header">
-              <div>
-                <h4>KML Overlays</h4>
-                <p style="color: var(--muted); font-size: 13px; margin: 0;">
-                  Import and configure your saved KML layers. Click Save Changes to apply.
-                </p>
-              </div>
-              <button type="button" class="btn" id="settingsKmlImportBtn">Import KML</button>
-            </div>
-            <label class="settings-kml-outline-toggle" title="Draw a bright thin red outline on every KML zone">
-              <span>Red zone outlines</span>
-              <span class="settings-switch">
-                <input type="checkbox" id="settingsKmlRedOutline" />
-                <span class="settings-switch-slider" aria-hidden="true"></span>
-              </span>
-            </label>
-            <label class="settings-kml-outline-toggle" title="Show feature names on the map">
-              <span>Show names</span>
-              <span class="settings-switch">
-                <input type="checkbox" id="settingsKmlShowNames" />
-                <span class="settings-switch-slider" aria-hidden="true"></span>
-              </span>
-            </label>
-            <div id="settingsKmlList" class="settings-kml-list"></div>
-          </div>
-
-          <div id="settingsDrawSection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stroke);">
-            <h4>Drawing</h4>
-            <p style="color: var(--muted);">Palette, labels, and stroke for the desktop draw tool.</p>
-            <label class="settings-draw-palette-label" for="settingsDrawPalette">Color palette</label>
-            <div id="settingsDrawPalette" class="settings-draw-palette" aria-label="Draw color palette"></div>
-            <div class="settings-draw-row">
-              <label class="settings-kml-outline-toggle">
-                <span>Measurements</span>
-                <span class="settings-switch">
-                  <input type="checkbox" id="settingsDrawShowMeasurements" />
-                  <span class="settings-switch-slider" aria-hidden="true"></span>
-                </span>
-              </label>
-              <label class="settings-kml-outline-toggle">
-                <span>Lengths</span>
-                <span class="settings-switch">
-                  <input type="checkbox" id="settingsDrawShowLength" />
-                  <span class="settings-switch-slider" aria-hidden="true"></span>
-                </span>
-              </label>
-              <label class="settings-kml-outline-toggle">
-                <span>Areas</span>
-                <span class="settings-switch">
-                  <input type="checkbox" id="settingsDrawShowArea" />
-                  <span class="settings-switch-slider" aria-hidden="true"></span>
-                </span>
-              </label>
-              <label class="settings-kml-outline-toggle">
-                <span>Coordinates</span>
-                <span class="settings-switch">
-                  <input type="checkbox" id="settingsDrawShowCoordinates" />
-                  <span class="settings-switch-slider" aria-hidden="true"></span>
-                </span>
-              </label>
-            </div>
-            <div class="settings-draw-controls">
-              <div class="settings-draw-stroke-row">
-                <label for="settingsDrawUnits">Units</label>
-                <select id="settingsDrawUnits">
-                  <option value="m">Meters</option>
-                  <option value="km">Kilometers</option>
-                  <option value="ft">Feet</option>
-                  <option value="mi">Miles</option>
-                  <option value="nm">Nautical mi</option>
-                </select>
-              </div>
-              <div class="settings-draw-stroke-row">
-                <label for="settingsDrawStrokeWeight">Stroke</label>
-                <input type="range" id="settingsDrawStrokeWeight" min="1" max="6" step="0.25" value="2.25" />
-                <span id="settingsDrawStrokeVal" class="settings-draw-stroke-val">2.25</span>
-              </div>
             </div>
           </div>
 
@@ -485,10 +332,147 @@
       </div>
     </div>
 
+    <!-- Panel "More" settings — mounted into Maps / Overlays / Draw / KML pickers -->
+    <div id="panelSettingsHost" hidden aria-hidden="true">
+      <div id="settingsMapsSection" class="panel-more-settings">
+        <h4>Default map</h4>
+        <p class="panel-more-hint">Preferred base map when you open ScepMaps</p>
+        <label class="panel-more-label" for="settingsBase">Base Map</label>
+        <select id="settingsBase">
+          <option value="">-- None --</option>
+          <option value="osm">OpenStreetMap</option>
+          <option value="dark">OSM Dark</option>
+          <option value="esri">Satellite</option>
+          <option value="topo">Topographic</option>
+          <option value="navigation">Navigation</option>
+          <option value="night">Night</option>
+          <option value="ocean">Navigation Dark</option>
+          <option value="shom">SHOM Charts</option>
+          <option value="ukho">UKHO Charts</option>
+          <option value="gbsouth">GB South Aviation</option>
+        </select>
+        <div class="panel-more-actions">
+          <button type="button" class="btn" id="useCurrentLayersBtn">Use current layers</button>
+          <button type="button" class="btn" id="saveMapsDefaultsBtn">Save</button>
+        </div>
+        <span id="mapsDefaultsMessage" class="panel-more-status" hidden></span>
+      </div>
+
+      <div id="settingsOverlaysSection" class="panel-more-settings">
+        <h4>Default overlays</h4>
+        <p class="panel-more-hint">Overlays enabled by default for the selected base map</p>
+        <div id="settingsOverlaysList" class="settings-overlays-list"></div>
+        <div id="settingsDensitySection" class="panel-more-density">
+          <h4>Population density</h4>
+          <p class="panel-more-hint">Appearance of the density overlay</p>
+          <label class="panel-more-label" for="settingsDensityOpacity">Layer opacity</label>
+          <div class="panel-more-range-row">
+            <input type="range" id="settingsDensityOpacity" min="0" max="1" step="0.05" value="0.65" />
+            <span id="densityOpacityValue">65%</span>
+          </div>
+          <div class="panel-more-density-colors">
+            <div>
+              <label class="panel-more-label">Border</label>
+              <div class="panel-more-range-row">
+                <input type="color" id="settingsDensityBorderColor" value="#ffffff" />
+                <input type="range" id="settingsDensityBorderOpacity" min="0" max="1" step="0.1" value="0.2" />
+                <span id="borderOpacityValue">20%</span>
+              </div>
+            </div>
+            <div>
+              <label class="panel-more-label">Hover border</label>
+              <div class="panel-more-range-row">
+                <input type="color" id="settingsDensityHoverColor" value="#000000" />
+                <input type="range" id="settingsDensityHoverOpacity" min="0" max="1" step="0.1" value="0.9" />
+                <span id="hoverOpacityValue">90%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="panel-more-actions">
+          <button type="button" class="btn" id="saveOverlaysDefaultsBtn">Save</button>
+        </div>
+        <span id="overlaysDefaultsMessage" class="panel-more-status" hidden></span>
+      </div>
+
+      <div id="settingsDrawSection" class="panel-more-settings">
+        <h4>Drawing</h4>
+        <p class="panel-more-hint">Palette, labels, and stroke</p>
+        <label class="settings-draw-palette-label" for="settingsDrawPalette">Color palette</label>
+        <div id="settingsDrawPalette" class="settings-draw-palette" aria-label="Draw color palette"></div>
+        <div class="settings-draw-row">
+          <label class="settings-kml-outline-toggle" title="Show length and area labels on drawn shapes">
+            <span>Measurements</span>
+            <span class="settings-switch">
+              <input type="checkbox" id="settingsDrawShowMeasurements" />
+              <span class="settings-switch-slider" aria-hidden="true"></span>
+            </span>
+          </label>
+          <label class="settings-kml-outline-toggle" title="Show line / perimeter length">
+            <span>Lengths</span>
+            <span class="settings-switch">
+              <input type="checkbox" id="settingsDrawShowLength" />
+              <span class="settings-switch-slider" aria-hidden="true"></span>
+            </span>
+          </label>
+          <label class="settings-kml-outline-toggle" title="Show area for polygons, rectangles, and circles">
+            <span>Areas</span>
+            <span class="settings-switch">
+              <input type="checkbox" id="settingsDrawShowArea" />
+              <span class="settings-switch-slider" aria-hidden="true"></span>
+            </span>
+          </label>
+          <label class="settings-kml-outline-toggle" title="Show latitude / longitude on shapes (independent of measurements)">
+            <span>Coordinates</span>
+            <span class="settings-switch">
+              <input type="checkbox" id="settingsDrawShowCoordinates" />
+              <span class="settings-switch-slider" aria-hidden="true"></span>
+            </span>
+          </label>
+        </div>
+        <div class="settings-draw-controls">
+          <div class="settings-draw-stroke-row">
+            <label for="settingsDrawUnits">Units</label>
+            <select id="settingsDrawUnits">
+              <option value="m">Meters</option>
+              <option value="km">Kilometers</option>
+              <option value="ft">Feet</option>
+              <option value="mi">Miles</option>
+              <option value="nm">Nautical mi</option>
+            </select>
+          </div>
+          <div class="settings-draw-stroke-row">
+            <label for="settingsDrawStrokeWeight">Stroke</label>
+            <input type="range" id="settingsDrawStrokeWeight" min="1" max="6" step="0.25" value="2.25" />
+            <span id="settingsDrawStrokeVal" class="settings-draw-stroke-val">2.25</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="settingsKmlSection" class="panel-more-settings">
+        <h4>KML options</h4>
+        <p class="panel-more-hint">Display options for imported overlays</p>
+        <label class="settings-kml-outline-toggle" title="Draw a bright thin red outline on every KML zone">
+          <span>Red zone outlines</span>
+          <span class="settings-switch">
+            <input type="checkbox" id="settingsKmlRedOutline" />
+            <span class="settings-switch-slider" aria-hidden="true"></span>
+          </span>
+        </label>
+        <label class="settings-kml-outline-toggle" title="Show feature names on the map">
+          <span>Show names</span>
+          <span class="settings-switch">
+            <input type="checkbox" id="settingsKmlShowNames" />
+            <span class="settings-switch-slider" aria-hidden="true"></span>
+          </span>
+        </label>
+      </div>
+    </div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
     <script src="particles.js"></script>
-    <script type="module" src="app.js?v=20260811g"></script>
+    <script type="module" src="app.js?v=20260812a"></script>
   </body>
 </html>

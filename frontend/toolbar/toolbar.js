@@ -298,10 +298,22 @@ export function createToolbarController(opts) {
   function populateNamedPanel(panelId, items, iconMap, labels, type, idMap) {
     const panel = document.getElementById(panelId);
     if (!panel) return;
-    panel.innerHTML = '';
+
+    // Preserve the More settings footer across refreshes.
+    const more = panel.querySelector(':scope > .rail-panel-more');
+    panel.querySelectorAll(':scope > .rail-panel-item, :scope > .rail-panel-empty').forEach((el) => el.remove());
+
+    const insertBeforeMore = (node) => {
+      if (more) panel.insertBefore(node, more);
+      else panel.appendChild(node);
+    };
 
     if (!items.length) {
-      panel.innerHTML = '<div class="rail-panel-empty">Nothing available</div>';
+      const empty = document.createElement('div');
+      empty.className = 'rail-panel-empty';
+      empty.textContent = 'Nothing available';
+      insertBeforeMore(empty);
+      if (more) panel.appendChild(more);
       return;
     }
 
@@ -341,8 +353,9 @@ export function createToolbarController(opts) {
         }
       });
 
-      panel.appendChild(row);
+      insertBeforeMore(row);
     });
+    if (more) panel.appendChild(more);
   }
 
   function refreshOverlayPicker() {

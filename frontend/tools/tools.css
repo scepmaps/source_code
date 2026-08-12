@@ -262,6 +262,13 @@
   padding: 0 2px 2px;
   line-height: 1.35;
 }
+.draw-panel > .rail-panel-more {
+  grid-column: 1 / -1;
+}
+.kml-panel > .rail-panel-more {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
 
 .draw-measure-label {
   background: transparent !important;
