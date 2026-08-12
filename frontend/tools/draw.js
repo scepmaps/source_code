@@ -6,7 +6,7 @@
  */
 
 import { iconHtml } from '../toolbar/icons.js?v=20260807q';
-import { collapseAllPanelMore, collapsePanelMore, syncOpenPanelMore } from '../settings/panel-more.js?v=20260812f';
+import { collapseAllPanelMore, collapsePanelMore, syncOpenPanelMore } from '../settings/panel-more.js?v=20260812g';
 
 const SETTINGS_KEY = 'scepmaps_draw_settings';
 const DEFAULT_PALETTE = [

@@ -1,10 +1,10 @@
 import { LAYERS } from './config.js?v=20260806k';
-import { createToolbarController } from './toolbar/toolbar.js?v=20260812f';
-import { initSettingsController } from './settings/settings.js?v=20260812f';
+import { createToolbarController } from './toolbar/toolbar.js?v=20260812g';
+import { initSettingsController } from './settings/settings.js?v=20260812g';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
 import { initMapToolControls } from './tools/tools.js?v=20260812c';
-import { initKmlOverlays } from './tools/kml.js?v=20260812f';
-import { initDrawTool } from './tools/draw.js?v=20260812f';
+import { initKmlOverlays } from './tools/kml.js?v=20260812g';
+import { initDrawTool } from './tools/draw.js?v=20260812g';
 import { iconHtml } from './toolbar/icons.js?v=20260807q';
 import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260811g';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
@@ -1112,6 +1112,10 @@ const basemapPreloader = createBasemapPreloader({
   getActiveBase: () => baseSelect?.value || null,
 });
 
+const toolbarPanelHooks = {
+  closeTools: () => {},
+};
+
 const toolbarController = createToolbarController({
   baseSelect,
   seamarksCb,
@@ -1129,6 +1133,7 @@ const toolbarController = createToolbarController({
     basemapPreloader.warmOnMapsPickerOpen();
     primeBasemapLayers();
   },
+  onCloseTools: () => toolbarPanelHooks.closeTools(),
 });
 const {
   updateBaseButtonStates,
@@ -2459,10 +2464,14 @@ function addRulerPoint(latlng) {
 }
 
 const API_BASE = '';
+const kmlToolHooks = {
+  onActivate: () => {},
+};
 const kmlController = initKmlOverlays({
   map,
   getToken: () => token,
   API_BASE,
+  onActivate: () => kmlToolHooks.onActivate(),
 });
 
 function suppressConflictingToolsForDraw() {
@@ -2510,6 +2519,14 @@ const drawController = initDrawTool({
     kmlController.setPointerEventsEnabled?.(enabled);
   },
 });
+
+toolbarPanelHooks.closeTools = () => {
+  drawController.closePanel?.();
+  kmlController.closePanel?.();
+};
+kmlToolHooks.onActivate = () => {
+  drawController.closePanel?.();
+};
 
 const controls = initMapToolControls({
   allowedTools,

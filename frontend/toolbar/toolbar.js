@@ -1,6 +1,6 @@
 import { iconHtml } from './icons.js?v=20260807o';
 import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260812c';
-import { syncOpenPanelMore, collapseAllPanelMore } from '../settings/panel-more.js?v=20260812f';
+import { syncOpenPanelMore, collapseAllPanelMore } from '../settings/panel-more.js?v=20260812g';
 
 export function createToolbarController(opts) {
   const {
@@ -17,6 +17,7 @@ export function createToolbarController(opts) {
     getIsNamesOverlayEnabled,
     setIsNamesOverlayEnabled,
     onMapsPickerOpen,
+    onCloseTools,
   } = opts;
 
   const favMapOptions = {
@@ -568,6 +569,8 @@ export function createToolbarController(opts) {
     const wasOpen = panel.classList.contains('open');
     closeAllPanels();
     if (!wasOpen) {
+      // Opening Maps / Overlays should dismiss Draw / other tool panels + Mores.
+      if (typeof onCloseTools === 'function') onCloseTools();
       panel.classList.add('open');
       document.getElementById(triggerId)?.classList.add('panel-open', 'active');
       document.getElementById(triggerId)?.setAttribute('aria-expanded', 'true');
@@ -587,7 +590,10 @@ export function createToolbarController(opts) {
     if (!dropdown) return;
     const wasOpen = dropdown.classList.contains('open');
     closeAllPanels();
-    if (!wasOpen) dropdown.classList.add('open');
+    if (!wasOpen) {
+      if (typeof onCloseTools === 'function') onCloseTools();
+      dropdown.classList.add('open');
+    }
     updateMoreButtonsHighlight();
   }
 

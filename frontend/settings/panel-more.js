@@ -133,24 +133,35 @@ export function syncSidePosition(panel, side = getSideForPanel(panel)) {
     left = margin;
   }
 
-  let top = rect.top;
   const maxHeight = Math.max(160, window.innerHeight - margin * 2);
-  let heightCap = Math.min(maxHeight, Math.max(rect.height, window.innerHeight * 0.72));
+  let heightCap = Math.min(maxHeight, window.innerHeight * 0.72);
 
-  if (top + heightCap > window.innerHeight - margin) {
-    top = Math.max(margin, window.innerHeight - margin - heightCap);
-  }
-  if (top < margin) top = margin;
-  heightCap = Math.min(heightCap, window.innerHeight - top - margin);
-
+  // Lay out off-screen-measure so we can vertically center on the picker.
   side.style.position = 'fixed';
   side.style.right = 'auto';
   side.style.left = `${Math.round(left)}px`;
-  side.style.top = `${Math.round(top)}px`;
   side.style.width = `${Math.round(width)}px`;
   side.style.maxHeight = `${Math.round(heightCap)}px`;
   side.style.height = 'auto';
   side.style.transform = 'none';
+  side.style.top = `${margin}px`;
+  side.style.visibility = 'hidden';
+
+  const sideHeight = Math.min(
+    Math.max(side.getBoundingClientRect().height || 0, 1),
+    heightCap
+  );
+  const panelMid = rect.top + rect.height / 2;
+  let top = panelMid - sideHeight / 2;
+  if (top < margin) top = margin;
+  if (top + sideHeight > window.innerHeight - margin) {
+    top = Math.max(margin, window.innerHeight - margin - sideHeight);
+  }
+  heightCap = Math.min(heightCap, window.innerHeight - top - margin);
+
+  side.style.top = `${Math.round(top)}px`;
+  side.style.maxHeight = `${Math.round(heightCap)}px`;
+  side.style.visibility = '';
 }
 
 /** Re-align any open More side panels (call after picker reposition / resize). */

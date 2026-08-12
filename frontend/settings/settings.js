@@ -1,4 +1,4 @@
-import { ensurePanelMore, collapseAllPanelMore } from './panel-more.js?v=20260812f';
+import { ensurePanelMore, collapseAllPanelMore } from './panel-more.js?v=20260812g';
 
 export function initSettingsController(opts) {
   const {

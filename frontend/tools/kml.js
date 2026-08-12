@@ -8,7 +8,7 @@ import {
   pointStyleFromFeature,
   summarizeStats,
 } from './kml-parse.js?v=20260807i';
-import { collapseAllPanelMore, collapsePanelMore, syncOpenPanelMore } from '../settings/panel-more.js?v=20260812f';
+import { collapseAllPanelMore, collapsePanelMore, syncOpenPanelMore } from '../settings/panel-more.js?v=20260812g';
 
 const DEFAULT_COLOR = '#4de2ff';
 const DEFAULT_OPACITY = 0.65;
@@ -49,7 +49,7 @@ function normalizeItem(raw = {}) {
   };
 }
 
-export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
+export function initKmlOverlays({ map, getToken, API_BASE = '', onActivate } = {}) {
   const activeLayers = new Map(); // id -> L.Layer
   let items = [];
   let panelEl = null;
@@ -222,6 +222,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
   function openPanel() {
     mountPanelNearButton();
     collapseAllPanelMore();
+    if (typeof onActivate === 'function') onActivate();
     document.querySelectorAll('#mapPickerPanel, #overlayPickerPanel, #moreToolDropdown').forEach((el) => {
       el.classList.remove('open');
       el.classList.remove('has-more-open');
