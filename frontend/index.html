@@ -16,10 +16,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css?v=20260806m">
-    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260812c">
+    <link rel="stylesheet" href="toolbar/toolbar.css?v=20260812e">
     <link rel="stylesheet" href="tools/tools.css?v=20260812c">
     <link rel="stylesheet" href="zoom/zoom.css">
-    <link rel="stylesheet" href="settings/settings.css?v=20260812c">
+    <link rel="stylesheet" href="settings/settings.css?v=20260812e">
     <script type="module">
       import { isMobileClient } from './mobile/device.js?v=20260806e';
       try {
@@ -399,34 +399,46 @@
         <label class="settings-draw-palette-label" for="settingsDrawPalette">Color palette</label>
         <div id="settingsDrawPalette" class="settings-draw-palette" aria-label="Draw color palette"></div>
         <div class="settings-draw-row">
-          <label class="settings-kml-outline-toggle" title="Show length and area labels on drawn shapes">
-            <span>Measurements</span>
-            <span class="settings-switch">
-              <input type="checkbox" id="settingsDrawShowMeasurements" />
-              <span class="settings-switch-slider" aria-hidden="true"></span>
+        <label class="panel-more-toggle" title="Show length and area labels on drawn shapes">
+          <span class="panel-more-toggle-text">Measurements</span>
+          <span class="panel-more-onoff">
+            <input type="checkbox" id="settingsDrawShowMeasurements" />
+            <span class="panel-more-onoff-track" aria-hidden="true">
+              <span data-state="off">Off</span>
+              <span data-state="on">On</span>
             </span>
-          </label>
-          <label class="settings-kml-outline-toggle" title="Show line / perimeter length">
-            <span>Lengths</span>
-            <span class="settings-switch">
-              <input type="checkbox" id="settingsDrawShowLength" />
-              <span class="settings-switch-slider" aria-hidden="true"></span>
+          </span>
+        </label>
+        <label class="panel-more-toggle" title="Show line / perimeter length">
+          <span class="panel-more-toggle-text">Lengths</span>
+          <span class="panel-more-onoff">
+            <input type="checkbox" id="settingsDrawShowLength" />
+            <span class="panel-more-onoff-track" aria-hidden="true">
+              <span data-state="off">Off</span>
+              <span data-state="on">On</span>
             </span>
-          </label>
-          <label class="settings-kml-outline-toggle" title="Show area for polygons, rectangles, and circles">
-            <span>Areas</span>
-            <span class="settings-switch">
-              <input type="checkbox" id="settingsDrawShowArea" />
-              <span class="settings-switch-slider" aria-hidden="true"></span>
+          </span>
+        </label>
+        <label class="panel-more-toggle" title="Show area for polygons, rectangles, and circles">
+          <span class="panel-more-toggle-text">Areas</span>
+          <span class="panel-more-onoff">
+            <input type="checkbox" id="settingsDrawShowArea" />
+            <span class="panel-more-onoff-track" aria-hidden="true">
+              <span data-state="off">Off</span>
+              <span data-state="on">On</span>
             </span>
-          </label>
-          <label class="settings-kml-outline-toggle" title="Show latitude / longitude on shapes (independent of measurements)">
-            <span>Coordinates</span>
-            <span class="settings-switch">
-              <input type="checkbox" id="settingsDrawShowCoordinates" />
-              <span class="settings-switch-slider" aria-hidden="true"></span>
+          </span>
+        </label>
+        <label class="panel-more-toggle" title="Show latitude / longitude on shapes (independent of measurements)">
+          <span class="panel-more-toggle-text">Coordinates</span>
+          <span class="panel-more-onoff">
+            <input type="checkbox" id="settingsDrawShowCoordinates" />
+            <span class="panel-more-onoff-track" aria-hidden="true">
+              <span data-state="off">Off</span>
+              <span data-state="on">On</span>
             </span>
-          </label>
+          </span>
+        </label>
         </div>
         <div class="settings-draw-controls">
           <div class="settings-draw-stroke-row">
@@ -440,18 +452,24 @@
       <div id="settingsKmlSection" class="panel-more-settings">
         <h4>KML options</h4>
         <p class="panel-more-hint">Display options for imported overlays</p>
-        <label class="settings-kml-outline-toggle" title="Draw a bright thin red outline on every KML zone">
-          <span>Red zone outlines</span>
-          <span class="settings-switch">
+        <label class="panel-more-toggle" title="Draw a bright thin red outline on every KML zone">
+          <span class="panel-more-toggle-text">Red zone outlines</span>
+          <span class="panel-more-onoff">
             <input type="checkbox" id="settingsKmlRedOutline" />
-            <span class="settings-switch-slider" aria-hidden="true"></span>
+            <span class="panel-more-onoff-track" aria-hidden="true">
+              <span data-state="off">Off</span>
+              <span data-state="on">On</span>
+            </span>
           </span>
         </label>
-        <label class="settings-kml-outline-toggle" title="Show feature names on the map">
-          <span>Show names</span>
-          <span class="settings-switch">
+        <label class="panel-more-toggle" title="Show feature names on the map">
+          <span class="panel-more-toggle-text">Show names</span>
+          <span class="panel-more-onoff">
             <input type="checkbox" id="settingsKmlShowNames" />
-            <span class="settings-switch-slider" aria-hidden="true"></span>
+            <span class="panel-more-onoff-track" aria-hidden="true">
+              <span data-state="off">Off</span>
+              <span data-state="on">On</span>
+            </span>
           </span>
         </label>
       </div>
@@ -465,6 +483,6 @@
     <!-- Interactive Mapping Grid System -->
     <script src="particles.js"></script>
 
-    <script type="module" src="app.js?v=20260812c"></script>
+    <script type="module" src="app.js?v=20260812e"></script>
   </body>
 </html>

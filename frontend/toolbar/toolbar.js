@@ -1,5 +1,6 @@
 import { iconHtml } from './icons.js?v=20260807o';
 import { TOOL_BTN_IDS, TOOL_LABELS, TOOL_ICONS } from '../tools/tools.js?v=20260812c';
+import { syncOpenPanelMore } from '../settings/panel-more.js?v=20260812e';
 
 export function createToolbarController(opts) {
   const {
@@ -80,6 +81,28 @@ export function createToolbarController(opts) {
     if (backdrop) backdrop.hidden = !open;
   }
 
+  function clearMoreSideStyles(side) {
+    if (!side) return;
+    side.style.position = '';
+    side.style.left = '';
+    side.style.right = '';
+    side.style.top = '';
+    side.style.width = '';
+    side.style.maxHeight = '';
+    side.style.height = '';
+    side.style.transform = '';
+  }
+
+  function getMoreSideForPanel(el) {
+    if (!el) return null;
+    return (
+      el._moreSideEl ||
+      el.querySelector(':scope > .rail-panel-more-side') ||
+      el.parentElement?.querySelector(`.rail-panel-more-side[data-for="${el.id}"]`) ||
+      document.querySelector(`.rail-panel-more-side[data-for="${el.id}"]`)
+    );
+  }
+
   function closeAllPanels(exceptId = null) {
     // Draw panel is sticky — only closed via its own button toggle or Esc.
     ['mapPickerPanel', 'overlayPickerPanel', 'moreToolDropdown', 'kmlPickerPanel'].forEach((id) => {
@@ -94,15 +117,13 @@ export function createToolbarController(opts) {
         el.style.right = '';
         el.style.transform = '';
         const more = el.querySelector(':scope > .rail-panel-more');
-        const side =
-          el._moreSideEl ||
-          el.querySelector(':scope > .rail-panel-more-side') ||
-          el.parentElement?.querySelector(`.rail-panel-more-side[data-for="${el.id}"]`);
+        const side = getMoreSideForPanel(el);
         const moreBtn = more?.querySelector('.rail-panel-more-btn');
         more?.classList.remove('is-expanded');
         if (side) {
           side.hidden = true;
           side.classList.remove('is-open');
+          clearMoreSideStyles(side);
         }
         if (moreBtn) {
           moreBtn.setAttribute('aria-expanded', 'false');
@@ -517,6 +538,7 @@ export function createToolbarController(opts) {
       panel.style.left = '';
       panel.style.right = '';
       panel.style.transform = '';
+      syncOpenPanelMore();
       return;
     }
 
@@ -533,6 +555,7 @@ export function createToolbarController(opts) {
     if (shift) {
       panel.style.transform = `translateY(calc(-50% + ${shift}px))`;
     }
+    syncOpenPanelMore();
   }
 
   function togglePanel(panelId, triggerId) {
@@ -640,6 +663,11 @@ export function createToolbarController(opts) {
       if (toolbarOverflowRaf) cancelAnimationFrame(toolbarOverflowRaf);
       toolbarOverflowRaf = requestAnimationFrame(() => {
         applyToolbarOverflowLayout();
+        const openPanel = document.querySelector(
+          '#mapPickerPanel.open, #overlayPickerPanel.open, #kmlPickerPanel.open, #drawPickerPanel.open'
+        );
+        if (openPanel) positionOpenPanel(openPanel);
+        else syncOpenPanelMore();
         toolbarOverflowRaf = null;
       });
     };

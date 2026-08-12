@@ -8,6 +8,7 @@ import {
   pointStyleFromFeature,
   summarizeStats,
 } from './kml-parse.js?v=20260807i';
+import { collapseAllPanelMore, collapsePanelMore, syncOpenPanelMore } from '../settings/panel-more.js?v=20260812e';
 
 const DEFAULT_COLOR = '#4de2ff';
 const DEFAULT_OPACITY = 0.65;
@@ -58,6 +59,8 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
   let bootstrapped = false;
   let redOutline = readRedOutlinePref();
   let showNames = readShowNamesPref();
+  /** When false, KML features let map clicks pass through (e.g. while drawing). */
+  let pointerEventsEnabled = true;
   const listeners = new Set();
 
   function notify() {
@@ -68,6 +71,35 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
         /* ignore */
       }
     });
+  }
+
+  function setLayerPointerEvents(layer, enabled) {
+    if (!layer) return;
+    if (typeof layer.eachLayer === 'function') {
+      layer.eachLayer((child) => setLayerPointerEvents(child, enabled));
+    }
+    if (layer.options) layer.options.interactive = !!enabled;
+    const el = layer.getElement?.() || layer._path || layer._image || layer._icon;
+    if (!el) return;
+    if (enabled) {
+      L.DomUtil.addClass(el, 'leaflet-interactive');
+      el.style.pointerEvents = '';
+    } else {
+      L.DomUtil.removeClass(el, 'leaflet-interactive');
+      el.style.pointerEvents = 'none';
+    }
+  }
+
+  function setPointerEventsEnabled(enabled) {
+    pointerEventsEnabled = !!enabled;
+    if (!pointerEventsEnabled) {
+      try {
+        map.closePopup?.();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    activeLayers.forEach((layer) => setLayerPointerEvents(layer, pointerEventsEnabled));
   }
 
   function getItems() {
@@ -176,6 +208,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
   }
 
   function closePanel() {
+    if (panelEl) collapsePanelMore(panelEl);
     panelEl?.classList.remove('open');
     btnEl?.classList.remove('panel-open', 'map-tool-btn--active');
     btnEl?.setAttribute('aria-expanded', 'false');
@@ -188,8 +221,10 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
 
   function openPanel() {
     mountPanelNearButton();
+    collapseAllPanelMore();
     document.querySelectorAll('#mapPickerPanel, #overlayPickerPanel, #moreToolDropdown').forEach((el) => {
       el.classList.remove('open');
+      el.classList.remove('has-more-open');
     });
     document.getElementById('btnMaps')?.classList.remove('panel-open');
     document.getElementById('btnOverlays')?.classList.remove('panel-open');
@@ -206,6 +241,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
       if (backdrop) backdrop.hidden = false;
     }
     refreshList();
+    requestAnimationFrame(() => syncOpenPanelMore());
   }
 
   function togglePanel() {
@@ -615,6 +651,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
       }
       const layer = buildLayer(parsed, merged);
       layer.addTo(map);
+      if (!pointerEventsEnabled) setLayerPointerEvents(layer, false);
       if (fit) fitLayerToMap(layer);
       activeLayers.set(kmlId, layer);
       if (merged && (parsed.stats || parsed.inventory)) {
@@ -826,6 +863,7 @@ export function initKmlOverlays({ map, getToken, API_BASE = '' }) {
     setRedOutline,
     getShowNames,
     setShowNames,
+    setPointerEventsEnabled,
     onChange(fn) {
       if (typeof fn === 'function') listeners.add(fn);
       return () => listeners.delete(fn);

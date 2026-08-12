@@ -1,4 +1,4 @@
-import { ensurePanelMore, collapseAllPanelMore } from './panel-more.js?v=20260812b';
+import { ensurePanelMore, collapseAllPanelMore } from './panel-more.js?v=20260812e';
 
 export function initSettingsController(opts) {
   const {
@@ -239,12 +239,15 @@ export function initSettingsController(opts) {
     settingsOverlaysList.innerHTML = '';
     getVisibleOverlayDefs(selectedBase).forEach((overlayDef) => {
       const row = document.createElement('label');
-      row.className = 'settings-overlay-item';
+      row.className = 'settings-overlay-item panel-more-toggle';
       row.innerHTML = `
-        <span class="settings-overlay-label">${overlayDef.label}</span>
-        <span class="settings-switch">
+        <span class="panel-more-toggle-text settings-overlay-label">${overlayDef.label}</span>
+        <span class="panel-more-onoff">
           <input type="checkbox" id="${overlayDef.inputId}" />
-          <span class="settings-switch-slider" aria-hidden="true"></span>
+          <span class="panel-more-onoff-track" aria-hidden="true">
+            <span data-state="off">Off</span>
+            <span data-state="on">On</span>
+          </span>
         </span>
       `;
       const input = row.querySelector('input');

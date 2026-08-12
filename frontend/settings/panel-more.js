@@ -1,17 +1,28 @@
 /**
  * Attach a More control to a rail panel. Settings open in a side panel
- * (left of the picker on desktop; stacked under More on mobile sheets).
+ * aligned to the picker (desktop) or stacked under More (mobile sheets).
  * Safe to call repeatedly.
  */
+
+function isMobileApp() {
+  return document.body.classList.contains('mobile-app');
+}
+
+function getSideForPanel(panel) {
+  if (!panel) return null;
+  return (
+    panel._moreSideEl ||
+    panel.querySelector(':scope > .rail-panel-more-side') ||
+    panel.parentElement?.querySelector(`.rail-panel-more-side[data-for="${panel.id}"]`) ||
+    document.querySelector(`.rail-panel-more-side[data-for="${panel.id}"]`)
+  );
+}
+
 export function ensurePanelMore(panel, { sectionEl, onExpand } = {}) {
   if (!panel) return null;
 
-  const isMobile = () => document.body.classList.contains('mobile-app');
   let more = panel.querySelector(':scope > .rail-panel-more');
-  const host = panel.parentElement || panel;
-  let side =
-    host.querySelector(`:scope > .rail-panel-more-side[data-for="${panel.id}"]`) ||
-    panel.querySelector(':scope > .rail-panel-more-side');
+  let side = getSideForPanel(panel);
 
   if (!more) {
     more = document.createElement('div');
@@ -40,11 +51,9 @@ export function ensurePanelMore(panel, { sectionEl, onExpand } = {}) {
   if (typeof onExpand === 'function') more._onExpand = onExpand;
 
   if (more.parentElement !== panel) panel.appendChild(more);
-  else if (panel.lastElementChild !== more && !more.nextElementSibling?.classList?.contains('rail-panel-more-side')) {
-    panel.appendChild(more);
-  }
+  else panel.appendChild(more);
 
-  placeSideHost(panel, side, isMobile());
+  placeSideHost(panel, side);
   more._sideEl = side;
   panel._moreSideEl = side;
 
@@ -52,31 +61,39 @@ export function ensurePanelMore(panel, { sectionEl, onExpand } = {}) {
     side.appendChild(sectionEl);
   }
 
+  ensureGlobalSync();
   return more;
 }
 
-function placeSideHost(panel, side, mobile) {
-  if (mobile) {
-    // Keep side inside the sheet panel so it scrolls with the picker.
+function placeSideHost(panel, side) {
+  if (isMobileApp()) {
+    clearFixedStyles(side);
     if (side.parentElement !== panel) panel.appendChild(side);
     return;
   }
-  const host = panel.parentElement || panel;
-  if (side.parentElement !== host) host.appendChild(side);
+  // Fixed to the viewport so rail transforms don't skew alignment.
+  if (side.parentElement !== document.body) document.body.appendChild(side);
+}
+
+function clearFixedStyles(side) {
+  if (!side) return;
+  side.style.position = '';
+  side.style.left = '';
+  side.style.right = '';
+  side.style.top = '';
+  side.style.width = '';
+  side.style.maxHeight = '';
+  side.style.height = '';
+  side.style.transform = '';
 }
 
 function setMoreExpanded(panel, open) {
   const more = panel?.querySelector(':scope > .rail-panel-more');
-  let side =
-    panel?._moreSideEl ||
-    more?._sideEl ||
-    panel?.querySelector(':scope > .rail-panel-more-side') ||
-    panel?.parentElement?.querySelector(`.rail-panel-more-side[data-for="${panel?.id}"]`);
+  const side = getSideForPanel(panel);
   const btn = more?.querySelector('.rail-panel-more-btn');
   if (!more || !side) return;
 
-  const mobile = document.body.classList.contains('mobile-app');
-  placeSideHost(panel, side, mobile);
+  placeSideHost(panel, side);
 
   more.classList.toggle('is-expanded', !!open);
   panel.classList.toggle('has-more-open', !!open);
@@ -86,25 +103,61 @@ function setMoreExpanded(panel, open) {
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     btn.textContent = open ? 'Less' : 'More';
   }
-  if (open) syncSidePosition(panel, side);
+  if (open) {
+    // Double rAF: wait for picker layout / clamp before measuring.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => syncSidePosition(panel, side));
+    });
+  } else {
+    clearFixedStyles(side);
+  }
 }
 
-function syncSidePosition(panel, side) {
-  if (!panel || !side) return;
-  if (document.body.classList.contains('mobile-app')) {
-    side.style.top = '';
-    side.style.right = '';
-    side.style.left = '';
-    side.style.transform = '';
+export function syncSidePosition(panel, side = getSideForPanel(panel)) {
+  if (!panel || !side || side.hidden || !side.classList.contains('is-open')) return;
+  if (isMobileApp()) {
+    clearFixedStyles(side);
     return;
   }
-  const host = panel.parentElement || panel;
-  const panelRect = panel.getBoundingClientRect();
-  const hostRect = host.getBoundingClientRect();
+  if (!panel.classList.contains('open')) return;
+
+  const rect = panel.getBoundingClientRect();
   const gap = 10;
-  side.style.right = `${Math.max(0, hostRect.right - panelRect.left + gap)}px`;
-  side.style.top = `${Math.max(0, panelRect.top - hostRect.top)}px`;
+  const margin = 12;
+  const maxWidth = Math.min(300, Math.max(200, window.innerWidth - margin * 2));
+  let width = maxWidth;
+  let left = rect.left - gap - width;
+  if (left < margin) {
+    // Not enough room on the left — shrink, then clamp.
+    width = Math.max(200, rect.left - gap - margin);
+    left = margin;
+  }
+
+  let top = rect.top;
+  const maxHeight = Math.max(160, window.innerHeight - margin * 2);
+  let heightCap = Math.min(maxHeight, Math.max(rect.height, window.innerHeight * 0.72));
+
+  if (top + heightCap > window.innerHeight - margin) {
+    top = Math.max(margin, window.innerHeight - margin - heightCap);
+  }
+  if (top < margin) top = margin;
+  heightCap = Math.min(heightCap, window.innerHeight - top - margin);
+
+  side.style.position = 'fixed';
+  side.style.right = 'auto';
+  side.style.left = `${Math.round(left)}px`;
+  side.style.top = `${Math.round(top)}px`;
+  side.style.width = `${Math.round(width)}px`;
+  side.style.maxHeight = `${Math.round(heightCap)}px`;
+  side.style.height = 'auto';
   side.style.transform = 'none';
+}
+
+/** Re-align any open More side panels (call after picker reposition / resize). */
+export function syncOpenPanelMore() {
+  document.querySelectorAll('.rail-panel.has-more-open').forEach((panel) => {
+    syncSidePosition(panel);
+  });
 }
 
 export function collapsePanelMore(panel) {
@@ -115,8 +168,17 @@ export function collapseAllPanelMore(root = document) {
   root.querySelectorAll('.rail-panel.has-more-open').forEach((panel) => {
     collapsePanelMore(panel);
   });
-  root.querySelectorAll('.rail-panel-more-side.is-open, .rail-panel-more-side:not([hidden])').forEach((side) => {
+  document.querySelectorAll('.rail-panel-more-side.is-open').forEach((side) => {
     side.hidden = true;
     side.classList.remove('is-open');
+    clearFixedStyles(side);
   });
+}
+
+let syncBound = false;
+function ensureGlobalSync() {
+  if (syncBound) return;
+  syncBound = true;
+  window.addEventListener('resize', () => syncOpenPanelMore(), { passive: true });
+  window.addEventListener('scroll', () => syncOpenPanelMore(), { passive: true, capture: true });
 }

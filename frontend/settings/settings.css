@@ -487,6 +487,14 @@ body.settings-modal-open::before {
   margin-top: 8px;
   align-items: center;
 }
+.panel-more-settings .settings-draw-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+.panel-more-settings .settings-draw-row .panel-more-toggle {
+  margin: 0;
+}
 .panel-more-settings .settings-draw-controls {
   grid-template-columns: 1fr;
   gap: 8px;

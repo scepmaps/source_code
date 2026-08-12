@@ -503,11 +503,14 @@ body.mobile-app .rail-panel-empty {
 /* More settings: stack under the picker inside the bottom sheet */
 body.mobile-app .rail-panel-more-side {
   position: static !important;
+  left: auto !important;
   right: auto !important;
   top: auto !important;
   width: 100% !important;
   max-width: none !important;
   max-height: none !important;
+  height: auto !important;
+  transform: none !important;
   margin-top: 4px;
   grid-column: 1 / -1;
   box-shadow: none !important;

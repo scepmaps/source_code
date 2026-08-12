@@ -1,10 +1,10 @@
 import { LAYERS } from './config.js?v=20260806k';
-import { createToolbarController } from './toolbar/toolbar.js?v=20260812c';
-import { initSettingsController } from './settings/settings.js?v=20260812c';
+import { createToolbarController } from './toolbar/toolbar.js?v=20260812e';
+import { initSettingsController } from './settings/settings.js?v=20260812e';
 import { initZoomMechanics } from './zoom/zoom.js?v=20260805c';
 import { initMapToolControls } from './tools/tools.js?v=20260812c';
-import { initKmlOverlays } from './tools/kml.js?v=20260807i';
-import { initDrawTool } from './tools/draw.js?v=20260807t';
+import { initKmlOverlays } from './tools/kml.js?v=20260812e';
+import { initDrawTool } from './tools/draw.js?v=20260812e';
 import { iconHtml } from './toolbar/icons.js?v=20260807q';
 import { startOnboardingTour, shouldAutoStartOnboardingTour } from './onboarding.js?v=20260811g';
 import { applySessionResponse, startSessionKeepalive, validateSession } from './auth-session.js?v=20260805c';
@@ -2506,6 +2506,9 @@ const drawController = initDrawTool({
   isMobile: isMobileApp,
   enableMapCursor,
   onActivate: suppressConflictingToolsForDraw,
+  setForeignPointerEvents: (enabled) => {
+    kmlController.setPointerEventsEnabled?.(enabled);
+  },
 });
 
 const controls = initMapToolControls({

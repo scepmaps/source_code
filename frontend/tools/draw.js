@@ -6,6 +6,7 @@
  */
 
 import { iconHtml } from '../toolbar/icons.js?v=20260807q';
+import { collapseAllPanelMore, collapsePanelMore, syncOpenPanelMore } from '../settings/panel-more.js?v=20260812e';
 
 const SETTINGS_KEY = 'scepmaps_draw_settings';
 const DEFAULT_PALETTE = [
@@ -158,6 +159,7 @@ export function initDrawTool({
   onActivate = null,
   onDeactivate = null,
   enableMapCursor = null,
+  setForeignPointerEvents = null,
 } = {}) {
   if (isMobile || !map) {
     return {
@@ -232,11 +234,15 @@ export function initDrawTool({
     if (!pane) return;
     // Hit-test existing drawings only for eraser (delete) or idle select.
     // While a draw tool is active / drafting, clicks must pass through onto the map
-    // so new shapes can start on top of existing ones.
+    // so new shapes can start on top of existing ones (and on top of KML).
     const placing = !!drafting || (activeMode && activeMode !== 'eraser');
     pane.classList.toggle('draw-pane--passthrough', placing);
     pane.style.pointerEvents = placing ? 'none' : '';
     setAllShapesHitTest(!placing);
+    // KML (and similar) overlays also steal clicks via Leaflet path hit-testing.
+    if (typeof setForeignPointerEvents === 'function') {
+      setForeignPointerEvents(!placing);
+    }
   }
 
   function setLayerHitTest(layer, enabled) {
@@ -1020,6 +1026,7 @@ export function initDrawTool({
     cancelDraft();
     activeMode = null;
     closeMapMenu();
+    if (panelEl) collapsePanelMore(panelEl);
     panelEl?.classList.remove('open');
     refreshPanelActive();
     refreshButtonState();
@@ -1030,8 +1037,10 @@ export function initDrawTool({
 
   function openPanel() {
     mountPanelNearButton();
+    collapseAllPanelMore();
     document.querySelectorAll('#mapPickerPanel, #overlayPickerPanel, #moreToolDropdown, #kmlPickerPanel').forEach((el) => {
       el.classList.remove('open');
+      el.classList.remove('has-more-open');
     });
     document.getElementById('btnMaps')?.classList.remove('panel-open');
     document.getElementById('btnOverlays')?.classList.remove('panel-open');
@@ -1048,6 +1057,7 @@ export function initDrawTool({
     refreshPanelActive();
     refreshColorActive();
     syncShapePointerEvents();
+    requestAnimationFrame(() => syncOpenPanelMore());
   }
 
   function togglePanel() {
